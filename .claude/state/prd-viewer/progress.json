@@ -1,15 +1,23 @@
 {
   "prdName": "PRD Viewer",
   "totalTasks": 25,
-  "completed": 3,
+  "completed": 20,
   "inProgress": 0,
   "blocked": 0,
   "startedAt": "2026-01-24T13:35:51Z",
-  "lastUpdated": "2026-01-24T13:35:51Z",
+  "lastUpdated": "2026-01-24T21:45:56Z",
   "patterns": [
     {
       "name": "Tailwind CSS v4 + Nuxt 4 Setup",
       "description": "Use @tailwindcss/vite plugin instead of @nuxtjs/tailwindcss module. Import plugin in nuxt.config.ts and add to vite.plugins array. CSS file uses @import 'tailwindcss' syntax."
+    },
+    {
+      "name": "Nuxt Server Route Param Naming",
+      "description": "Use consistent dynamic parameter names across all routes in the same path hierarchy. Having both [id] and [repoId] in /api/repos/ causes routing conflicts. Standardize on one name like [repoId]."
+    },
+    {
+      "name": "ClientOnly for Hydration Mismatch",
+      "description": "Wrap components using client-only state (colorMode, useFetch with server:false, localStorage) in ClientOnly with a #fallback slot. The fallback should provide skeleton placeholders that match the expected layout to prevent hydration node count mismatches."
     }
   ],
   "taskLogs": [
@@ -39,6 +47,159 @@
       "implemented": "Installed 9 shadcn-vue components: button, input, card, badge, tabs, sheet, separator, scroll-area, combobox",
       "filesChanged": ["app/components/ui/button/", "app/components/ui/input/", "app/components/ui/card/", "app/components/ui/badge/", "app/components/ui/tabs/", "app/components/ui/sheet/", "app/components/ui/separator/", "app/components/ui/scroll-area/", "app/components/ui/combobox/", "package.json", "bun.lock"],
       "learnings": "Use npx shadcn-vue@latest add <component> --yes for non-interactive installation"
+    },
+    {
+      "taskId": "task-004",
+      "status": "completed",
+      "startedAt": "2026-01-24T15:58:00Z",
+      "completedAt": "2026-01-24T16:03:00Z",
+      "implemented": "Created server API for repository management with GET /api/repos (list), POST /api/repos (add with validation), DELETE /api/repos/[id] (remove). Repos stored in server/data/repos.json. Path validation checks for directory existence and presence of docs/prd or .claude directories.",
+      "filesChanged": ["server/utils/repos.ts", "server/api/repos/index.get.ts", "server/api/repos/index.post.ts", "server/api/repos/[id].delete.ts", "package.json"],
+      "learnings": "In Nuxt 4, use ~~ prefix for imports from server directory (e.g., ~~/server/utils/repos). Server utils auto-import doesn't work with custom utilities."
+    },
+    {
+      "taskId": "task-005",
+      "status": "completed",
+      "startedAt": "2026-01-24T16:03:13Z",
+      "completedAt": "2026-01-24T16:04:12Z",
+      "implemented": "Created GET /api/repos/[repoId]/prds endpoint that scans docs/prd/*.md, extracts title from first H1, checks .claude/state/<slug>/tasks.json for task counts, returns PrdListItem array.",
+      "filesChanged": ["server/api/repos/[repoId]/prds.get.ts"],
+      "learnings": "Use Promise.all for parallel file processing. Empty docs/prd returns empty array without error."
+    },
+    {
+      "taskId": "task-006",
+      "status": "completed",
+      "startedAt": "2026-01-24T16:05:21Z",
+      "completedAt": "2026-01-24T16:15:31Z",
+      "implemented": "Created GET /api/repos/[repoId]/prd/[prdSlug] endpoint. Returns PrdDocument with slug, name, content (raw markdown), and parsed metadata (author, date, status, shortcut story).",
+      "filesChanged": ["server/api/repos/[repoId]/prd/[prdSlug].get.ts", "server/api/repos/[repoId].delete.ts"],
+      "learnings": "Nuxt server routes with same dynamic param name must use consistent naming. Having [id] and [repoId] causes routing conflicts. Use singular 'prd' for document retrieval vs plural 'prds' for listing."
+    },
+    {
+      "taskId": "task-007",
+      "status": "completed",
+      "startedAt": "2026-01-24T16:16:51Z",
+      "completedAt": "2026-01-24T16:18:04Z",
+      "implemented": "Created GET /api/repos/[repoId]/prd/[prdSlug]/tasks and /progress endpoints. Returns parsed JSON content or null if files don't exist. Invalid JSON returns 500 with error message.",
+      "filesChanged": ["server/api/repos/[repoId]/prd/[prdSlug]/tasks.get.ts", "server/api/repos/[repoId]/prd/[prdSlug]/progress.get.ts"],
+      "learnings": "Check error.code for ENOENT to distinguish missing files from parse errors. Return null for missing files, throw 500 for invalid JSON."
+    },
+    {
+      "taskId": "task-008",
+      "status": "completed",
+      "startedAt": "2026-01-24T16:19:01Z",
+      "completedAt": "2026-01-24T16:19:54Z",
+      "implemented": "Created useRepos composable with repos list (useFetch), currentRepo (useState + localStorage), selectRepo, addRepo, removeRepo functions. Auto-selects newly added repos.",
+      "filesChanged": ["app/composables/useRepos.ts"],
+      "learnings": "Use useState for SSR-safe reactive state, import.meta.client guard for localStorage access. useFetch with default() for initial empty array."
+    },
+    {
+      "taskId": "task-009",
+      "status": "completed",
+      "startedAt": "2026-01-24T16:21:38Z",
+      "completedAt": "2026-01-24T16:22:32Z",
+      "implemented": "Created usePrd composable with reactive prds list (watches currentRepoId), fetchDocument(slug), fetchTasks(slug), fetchProgress(slug) functions.",
+      "filesChanged": ["app/composables/usePrd.ts"],
+      "learnings": "useFetch doesn't accept null URLs. Use computed URL with immediate:false and manual watch trigger instead. $fetch returns raw data for one-off requests."
+    },
+    {
+      "taskId": "task-010",
+      "status": "completed",
+      "startedAt": "2026-01-24T16:25:46Z",
+      "completedAt": "2026-01-24T16:28:12Z",
+      "implemented": "Created default layout with fixed header containing app title and theme toggle button. Uses NuxtLayout with slot for header-actions (RepoSelector placeholder) and main content slot. Responsive design with backdrop blur on header.",
+      "filesChanged": ["app/layouts/default.vue", "app/app.vue", "app/pages/index.vue"],
+      "learnings": "Nuxt 4 layouts use NuxtLayout in app.vue with NuxtPage for content. Header slot allows injecting RepoSelector later."
+    },
+    {
+      "taskId": "task-011",
+      "status": "completed",
+      "startedAt": "2026-01-24T16:29:57Z",
+      "completedAt": "2026-01-24T18:32:40Z",
+      "implemented": "Created RepoSelector component using shadcn-vue Combobox. Displays repos from useRepos composable, allows selecting repos (persists to localStorage), and has 'Add repository' flow with Sheet dialog for path input. Fixed useFetch with server:false for client-side only fetching.",
+      "filesChanged": ["app/components/layout/RepoSelector.vue", "app/layouts/default.vue", "app/composables/useRepos.ts", "app/components/ui/combobox/index.ts"],
+      "learnings": "useFetch with server:false avoids SSR issues with filesystem APIs. Combobox v-model binding requires watching selectedValue to trigger side effects like opening dialogs for special values. Wrap client-dependent components (colorMode, useFetch with server:false) in ClientOnly with fallback skeleton to prevent hydration mismatch."
+    },
+    {
+      "taskId": "task-012",
+      "status": "completed",
+      "startedAt": "2026-01-24T20:03:04Z",
+      "completedAt": "2026-01-24T20:05:14Z",
+      "implemented": "Created Sidebar component showing PRDs for current repo with task progress badges. Uses usePrd composable for data, NuxtLink for navigation, ScrollArea for overflow. Shows loading, empty, and no-repo-selected states. Updated default layout to include sidebar with ClientOnly wrapper.",
+      "filesChanged": ["app/components/layout/Sidebar.vue", "app/layouts/default.vue"],
+      "learnings": "NuxtLink handles client-side navigation automatically. Nuxt 404 page doesn't use default layout."
+    },
+    {
+      "taskId": "task-013",
+      "status": "completed",
+      "startedAt": "2026-01-24T20:24:14Z",
+      "completedAt": "2026-01-24T20:25:55Z",
+      "implemented": "Created index page with context-aware states: onboarding (no repos), select prompt (repos exist but none selected), welcome with PRD count (repo selected with PRDs), no PRDs message (repo selected but empty). Includes directory browser for adding first repo.",
+      "filesChanged": ["app/pages/index.vue"],
+      "learnings": "Computed properties work well for determining UI states based on multiple reactive values. Reuse directory browser pattern from RepoSelector."
+    },
+    {
+      "taskId": "task-015",
+      "status": "completed",
+      "startedAt": "2026-01-24T20:29:05Z",
+      "completedAt": "2026-01-24T22:36:00Z",
+      "implemented": "Created PrdViewer component (renamed to Viewer.vue in prd/ folder) with markdown rendering using marked library and syntax highlighting using shiki. Features: custom link renderer for target='_blank', code block extraction and parallel highlighting with dual themes (github-light/github-dark), prose CSS styling for tables, checkboxes, blockquotes, lists, and code blocks.",
+      "filesChanged": ["app/components/prd/Viewer.vue"],
+      "learnings": "When using placeholder-based code block extraction with marked, avoid using underscores which get interpreted as bold markdown. Use alphanumeric placeholders instead."
+    },
+    {
+      "taskId": "task-014",
+      "status": "completed",
+      "startedAt": "2026-01-24T20:54:05Z",
+      "completedAt": "2026-01-24T20:56:34Z",
+      "implemented": "Created PrdMeta component (Meta.vue in prd/ folder) displaying PRD metadata in a horizontal layout. Shows author with User icon, date with Calendar icon, status as Badge with color coding (default for complete/in-progress, secondary for draft, destructive for blocked), and Shortcut story as external link when URL present or plain text when only ID provided. Handles missing fields gracefully with v-if conditionals.",
+      "filesChanged": ["app/components/prd/Meta.vue"],
+      "learnings": "Nuxt's HMR for new pages may require server restart. Component file naming in nested folders follows FolderFile pattern for auto-import."
+    },
+    {
+      "taskId": "task-016",
+      "status": "completed",
+      "startedAt": "2026-01-24T21:16:11Z",
+      "completedAt": "2026-01-24T21:16:53Z",
+      "implemented": "Created TaskCard component (Card.vue in tasks/ folder) displaying task in kanban board. Shows category badge (color-coded by type), priority icon (ArrowUp red=critical, orange=high; Minus gray=medium; ArrowDown=low), task title with line-clamp-2, and blocked indicator with count. Emits click event for opening detail view. Hover states with shadow and border highlight.",
+      "filesChanged": ["app/components/tasks/Card.vue"],
+      "learnings": "Use computed properties for variant/style configurations to keep template clean."
+    },
+    {
+      "taskId": "task-017",
+      "status": "completed",
+      "startedAt": "2026-01-24T21:18:30Z",
+      "completedAt": "2026-01-24T21:19:32Z",
+      "implemented": "Created TaskColumn component (Column.vue in tasks/ folder) for kanban board columns. Shows header with status icon (Circle=pending, spinning Loader2=in_progress, CheckCircle2=completed), label, and task count. Color-coded backgrounds (gray, blue, green). Renders TasksCard for each task with blockedByMap support. Uses ScrollArea for overflow. Shows 'No tasks' empty state.",
+      "filesChanged": ["app/components/tasks/Column.vue"],
+      "learnings": "Pass blockedByMap from parent to avoid recalculating dependency status in each card."
+    },
+    {
+      "taskId": "task-018",
+      "status": "completed",
+      "startedAt": "2026-01-24T21:20:12Z",
+      "completedAt": "2026-01-24T21:20:46Z",
+      "implemented": "Created TaskBoard component (Board.vue in tasks/ folder) as main kanban board. Groups tasks by status using computed properties. Builds blockedByMap to track incomplete dependencies. Renders three TasksColumn components in horizontal flex layout. Uses overflow-x-auto for horizontal scroll on narrow screens.",
+      "filesChanged": ["app/components/tasks/Board.vue"],
+      "learnings": "Build blockedByMap at board level and pass down to columns/cards for efficient dependency tracking."
+    },
+    {
+      "taskId": "task-019",
+      "status": "completed",
+      "startedAt": "2026-01-24T21:41:13Z",
+      "completedAt": "2026-01-24T21:42:05Z",
+      "implemented": "Created TaskDetail component (Detail.vue in tasks/ folder) as slide-in panel using shadcn-vue Sheet. Shows task title, description, category/priority/status badges. Displays steps as numbered ordered list, passes criteria as disabled checkboxes (checked when completed), dependencies with ID and title lookup. Shows timestamps (startedAt, completedAt) when present. Close button at bottom.",
+      "filesChanged": ["app/components/tasks/Detail.vue"],
+      "learnings": "Use defineModel for v-model:open on Sheet for cleaner parent-child state sync."
+    },
+    {
+      "taskId": "task-020",
+      "status": "completed",
+      "startedAt": "2026-01-24T21:44:57Z",
+      "completedAt": "2026-01-24T21:45:56Z",
+      "implemented": "Created PRD page at pages/[repo]/[prd].vue with Document and Task Board tabs. Fetches PRD document and tasks in parallel on mount. Shows PrdMeta header, PrdViewer for document content, TasksBoard for kanban. TasksDetail sheet opens on task click. Tab preference persisted to localStorage. Loading spinner and error states with helpful messages.",
+      "filesChanged": ["app/pages/[repo]/[prd].vue"],
+      "learnings": "Use Promise.all to fetch document and tasks in parallel for better performance."
     }
   ]
 }
