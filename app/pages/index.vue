@@ -94,8 +94,9 @@ const showPrdList = computed(() => {
 watch(
   [currentRepoId, prds, prdsStatus],
   ([repoId, prdList, status]) => {
-    if (repoId && status === 'success' && prdList && prdList.length > 0) {
-      router.push(`/${repoId}/${prdList[0].slug}`)
+    const firstPrd = prdList?.[0]
+    if (repoId && status === 'success' && firstPrd) {
+      router.push(`/${repoId}/${firstPrd.slug}`)
     }
   },
   { immediate: true }

@@ -26,8 +26,9 @@ async function handleSelectRepo(id: string) {
   // Fetch PRDs for new repo and navigate to first one
   try {
     const prds = await $fetch<{ slug: string }[]>(`/api/repos/${id}/prds`)
-    if (prds && prds.length > 0) {
-      router.push(`/${id}/${prds[0].slug}`)
+    const firstPrd = prds?.[0]
+    if (firstPrd) {
+      router.push(`/${id}/${firstPrd.slug}`)
     } else {
       router.push('/')
     }
@@ -112,8 +113,9 @@ async function handleAddRepo() {
     if (newRepo?.id) {
       try {
         const prds = await $fetch<{ slug: string }[]>(`/api/repos/${newRepo.id}/prds`)
-        if (prds && prds.length > 0) {
-          router.push(`/${newRepo.id}/${prds[0].slug}`)
+        const firstPrd = prds?.[0]
+        if (firstPrd) {
+          router.push(`/${newRepo.id}/${firstPrd.slug}`)
         }
       } catch {
         // Ignore navigation errors
