@@ -6,6 +6,7 @@ import { Input } from '~/components/ui/input'
 const router = useRouter()
 const { repos, currentRepo, currentRepoId, addRepo, status: reposStatus } = useRepos()
 const { prds, prdsStatus } = usePrd()
+const { showSuccess } = useToast()
 
 // Onboarding state
 const newRepoPath = ref('')
@@ -59,8 +60,9 @@ async function handleAddRepo() {
   addError.value = null
 
   try {
-    await addRepo(newRepoPath.value.trim())
+    const repo = await addRepo(newRepoPath.value.trim())
     newRepoPath.value = ''
+    showSuccess('Repository added', repo?.name || 'Successfully added repository')
   } catch (error) {
     if (error instanceof Error) {
       const fetchError = error as { data?: { message?: string } }

@@ -3,12 +3,21 @@ import type { RepoConfig, AddRepoRequest } from '~/types/repo'
 const STORAGE_KEY = 'prd-viewer-current-repo'
 
 export function useRepos() {
+  const { showError, showSuccess } = useToast()
+
   // Reactive repos list fetched from API
   // Use key to share data, server: false to avoid SSR issues with filesystem reads
-  const { data: repos, refresh: refreshRepos, status } = useFetch<RepoConfig[]>('/api/repos', {
+  const { data: repos, refresh: refreshRepos, status, error: fetchError } = useFetch<RepoConfig[]>('/api/repos', {
     key: 'repos',
     default: () => [],
     server: false
+  })
+
+  // Show error toast when fetch fails
+  watch(fetchError, (err) => {
+    if (err) {
+      showError('Failed to load repositories', 'Please check if the server is running.')
+    }
   })
 
   // Current repo ID stored in localStorage
@@ -52,14 +61,20 @@ export function useRepos() {
 
   // Remove a repo by ID
   async function removeRepo(id: string): Promise<void> {
-    await $fetch(`/api/repos/${id}`, {
-      method: 'DELETE'
-    })
-    // If we deleted the current repo, clear selection
-    if (currentRepoId.value === id) {
-      selectRepo(null)
+    try {
+      await $fetch(`/api/repos/${id}`, {
+        method: 'DELETE'
+      })
+      // If we deleted the current repo, clear selection
+      if (currentRepoId.value === id) {
+        selectRepo(null)
+      }
+      await refreshRepos()
+      showSuccess('Repository removed')
+    } catch (err) {
+      showError('Failed to remove repository')
+      throw err
     }
-    await refreshRepos()
   }
 
   // Initialize: restore from localStorage on client

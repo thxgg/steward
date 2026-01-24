@@ -1,7 +1,7 @@
 {
   "prdName": "PRD Viewer",
   "totalTasks": 25,
-  "completed": 22,
+  "completed": 23,
   "inProgress": 0,
   "blocked": 0,
   "startedAt": "2026-01-24T13:35:51Z",
@@ -218,6 +218,15 @@
       "implemented": "Implemented file watching for auto-refresh using chokidar. Created server/utils/watcher.ts with debounced file watcher that monitors docs/prd/*.md and .claude/state/*/*.json for each repo. Created SSE endpoint at server/api/watch.get.ts with keepalive. Created useFileWatch composable for client-side SSE connection with auto-reconnect. Integrated into default layout to trigger data refresh on file changes. Updated repo add/delete endpoints to refresh watcher.",
       "filesChanged": ["server/utils/watcher.ts", "server/api/watch.get.ts", "app/composables/useFileWatch.ts", "app/layouts/default.vue", "server/api/repos/index.post.ts", "server/api/repos/[repoId].delete.ts", "package.json"],
       "learnings": "Use chokidar with ignoreInitial: true and debounce for efficient file watching. SSE with ReadableStream works well for server-to-client push notifications in Nuxt."
+    },
+    {
+      "taskId": "task-023",
+      "status": "completed",
+      "startedAt": "2026-01-24T23:11:09Z",
+      "completedAt": "2026-01-24T23:15:16Z",
+      "implemented": "Added toast notifications using vue-sonner for error and success feedback. Created useToast composable. Integrated Toaster into app.vue with theme support. Added error/success toasts to useRepos (repo fetch errors, remove success), usePrd (PRD list fetch errors), RepoSelector (add success), and index page (add success). Improved PRD page error state with retry button and specific error messages. Added error state with retry button to Sidebar when PRD fetch fails.",
+      "filesChanged": ["app/composables/useToast.ts", "app/app.vue", "app/composables/useRepos.ts", "app/composables/usePrd.ts", "app/components/layout/RepoSelector.vue", "app/components/layout/Sidebar.vue", "app/pages/index.vue", "app/pages/[repo]/[prd].vue", "package.json"],
+      "learnings": "vue-sonner integrates well with Nuxt and supports theme switching. Wrap Toaster in ClientOnly to avoid SSR issues with color mode detection."
     }
   ]
 }

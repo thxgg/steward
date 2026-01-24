@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { FileText, LayoutGrid, AlertCircle, Loader2 } from 'lucide-vue-next'
+import { FileText, LayoutGrid, AlertCircle, Loader2, RefreshCw } from 'lucide-vue-next'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
+import { Button } from '~/components/ui/button'
 import type { PrdDocument } from '~/types/prd'
 import type { Task, TasksFile } from '~/types/task'
 
@@ -12,6 +13,7 @@ definePageMeta({
 const route = useRoute()
 const { selectRepo } = useRepos()
 const { fetchDocument, fetchTasks } = usePrd()
+const { showError } = useToast()
 
 // Get route params
 const repoId = computed(() => route.params.repo as string)
@@ -74,7 +76,7 @@ async function loadData() {
     ])
 
     if (!doc) {
-      error.value = 'PRD document not found'
+      error.value = `PRD "${prdSlug.value}" not found in this repository.`
       return
     }
 
@@ -82,7 +84,16 @@ async function loadData() {
     tasksFile.value = tasks
   } catch (err) {
     console.error('Failed to load PRD:', err)
-    error.value = 'Failed to load PRD document'
+    const fetchErr = err as { statusCode?: number; data?: { message?: string } }
+    if (fetchErr.statusCode === 404) {
+      error.value = `PRD "${prdSlug.value}" not found. Check if the file exists in docs/prd/.`
+    } else if (fetchErr.statusCode === 500) {
+      error.value = 'Server error while loading the PRD. Check the file format.'
+      showError('Server error', fetchErr.data?.message || 'Failed to read PRD file')
+    } else {
+      error.value = 'Failed to load PRD document. Please try again.'
+      showError('Load failed', 'Could not fetch the PRD document')
+    }
   } finally {
     isLoading.value = false
   }
@@ -113,13 +124,21 @@ function handleTaskClick(task: Task) {
 
     <!-- Error State -->
     <div v-else-if="error" class="flex h-full items-center justify-center">
-      <div class="flex flex-col items-center gap-4 text-center">
+      <div class="flex max-w-md flex-col items-center gap-4 text-center">
         <AlertCircle class="size-12 text-destructive" />
         <h2 class="text-lg font-semibold">Error Loading PRD</h2>
         <p class="text-sm text-muted-foreground">{{ error }}</p>
-        <NuxtLink to="/" class="text-sm text-primary hover:underline">
-          Go back home
-        </NuxtLink>
+        <div class="flex gap-3">
+          <Button variant="outline" size="sm" @click="loadData">
+            <RefreshCw class="mr-2 size-4" />
+            Retry
+          </Button>
+          <NuxtLink to="/">
+            <Button variant="ghost" size="sm">
+              Go back home
+            </Button>
+          </NuxtLink>
+        </div>
       </div>
     </div>
 

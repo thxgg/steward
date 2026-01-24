@@ -13,6 +13,7 @@ import { Input } from '~/components/ui/input'
 
 const router = useRouter()
 const { repos, currentRepo, currentRepoId, selectRepo, addRepo, removeRepo } = useRepos()
+const { showSuccess, showError } = useToast()
 
 // Dropdown state
 const open = ref(false)
@@ -108,6 +109,7 @@ async function handleAddRepo() {
     const newRepo = await addRepo(newRepoPath.value.trim())
     showAddDialog.value = false
     newRepoPath.value = ''
+    showSuccess('Repository added', newRepo?.name || 'Successfully added repository')
 
     // Navigate to first PRD of newly added repo
     if (newRepo?.id) {

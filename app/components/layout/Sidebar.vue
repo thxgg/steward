@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { FileText, Loader2 } from 'lucide-vue-next'
+import { FileText, Loader2, AlertCircle, RefreshCw } from 'lucide-vue-next'
 import { ScrollArea } from '~/components/ui/scroll-area'
 import { Badge } from '~/components/ui/badge'
+import { Button } from '~/components/ui/button'
 
 const route = useRoute()
-const { prds, prdsStatus } = usePrd()
+const { prds, prdsStatus, refreshPrds } = usePrd()
 const { currentRepoId } = useRepos()
 
 // Determine which PRD is currently selected based on route
@@ -38,6 +39,18 @@ function isActive(slug: string): boolean {
           <p class="text-sm text-muted-foreground">
             Select a repository to view PRDs
           </p>
+        </div>
+
+        <!-- Error state -->
+        <div v-else-if="prdsStatus === 'error'" class="px-2 py-8 text-center">
+          <AlertCircle class="mx-auto size-8 text-destructive/50" />
+          <p class="mt-2 text-sm text-muted-foreground">
+            Failed to load PRDs
+          </p>
+          <Button variant="ghost" size="sm" class="mt-2" @click="refreshPrds">
+            <RefreshCw class="mr-1 size-3" />
+            Retry
+          </Button>
         </div>
 
         <!-- Empty state -->

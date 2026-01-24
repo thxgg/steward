@@ -2,20 +2,28 @@ import type { PrdListItem, PrdDocument } from '~/types/prd'
 import type { TasksFile, ProgressFile } from '~/types/task'
 
 export function usePrd() {
-  const { currentRepo, currentRepoId } = useRepos()
+  const { currentRepoId } = useRepos()
+  const { showError } = useToast()
 
   // PRD list for current repo - refetches when currentRepoId changes
   const prdsUrl = computed(() =>
     currentRepoId.value ? `/api/repos/${currentRepoId.value}/prds` : ''
   )
 
-  const { data: prds, refresh: refreshPrds, status: prdsStatus } = useFetch<PrdListItem[]>(
+  const { data: prds, refresh: refreshPrds, status: prdsStatus, error: prdsError } = useFetch<PrdListItem[]>(
     prdsUrl,
     {
       default: () => [],
       immediate: false
     }
   )
+
+  // Show error toast when PRD list fetch fails
+  watch(prdsError, (err) => {
+    if (err) {
+      showError('Failed to load PRD list', 'The repository may be inaccessible.')
+    }
+  })
 
   // Watch for repo changes and fetch PRDs
   watch(currentRepoId, async (newId) => {
