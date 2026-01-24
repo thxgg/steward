@@ -8,7 +8,8 @@ import {
   Circle,
   ListOrdered,
   CheckSquare,
-  Link2
+  Link2,
+  Check
 } from 'lucide-vue-next'
 import {
   Sheet,
@@ -154,14 +155,14 @@ function getTaskTitle(taskId: string): string {
             <CheckSquare class="size-4" />
             Pass Criteria
           </h4>
-          <ul class="space-y-1 text-sm text-muted-foreground">
+          <ul class="space-y-1.5 text-sm text-muted-foreground">
             <li v-for="(pass, index) in task.passes" :key="index" class="flex items-start gap-2">
-              <input
-                type="checkbox"
-                :checked="task.status === 'completed'"
-                disabled
-                class="mt-0.5 shrink-0"
-              />
+              <div
+                class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border"
+                :class="task.status === 'completed' ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/50'"
+              >
+                <Check v-if="task.status === 'completed'" class="size-3" />
+              </div>
               <span>{{ pass }}</span>
             </li>
           </ul>
