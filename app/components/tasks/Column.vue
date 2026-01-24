@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Circle, Loader2, CheckCircle2 } from 'lucide-vue-next'
+import { Circle, PlayCircle, CheckCircle2 } from 'lucide-vue-next'
 import { ScrollArea } from '~/components/ui/scroll-area'
 import type { Task, TaskStatus } from '~/types/task'
 
@@ -27,7 +27,7 @@ const statusConfig = computed(() => {
     case 'in_progress':
       return {
         label: 'In Progress',
-        icon: Loader2,
+        icon: PlayCircle,
         headerClass: 'bg-blue-500/10',
         iconClass: 'text-blue-500'
       }
@@ -58,7 +58,7 @@ function handleTaskClick(task: Task) {
 </script>
 
 <template>
-  <div class="flex h-full w-72 shrink-0 flex-col rounded-lg border border-border bg-card">
+  <div class="flex h-full w-64 shrink-0 flex-col rounded-lg border border-border bg-card">
     <!-- Column Header -->
     <div
       class="flex items-center gap-2 rounded-t-lg border-b border-border px-3 py-2"
@@ -67,7 +67,7 @@ function handleTaskClick(task: Task) {
       <component
         :is="statusConfig.icon"
         class="size-4"
-        :class="[statusConfig.iconClass, { 'animate-spin': status === 'in_progress' }]"
+        :class="statusConfig.iconClass"
       />
       <h3 class="text-sm font-medium">{{ statusConfig.label }}</h3>
       <span class="ml-auto text-xs text-muted-foreground">
@@ -76,8 +76,8 @@ function handleTaskClick(task: Task) {
     </div>
 
     <!-- Task Cards -->
-    <ScrollArea class="flex-1 p-2">
-      <div class="space-y-2">
+    <ScrollArea class="flex-1 p-1.5">
+      <div class="space-y-1.5">
         <TasksCard
           v-for="task in tasks"
           :key="task.id"

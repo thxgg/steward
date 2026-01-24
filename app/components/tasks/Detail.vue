@@ -100,13 +100,13 @@ function getTaskTitle(taskId: string): string {
 
 <template>
   <Sheet v-model:open="open">
-    <SheetContent class="w-full overflow-y-auto sm:max-w-lg">
-      <SheetHeader v-if="task">
+    <SheetContent class="w-full overflow-y-auto px-6 sm:max-w-lg">
+      <SheetHeader v-if="task" class="pr-6">
         <SheetTitle class="text-left text-lg">{{ task.title }}</SheetTitle>
         <SheetDescription class="sr-only">Task details</SheetDescription>
       </SheetHeader>
 
-      <div v-if="task" class="mt-6 space-y-6">
+      <div v-if="task" class="mt-4 space-y-4">
         <!-- Status, Category, Priority row -->
         <div class="flex flex-wrap items-center gap-2">
           <Badge :variant="categoryConfig.variant">

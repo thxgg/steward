@@ -68,9 +68,9 @@ function handleClick() {
     :class="{ 'opacity-60': isBlocked }"
     @click="handleClick"
   >
-    <CardContent class="p-3">
+    <CardContent class="p-2.5">
       <!-- Header: Category + Priority -->
-      <div class="flex items-center justify-between gap-2 mb-2">
+      <div class="flex items-center justify-between gap-2 mb-1.5">
         <Badge :variant="categoryConfig.variant" class="text-xs">
           {{ categoryConfig.label }}
         </Badge>

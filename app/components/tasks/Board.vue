@@ -53,7 +53,7 @@ function handleTaskClick(task: Task) {
 </script>
 
 <template>
-  <div class="flex h-full gap-4 overflow-x-auto pb-4 md:gap-6">
+  <div class="flex h-full gap-3 overflow-x-auto pb-2">
     <TasksColumn
       v-for="column in columns"
       :key="column.status"
