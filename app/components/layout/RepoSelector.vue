@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronDown, Plus, FolderOpen, Check, Trash2 } from 'lucide-vue-next'
+import { ChevronDown, Plus, FolderOpen, Check, Trash2, Folder } from 'lucide-vue-next'
 import {
   Sheet,
   SheetContent,
@@ -26,6 +26,43 @@ function handleSelectRepo(id: string) {
 function handleAddClick() {
   open.value = false
   showAddDialog.value = true
+}
+
+// Directory browser state
+const showBrowser = ref(false)
+const browserPath = ref('')
+const browserDirs = ref<{ name: string; path: string }[]>([])
+const browserLoading = ref(false)
+
+async function browseDirectory(path?: string) {
+  browserLoading.value = true
+  try {
+    const data = await $fetch('/api/browse', {
+      query: { path: path || browserPath.value || undefined }
+    })
+    browserPath.value = data.current
+    browserDirs.value = data.directories
+  } catch (err) {
+    console.error('Browse error:', err)
+  } finally {
+    browserLoading.value = false
+  }
+}
+
+function openBrowser() {
+  showBrowser.value = true
+  browseDirectory(newRepoPath.value || undefined)
+}
+
+function selectDirectory(path: string) {
+  newRepoPath.value = path
+  showBrowser.value = false
+  addError.value = null
+}
+
+function navigateUp() {
+  const parent = browserPath.value.split('/').slice(0, -1).join('/') || '/'
+  browseDirectory(parent)
 }
 
 // Add repo dialog state
@@ -102,7 +139,7 @@ function handleDialogClose() {
     <!-- Dropdown content -->
     <div
       v-if="open"
-      class="absolute top-full left-0 z-[9999] mt-1 w-[280px] rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+      class="absolute top-full right-0 z-[9999] mt-1 w-[280px] rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
     >
       <!-- Search input -->
       <input
@@ -176,18 +213,30 @@ function handleDialogClose() {
           </SheetDescription>
         </SheetHeader>
 
-        <form class="mt-6 space-y-4" @submit.prevent="handleAddRepo">
+        <form id="add-repo-form" class="flex-1 space-y-4 px-4" @submit.prevent="handleAddRepo">
           <div class="space-y-2">
             <label for="repo-path" class="text-sm font-medium">
               Repository Path
             </label>
-            <Input
-              id="repo-path"
-              v-model="newRepoPath"
-              placeholder="/path/to/your/project"
-              :aria-invalid="!!addError"
-              :disabled="isAdding"
-            />
+            <div class="flex gap-2">
+              <Input
+                id="repo-path"
+                v-model="newRepoPath"
+                placeholder="/path/to/your/project"
+                :aria-invalid="!!addError"
+                :disabled="isAdding"
+                class="flex-1"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                :disabled="isAdding"
+                @click="openBrowser"
+              >
+                <Folder class="size-4" />
+              </Button>
+            </div>
             <p v-if="addError" class="text-sm text-destructive">
               {{ addError }}
             </p>
@@ -196,21 +245,66 @@ function handleDialogClose() {
             </p>
           </div>
 
-          <SheetFooter class="gap-2 sm:gap-0">
-            <Button
-              type="button"
-              variant="outline"
-              :disabled="isAdding"
-              @click="handleDialogClose"
-            >
-              Cancel
-            </Button>
-            <Button type="submit" :disabled="isAdding">
-              <span v-if="isAdding">Adding...</span>
-              <span v-else>Add Repository</span>
-            </Button>
-          </SheetFooter>
+          <!-- Directory Browser -->
+          <div v-if="showBrowser" class="space-y-2 rounded-md border p-3">
+            <div class="flex items-center gap-2 text-sm">
+              <button
+                type="button"
+                class="hover:text-foreground text-muted-foreground"
+                :disabled="browserPath === '/'"
+                @click="navigateUp"
+              >
+                ..
+              </button>
+              <span class="flex-1 truncate font-mono text-xs text-muted-foreground">
+                {{ browserPath }}
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="h-7 text-xs"
+                @click="selectDirectory(browserPath)"
+              >
+                Select
+              </Button>
+            </div>
+            <div class="max-h-[200px] overflow-y-auto">
+              <div v-if="browserLoading" class="py-2 text-center text-sm text-muted-foreground">
+                Loading...
+              </div>
+              <div v-else-if="!browserDirs.length" class="py-2 text-center text-sm text-muted-foreground">
+                No subdirectories
+              </div>
+              <button
+                v-for="dir in browserDirs"
+                v-else
+                :key="dir.path"
+                type="button"
+                class="flex w-full items-center gap-2 rounded px-2 py-1 text-sm hover:bg-accent"
+                @click="browseDirectory(dir.path)"
+              >
+                <Folder class="size-4 text-muted-foreground" />
+                <span class="truncate">{{ dir.name }}</span>
+              </button>
+            </div>
+          </div>
         </form>
+
+        <SheetFooter>
+          <Button
+            type="button"
+            variant="outline"
+            :disabled="isAdding"
+            @click="handleDialogClose"
+          >
+            Cancel
+          </Button>
+          <Button type="submit" form="add-repo-form" :disabled="isAdding">
+            <span v-if="isAdding">Adding...</span>
+            <span v-else>Add Repository</span>
+          </Button>
+        </SheetFooter>
       </SheetContent>
     </Sheet>
   </div>
