@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { Button } from '~/components/ui/button'
+
 const colorMode = useColorMode()
 
 function toggleColorMode() {
@@ -20,10 +22,9 @@ function toggleColorMode() {
           </h1>
         </div>
 
-        <!-- Right side: Repo Selector slot + Theme Toggle -->
+        <!-- Right side: Repo Selector + Theme Toggle -->
         <div class="flex items-center gap-3">
-          <!-- Slot for RepoSelector component -->
-          <slot name="header-actions" />
+          <LayoutRepoSelector />
 
           <!-- Theme Toggle -->
           <Button

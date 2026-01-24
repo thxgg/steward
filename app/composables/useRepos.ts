@@ -4,8 +4,11 @@ const STORAGE_KEY = 'prd-viewer-current-repo'
 
 export function useRepos() {
   // Reactive repos list fetched from API
+  // Use key to share data, server: false to avoid SSR issues with filesystem reads
   const { data: repos, refresh: refreshRepos, status } = useFetch<RepoConfig[]>('/api/repos', {
-    default: () => []
+    key: 'repos',
+    default: () => [],
+    server: false
   })
 
   // Current repo ID stored in localStorage
