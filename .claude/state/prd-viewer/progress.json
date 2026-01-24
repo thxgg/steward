@@ -1,7 +1,7 @@
 {
   "prdName": "PRD Viewer",
   "totalTasks": 25,
-  "completed": 21,
+  "completed": 22,
   "inProgress": 0,
   "blocked": 0,
   "startedAt": "2026-01-24T13:35:51Z",
@@ -209,6 +209,15 @@
       "implemented": "Wired up full navigation flow: RepoSelector auto-navigates to first PRD on repo change, Sidebar uses NuxtLink for PRD navigation, added routeRules for SPA fallback to support deep links and browser refresh, tab preference persists in localStorage, page calls selectRepo to ensure repo context on direct URL access.",
       "filesChanged": ["app/components/layout/RepoSelector.vue", "app/pages/index.vue", "nuxt.config.ts", "app/pages/[repo]/[prd].vue"],
       "learnings": "Use routeRules with ssr: false for SPA fallback on dynamic routes. Extract array element to variable before null check to satisfy TypeScript."
+    },
+    {
+      "taskId": "task-022",
+      "status": "completed",
+      "startedAt": "2026-01-24T22:54:00Z",
+      "completedAt": "2026-01-25T00:00:00Z",
+      "implemented": "Implemented file watching for auto-refresh using chokidar. Created server/utils/watcher.ts with debounced file watcher that monitors docs/prd/*.md and .claude/state/*/*.json for each repo. Created SSE endpoint at server/api/watch.get.ts with keepalive. Created useFileWatch composable for client-side SSE connection with auto-reconnect. Integrated into default layout to trigger data refresh on file changes. Updated repo add/delete endpoints to refresh watcher.",
+      "filesChanged": ["server/utils/watcher.ts", "server/api/watch.get.ts", "app/composables/useFileWatch.ts", "app/layouts/default.vue", "server/api/repos/index.post.ts", "server/api/repos/[repoId].delete.ts", "package.json"],
+      "learnings": "Use chokidar with ignoreInitial: true and debounce for efficient file watching. SSE with ReadableStream works well for server-to-client push notifications in Nuxt."
     }
   ]
 }

@@ -1,4 +1,5 @@
 import { removeRepo } from '~~/server/utils/repos'
+import { refreshWatcher } from '~~/server/utils/watcher'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'repoId')
@@ -18,6 +19,9 @@ export default defineEventHandler(async (event) => {
       statusMessage: 'Repository not found'
     })
   }
+
+  // Refresh file watcher to remove repo from watch list
+  await refreshWatcher()
 
   return { success: true }
 })

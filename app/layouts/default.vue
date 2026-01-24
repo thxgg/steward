@@ -2,10 +2,42 @@
 import { Button } from '~/components/ui/button'
 
 const colorMode = useColorMode()
+const { refreshPrds } = usePrd()
+const { currentRepoId } = useRepos()
+const route = useRoute()
 
 function toggleColorMode() {
   colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark'
 }
+
+// File watching for auto-refresh
+useFileWatch((event) => {
+  if (event.type === 'connected') {
+    console.log('[layout] File watcher connected')
+    return
+  }
+
+  // Only refresh if the change is for the current repo
+  if (event.repoId !== currentRepoId.value) {
+    return
+  }
+
+  console.log('[layout] File change detected:', event.category, event.path)
+
+  // Refresh PRD list for any changes
+  if (event.category === 'prd' || event.category === 'tasks') {
+    refreshPrds()
+  }
+
+  // For task/progress changes on current PRD page, trigger a page refresh
+  if (event.category === 'tasks' || event.category === 'progress') {
+    const prdSlug = route.params.prd as string | undefined
+    if (prdSlug && event.path?.includes(`/${prdSlug}/`)) {
+      // Refresh the page data by navigating to the same route
+      navigateTo(route.fullPath, { replace: true })
+    }
+  }
+})
 </script>
 
 <template>
