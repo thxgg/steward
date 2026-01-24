@@ -10,6 +10,14 @@ export default defineNuxtConfig({
   modules: [
     '@nuxtjs/color-mode'
   ],
+  components: {
+    dirs: [
+      {
+        path: '~/components',
+        ignore: ['**/index.ts']
+      }
+    ]
+  },
   css: ['~/assets/css/main.css'],
   colorMode: {
     classSuffix: '',
@@ -18,5 +26,9 @@ export default defineNuxtConfig({
   },
   vite: {
     plugins: [tailwindcss()]
+  },
+  // Enable SPA fallback for dynamic routes
+  routeRules: {
+    '/**': { ssr: false }
   }
 })

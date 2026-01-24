@@ -11,16 +11,29 @@ import {
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 
+const router = useRouter()
 const { repos, currentRepo, currentRepoId, selectRepo, addRepo, removeRepo } = useRepos()
 
 // Dropdown state
 const open = ref(false)
 const searchQuery = ref('')
 
-function handleSelectRepo(id: string) {
+async function handleSelectRepo(id: string) {
   selectRepo(id)
   open.value = false
   searchQuery.value = ''
+
+  // Fetch PRDs for new repo and navigate to first one
+  try {
+    const prds = await $fetch<{ slug: string }[]>(`/api/repos/${id}/prds`)
+    if (prds && prds.length > 0) {
+      router.push(`/${id}/${prds[0].slug}`)
+    } else {
+      router.push('/')
+    }
+  } catch {
+    router.push('/')
+  }
 }
 
 function handleAddClick() {
@@ -91,9 +104,21 @@ async function handleAddRepo() {
   addError.value = null
 
   try {
-    await addRepo(newRepoPath.value.trim())
+    const newRepo = await addRepo(newRepoPath.value.trim())
     showAddDialog.value = false
     newRepoPath.value = ''
+
+    // Navigate to first PRD of newly added repo
+    if (newRepo?.id) {
+      try {
+        const prds = await $fetch<{ slug: string }[]>(`/api/repos/${newRepo.id}/prds`)
+        if (prds && prds.length > 0) {
+          router.push(`/${newRepo.id}/${prds[0].slug}`)
+        }
+      } catch {
+        // Ignore navigation errors
+      }
+    }
   } catch (error) {
     if (error instanceof Error) {
       // Extract message from fetch error
@@ -152,11 +177,12 @@ function handleDialogClose() {
       <!-- Repository items -->
       <div class="max-h-[200px] overflow-y-auto">
         <template v-if="filteredRepos?.length">
-          <button
+          <div
             v-for="repo in filteredRepos"
             :key="repo.id"
-            type="button"
-            class="group flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
+            class="group flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer"
+            role="option"
+            :aria-selected="currentRepoId === repo.id"
             @click="handleSelectRepo(repo.id)"
           >
             <Check
@@ -175,7 +201,7 @@ function handleDialogClose() {
             >
               <Trash2 class="size-3.5 text-destructive" />
             </button>
-          </button>
+          </div>
         </template>
         <div v-else class="px-2 py-1.5 text-sm text-muted-foreground">
           No repositories found.

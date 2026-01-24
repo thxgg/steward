@@ -4,6 +4,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import type { PrdDocument } from '~/types/prd'
 import type { Task, TasksFile } from '~/types/task'
 
+// Disable SSR for this page - requires client-side localStorage for repo context
+definePageMeta({
+  ssr: false
+})
+
 const route = useRoute()
 const { selectRepo } = useRepos()
 const { fetchDocument, fetchTasks } = usePrd()

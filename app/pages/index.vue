@@ -3,8 +3,9 @@ import { FolderOpen, FileText, ArrowRight, Folder } from 'lucide-vue-next'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 
+const router = useRouter()
 const { repos, currentRepo, currentRepoId, addRepo, status: reposStatus } = useRepos()
-const { prds } = usePrd()
+const { prds, prdsStatus } = usePrd()
 
 // Onboarding state
 const newRepoPath = ref('')
@@ -88,6 +89,17 @@ const showWelcome = computed(() => {
 const showPrdList = computed(() => {
   return currentRepoId.value && prds.value && prds.value.length > 0
 })
+
+// Auto-navigate to first PRD when repo is selected and has documents
+watch(
+  [currentRepoId, prds, prdsStatus],
+  ([repoId, prdList, status]) => {
+    if (repoId && status === 'success' && prdList && prdList.length > 0) {
+      router.push(`/${repoId}/${prdList[0].slug}`)
+    }
+  },
+  { immediate: true }
+)
 </script>
 
 <template>

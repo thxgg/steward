@@ -64,7 +64,7 @@ function handleClick() {
 
 <template>
   <Card
-    class="cursor-pointer transition-all hover:shadow-md hover:border-primary/50"
+    class="cursor-pointer py-0 gap-0 transition-all hover:shadow-md hover:border-primary/50"
     :class="{ 'opacity-60': isBlocked }"
     @click="handleClick"
   >
@@ -83,7 +83,7 @@ function handleClick() {
       </div>
 
       <!-- Title -->
-      <h4 class="text-sm font-medium leading-snug line-clamp-2">
+      <h4 class="text-sm font-medium leading-snug">
         {{ task.title }}
       </h4>
 
