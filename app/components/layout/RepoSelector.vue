@@ -1,16 +1,6 @@
 <script setup lang="ts">
 import { ChevronDown, Plus, FolderOpen, Check, Trash2 } from 'lucide-vue-next'
 import {
-  Combobox,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-  ComboboxSeparator,
-  ComboboxViewport,
-  ComboboxTrigger
-} from '~/components/ui/combobox'
-import {
   Sheet,
   SheetContent,
   SheetDescription,
@@ -23,22 +13,20 @@ import { Input } from '~/components/ui/input'
 
 const { repos, currentRepo, currentRepoId, selectRepo, addRepo, removeRepo } = useRepos()
 
-// Combobox state
+// Dropdown state
 const open = ref(false)
 const searchQuery = ref('')
-const selectedValue = ref<string | undefined>(currentRepoId.value ?? undefined)
 
-// Watch for selection changes
-watch(selectedValue, (newValue) => {
-  if (newValue === '__add__') {
-    showAddDialog.value = true
-    // Reset to previous value
-    selectedValue.value = currentRepoId.value ?? undefined
-  } else if (newValue && newValue !== currentRepoId.value) {
-    selectRepo(newValue)
-  }
+function handleSelectRepo(id: string) {
+  selectRepo(id)
+  open.value = false
   searchQuery.value = ''
-})
+}
+
+function handleAddClick() {
+  open.value = false
+  showAddDialog.value = true
+}
 
 // Add repo dialog state
 const showAddDialog = ref(false)
@@ -96,50 +84,49 @@ function handleDialogClose() {
 
 <template>
   <div class="relative">
-    <!-- Combobox for repo selection -->
-    <Combobox
-      v-model="selectedValue"
-      v-model:open="open"
-      v-model:search-term="searchQuery"
+    <!-- Simple dropdown for repo selection -->
+    <button
+      type="button"
+      class="inline-flex h-8 w-[200px] items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm font-normal ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      @click="open = !open"
     >
-      <ComboboxTrigger as-child>
-        <Button
-          variant="outline"
-          size="sm"
-          class="w-[200px] justify-between gap-2 font-normal"
-          role="combobox"
-          :aria-expanded="open"
-        >
-          <span class="flex items-center gap-2 truncate">
-            <FolderOpen class="size-4 shrink-0 text-muted-foreground" />
-            <span class="truncate">
-              {{ currentRepo?.name ?? 'Select repository' }}
-            </span>
-          </span>
-          <ChevronDown class="size-4 shrink-0 opacity-50" />
-        </Button>
-      </ComboboxTrigger>
+      <span class="flex items-center gap-2 truncate">
+        <FolderOpen class="size-4 shrink-0 text-muted-foreground" />
+        <span class="truncate">
+          {{ currentRepo?.name ?? 'Select repository' }}
+        </span>
+      </span>
+      <ChevronDown class="size-4 shrink-0 opacity-50" />
+    </button>
 
-      <ComboboxList class="w-[280px]">
-        <ComboboxInput
-          placeholder="Search repositories..."
-          class="h-9"
-        />
-        <ComboboxViewport class="p-1">
-          <ComboboxEmpty>No repositories found.</ComboboxEmpty>
+    <!-- Dropdown content -->
+    <div
+      v-if="open"
+      class="absolute top-full left-0 z-[9999] mt-1 w-[280px] rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+    >
+      <!-- Search input -->
+      <input
+        v-model="searchQuery"
+        type="text"
+        placeholder="Search repositories..."
+        class="mb-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      />
 
-          <!-- Repository items -->
-          <ComboboxItem
+      <!-- Repository items -->
+      <div class="max-h-[200px] overflow-y-auto">
+        <template v-if="filteredRepos?.length">
+          <button
             v-for="repo in filteredRepos"
             :key="repo.id"
-            :value="repo.id"
-            class="group"
+            type="button"
+            class="group flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
+            @click="handleSelectRepo(repo.id)"
           >
             <Check
               class="size-4 shrink-0"
               :class="currentRepoId === repo.id ? 'opacity-100' : 'opacity-0'"
             />
-            <div class="flex flex-1 flex-col gap-0.5 overflow-hidden">
+            <div class="flex flex-1 flex-col gap-0.5 overflow-hidden text-left">
               <span class="truncate font-medium">{{ repo.name }}</span>
               <span class="truncate text-xs text-muted-foreground">{{ repo.path }}</span>
             </div>
@@ -151,20 +138,33 @@ function handleDialogClose() {
             >
               <Trash2 class="size-3.5 text-destructive" />
             </button>
-          </ComboboxItem>
+          </button>
+        </template>
+        <div v-else class="px-2 py-1.5 text-sm text-muted-foreground">
+          No repositories found.
+        </div>
 
-          <!-- Add repository option -->
-          <ComboboxSeparator v-if="filteredRepos?.length" class="my-1" />
-          <ComboboxItem
-            value="__add__"
-            class="text-muted-foreground"
-          >
-            <Plus class="size-4" />
-            <span>Add repository...</span>
-          </ComboboxItem>
-        </ComboboxViewport>
-      </ComboboxList>
-    </Combobox>
+        <!-- Separator -->
+        <div v-if="filteredRepos?.length" class="my-1 h-px bg-border" />
+
+        <!-- Add repository option -->
+        <button
+          type="button"
+          class="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          @click="handleAddClick"
+        >
+          <Plus class="size-4" />
+          <span>Add repository...</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Click outside to close -->
+    <div
+      v-if="open"
+      class="fixed inset-0 z-[9998]"
+      @click="open = false"
+    />
 
     <!-- Add Repository Sheet -->
     <Sheet :open="showAddDialog" @update:open="showAddDialog = $event">
