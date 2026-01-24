@@ -80,8 +80,28 @@ function toggleColorMode() {
     </header>
 
     <!-- Main Content Area with top padding for fixed header -->
-    <main class="pt-14">
-      <slot />
-    </main>
+    <div class="flex h-screen pt-14">
+      <!-- Sidebar -->
+      <ClientOnly>
+        <LayoutSidebar />
+        <template #fallback>
+          <aside class="flex h-full w-64 flex-col border-r border-border bg-background">
+            <div class="flex h-12 items-center border-b border-border px-4">
+              <div class="h-4 w-20 animate-pulse rounded bg-muted" />
+            </div>
+            <div class="flex-1 p-2 space-y-2">
+              <div class="h-9 animate-pulse rounded-md bg-muted" />
+              <div class="h-9 animate-pulse rounded-md bg-muted" />
+              <div class="h-9 animate-pulse rounded-md bg-muted" />
+            </div>
+          </aside>
+        </template>
+      </ClientOnly>
+
+      <!-- Main content -->
+      <main class="flex-1 overflow-auto">
+        <slot />
+      </main>
+    </div>
   </div>
 </template>
