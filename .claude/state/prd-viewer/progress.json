@@ -1,7 +1,7 @@
 {
   "prdName": "PRD Viewer",
   "totalTasks": 25,
-  "completed": 1,
+  "completed": 2,
   "inProgress": 0,
   "blocked": 0,
   "startedAt": "2026-01-24T13:35:51Z",
@@ -21,6 +21,15 @@
       "implemented": "Initialized Nuxt 4 project with v4-compat template, configured Tailwind CSS v4 with @tailwindcss/vite plugin, initialized shadcn-vue, added @nuxtjs/color-mode for system theme detection",
       "filesChanged": ["nuxt.config.ts", "package.json", "app/app.vue", "app/assets/css/main.css", "app/lib/utils.ts", "components.json"],
       "learnings": "Tailwind CSS v4 requires @tailwindcss/vite plugin instead of @nuxtjs/tailwindcss module. Use bun as package manager for faster installs."
+    },
+    {
+      "taskId": "task-002",
+      "status": "completed",
+      "startedAt": "2026-01-24T15:53:08Z",
+      "completedAt": "2026-01-24T15:54:51Z",
+      "implemented": "Created TypeScript interfaces for RepoConfig, PrdListItem, PrdDocument, Task, TasksFile, ProgressFile and related types. All types match PRD schema with proper JSDoc documentation.",
+      "filesChanged": ["app/types/repo.ts", "app/types/prd.ts", "app/types/task.ts", "app/types/index.ts"],
+      "learnings": "Nuxt 4 with app/ directory structure uses app/types/ for shared types. vue-tsc validates types correctly."
     }
   ]
 }

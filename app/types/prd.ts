@@ -1,0 +1,47 @@
+/**
+ * PRD list item returned when listing PRDs in a repository
+ */
+export interface PrdListItem {
+  /** URL-safe identifier (derived from filename) */
+  slug: string
+  /** PRD title extracted from markdown H1 */
+  name: string
+  /** Relative path to the .md file */
+  source: string
+  /** Whether .claude/state/<slug> directory exists */
+  hasState: boolean
+  /** Total number of tasks if state exists */
+  taskCount?: number
+  /** Number of completed tasks if state exists */
+  completedCount?: number
+}
+
+/**
+ * PRD metadata extracted from document header
+ */
+export interface PrdMetadata {
+  /** Document author */
+  author?: string
+  /** Creation/update date */
+  date?: string
+  /** Document status (Draft, In Progress, Complete, etc.) */
+  status?: string
+  /** Shortcut story ID if linked */
+  shortcutStory?: string
+  /** Shortcut story URL if linked */
+  shortcutUrl?: string
+}
+
+/**
+ * Full PRD document with content and metadata
+ */
+export interface PrdDocument {
+  /** URL-safe identifier */
+  slug: string
+  /** PRD title */
+  name: string
+  /** Raw markdown content */
+  content: string
+  /** Extracted metadata */
+  metadata: PrdMetadata
+}
