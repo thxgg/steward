@@ -1,7 +1,7 @@
 import { removeRepo } from '~~/server/utils/repos'
 
 export default defineEventHandler(async (event) => {
-  const id = getRouterParam(event, 'id')
+  const id = getRouterParam(event, 'repoId')
 
   if (!id) {
     throw createError({
