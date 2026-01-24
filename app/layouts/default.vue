@@ -22,56 +22,60 @@ function toggleColorMode() {
           </h1>
         </div>
 
-        <!-- Right side: Repo Selector + Theme Toggle -->
-        <div class="flex items-center gap-3">
-          <LayoutRepoSelector />
-
-          <!-- Theme Toggle -->
-          <Button
-            variant="ghost"
-            size="icon"
-            class="size-9"
-            @click="toggleColorMode"
-          >
-            <!-- Sun icon for dark mode (click to switch to light) -->
-            <svg
-              v-if="colorMode.value === 'dark'"
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="size-4"
+        <!-- Right side: Repo Selector + Theme Toggle (ClientOnly to prevent hydration mismatch) -->
+        <ClientOnly>
+          <div class="flex items-center gap-3">
+            <LayoutRepoSelector />
+            <Button
+              variant="ghost"
+              size="icon"
+              class="size-9"
+              @click="toggleColorMode"
             >
-              <circle cx="12" cy="12" r="4" />
-              <path d="M12 2v2" />
-              <path d="M12 20v2" />
-              <path d="m4.93 4.93 1.41 1.41" />
-              <path d="m17.66 17.66 1.41 1.41" />
-              <path d="M2 12h2" />
-              <path d="M20 12h2" />
-              <path d="m6.34 17.66-1.41 1.41" />
-              <path d="m19.07 4.93-1.41 1.41" />
-            </svg>
-            <!-- Moon icon for light mode (click to switch to dark) -->
-            <svg
-              v-else
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="size-4"
-            >
-              <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
-            </svg>
-            <span class="sr-only">Toggle theme</span>
-          </Button>
-        </div>
+              <svg
+                v-if="colorMode.value === 'dark'"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="size-4"
+              >
+                <circle cx="12" cy="12" r="4" />
+                <path d="M12 2v2" />
+                <path d="M12 20v2" />
+                <path d="m4.93 4.93 1.41 1.41" />
+                <path d="m17.66 17.66 1.41 1.41" />
+                <path d="M2 12h2" />
+                <path d="M20 12h2" />
+                <path d="m6.34 17.66-1.41 1.41" />
+                <path d="m19.07 4.93-1.41 1.41" />
+              </svg>
+              <svg
+                v-else
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="size-4"
+              >
+                <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+              </svg>
+              <span class="sr-only">Toggle theme</span>
+            </Button>
+          </div>
+          <template #fallback>
+            <div class="flex items-center gap-3">
+              <div class="h-8 w-[200px] animate-pulse rounded-md bg-muted" />
+              <div class="size-9 animate-pulse rounded-md bg-muted" />
+            </div>
+          </template>
+        </ClientOnly>
       </div>
     </header>
 
