@@ -1,0 +1,604 @@
+{
+  "prd": {
+    "name": "PRD Viewer",
+    "source": "docs/prd/prd-viewer.md",
+    "createdAt": "2026-01-24T13:10:54Z"
+  },
+  "tasks": [
+    {
+      "id": "task-001",
+      "category": "setup",
+      "title": "Initialize Nuxt 4 project with shadcn-vue",
+      "description": "Create a new Nuxt 4 project and configure shadcn-vue with Tailwind CSS v4. Set up the base project structure.",
+      "steps": [
+        "Run `npx nuxi@latest init prd-viewer` to create Nuxt 4 project",
+        "Install and configure Tailwind CSS v4",
+        "Initialize shadcn-vue with `npx shadcn-vue@latest init`",
+        "Configure color mode module for system theme detection",
+        "Verify dev server starts successfully"
+      ],
+      "passes": [
+        "Nuxt 4 project runs with `npm run dev`",
+        "Tailwind CSS classes work in components",
+        "shadcn-vue is initialized and ready for component installation",
+        "Color mode switches based on system preference"
+      ],
+      "dependencies": [],
+      "priority": "critical",
+      "status": "completed",
+      "startedAt": "2026-01-24T13:35:51Z",
+      "completedAt": "2026-01-24T15:27:18Z"
+    },
+    {
+      "id": "task-002",
+      "category": "setup",
+      "title": "Define TypeScript types for data models",
+      "description": "Create TypeScript interfaces for repository config, PRD documents, tasks, and progress tracking.",
+      "steps": [
+        "Create `types/repo.ts` with RepoConfig interface",
+        "Create `types/prd.ts` with PrdListItem and PrdDocument interfaces",
+        "Create `types/task.ts` with Task and Progress interfaces",
+        "Export all types from a central `types/index.ts`"
+      ],
+      "passes": [
+        "All interfaces match schemas defined in PRD",
+        "Types are importable throughout the project",
+        "No TypeScript errors in type definitions"
+      ],
+      "dependencies": ["task-001"],
+      "priority": "high",
+      "status": "pending"
+    },
+    {
+      "id": "task-003",
+      "category": "setup",
+      "title": "Install required shadcn-vue components",
+      "description": "Install the shadcn-vue components needed for the UI: Combobox, Card, Badge, Tabs, Sheet, Separator, ScrollArea, Button, Input.",
+      "steps": [
+        "Run `npx shadcn-vue@latest add combobox`",
+        "Run `npx shadcn-vue@latest add card`",
+        "Run `npx shadcn-vue@latest add badge`",
+        "Run `npx shadcn-vue@latest add tabs`",
+        "Run `npx shadcn-vue@latest add sheet`",
+        "Run `npx shadcn-vue@latest add separator`",
+        "Run `npx shadcn-vue@latest add scroll-area`",
+        "Run `npx shadcn-vue@latest add button`",
+        "Run `npx shadcn-vue@latest add input`",
+        "Verify all components are importable"
+      ],
+      "passes": [
+        "All listed components are installed in `components/ui/`",
+        "Components render without errors",
+        "Components respect color mode (dark/light)"
+      ],
+      "dependencies": ["task-001"],
+      "priority": "high",
+      "status": "pending"
+    },
+    {
+      "id": "task-004",
+      "category": "feature",
+      "title": "Create server API for repository management",
+      "description": "Implement server-side API routes for listing, adding, and removing repository configurations. Repos are stored server-side in a JSON file.",
+      "steps": [
+        "Create `server/api/repos/index.get.ts` to list all repos",
+        "Create `server/api/repos/index.post.ts` to add a new repo (validates path exists)",
+        "Create `server/api/repos/[id].delete.ts` to remove a repo",
+        "Store repos in `server/data/repos.json` (created on first write)",
+        "Add path validation to ensure directory exists and contains expected structure"
+      ],
+      "passes": [
+        "GET /api/repos returns array of RepoConfig objects",
+        "POST /api/repos with valid path creates new repo entry",
+        "POST /api/repos with invalid path returns 400 error",
+        "DELETE /api/repos/:id removes repo from storage",
+        "Path traversal attempts are rejected"
+      ],
+      "dependencies": ["task-002"],
+      "priority": "critical",
+      "status": "pending"
+    },
+    {
+      "id": "task-005",
+      "category": "feature",
+      "title": "Create server API for PRD listing",
+      "description": "Implement API route to list all PRDs found in a repository's docs/prd/ directory with metadata.",
+      "steps": [
+        "Create `server/api/repos/[repoId]/prds.get.ts`",
+        "Scan `<repo-path>/docs/prd/*.md` for PRD files",
+        "Parse each markdown file to extract title from first H1",
+        "Check if `.claude/state/<slug>/tasks.json` exists",
+        "If tasks exist, count total and completed tasks",
+        "Return array of PrdListItem objects"
+      ],
+      "passes": [
+        "API returns list of PRDs with slug, name, source path",
+        "hasState is true when .claude/state directory exists for PRD",
+        "taskCount and completedCount are populated when tasks exist",
+        "Empty docs/prd returns empty array, not error",
+        "Invalid repoId returns 404"
+      ],
+      "dependencies": ["task-004"],
+      "priority": "critical",
+      "status": "pending"
+    },
+    {
+      "id": "task-006",
+      "category": "feature",
+      "title": "Create server API for PRD document retrieval",
+      "description": "Implement API route to get the raw markdown content and parsed metadata of a PRD document.",
+      "steps": [
+        "Create `server/api/repos/[repoId]/prds/[prdSlug]/document.get.ts`",
+        "Read markdown file from `docs/prd/<slug>.md`",
+        "Parse frontmatter-style metadata (Author, Date, Status, Shortcut Story)",
+        "Return both raw markdown and extracted metadata"
+      ],
+      "passes": [
+        "API returns markdown content for valid PRD",
+        "Metadata (author, date, status) is extracted from document header",
+        "Shortcut story link is parsed if present",
+        "Non-existent PRD returns 404"
+      ],
+      "dependencies": ["task-005"],
+      "priority": "high",
+      "status": "pending"
+    },
+    {
+      "id": "task-007",
+      "category": "feature",
+      "title": "Create server API for tasks and progress",
+      "description": "Implement API routes to retrieve tasks.json and progress.json for a PRD.",
+      "steps": [
+        "Create `server/api/repos/[repoId]/prds/[prdSlug]/tasks.get.ts`",
+        "Create `server/api/repos/[repoId]/prds/[prdSlug]/progress.get.ts`",
+        "Read from `.claude/state/<slug>/tasks.json` and `progress.json`",
+        "Return parsed JSON or null if files don't exist"
+      ],
+      "passes": [
+        "Tasks API returns parsed tasks.json content",
+        "Progress API returns parsed progress.json content",
+        "Missing files return null (not error) with 200 status",
+        "Invalid JSON files return 500 with helpful error"
+      ],
+      "dependencies": ["task-005"],
+      "priority": "high",
+      "status": "pending"
+    },
+    {
+      "id": "task-008",
+      "category": "feature",
+      "title": "Create useRepos composable",
+      "description": "Build a composable for managing repository state on the client side.",
+      "steps": [
+        "Create `composables/useRepos.ts`",
+        "Implement `repos` ref with useFetch to /api/repos",
+        "Implement `currentRepo` ref stored in localStorage",
+        "Implement `addRepo(path)` function",
+        "Implement `removeRepo(id)` function",
+        "Implement `selectRepo(id)` function"
+      ],
+      "passes": [
+        "useRepos() returns reactive repos list",
+        "currentRepo persists across page refreshes",
+        "addRepo triggers API call and refreshes list",
+        "removeRepo triggers API call and clears currentRepo if deleted",
+        "selectRepo updates currentRepo in localStorage"
+      ],
+      "dependencies": ["task-004"],
+      "priority": "high",
+      "status": "pending"
+    },
+    {
+      "id": "task-009",
+      "category": "feature",
+      "title": "Create usePrd composable",
+      "description": "Build a composable for fetching PRD data (document, tasks, progress) for the current repository.",
+      "steps": [
+        "Create `composables/usePrd.ts`",
+        "Implement `prds` computed that fetches PRD list for current repo",
+        "Implement `fetchDocument(slug)` to get PRD markdown",
+        "Implement `fetchTasks(slug)` to get tasks.json",
+        "Implement `fetchProgress(slug)` to get progress.json"
+      ],
+      "passes": [
+        "usePrd() returns reactive PRD list for current repo",
+        "PRD list updates when currentRepo changes",
+        "fetchDocument returns markdown content and metadata",
+        "fetchTasks returns tasks array or null",
+        "fetchProgress returns progress object or null"
+      ],
+      "dependencies": ["task-005", "task-006", "task-007", "task-008"],
+      "priority": "high",
+      "status": "pending"
+    },
+    {
+      "id": "task-010",
+      "category": "feature",
+      "title": "Create default layout with header",
+      "description": "Build the default layout with a header containing the app title and repository selector. **Use `/frontend-design` skill for implementation.**",
+      "steps": [
+        "Create `layouts/default.vue`",
+        "Add header with app title 'PRD Viewer'",
+        "Add slot for RepoSelector component in header",
+        "Add main content area with slot for page content",
+        "Style with Tailwind, respect dark/light mode"
+      ],
+      "passes": [
+        "Layout renders header and main content area",
+        "Header is fixed at top",
+        "Dark mode applies correct background/text colors",
+        "Layout is responsive"
+      ],
+      "dependencies": ["task-003"],
+      "priority": "high",
+      "status": "pending"
+    },
+    {
+      "id": "task-011",
+      "category": "feature",
+      "title": "Create RepoSelector component",
+      "description": "Build the repository selector combobox that allows switching between repos or adding new ones. **Use `/frontend-design` skill for implementation.**",
+      "steps": [
+        "Create `components/layout/RepoSelector.vue`",
+        "Use shadcn-vue Combobox component",
+        "Display current repo name or 'Select repository'",
+        "Show dropdown with all configured repos",
+        "Add 'Add repository...' option that opens input dialog",
+        "Implement add repo flow with path input and validation"
+      ],
+      "passes": [
+        "Combobox shows current repo name when selected",
+        "Dropdown lists all configured repositories",
+        "Selecting a repo switches currentRepo",
+        "'Add repository' option allows entering new path",
+        "Invalid paths show error message",
+        "Newly added repo is auto-selected"
+      ],
+      "dependencies": ["task-003", "task-008"],
+      "priority": "critical",
+      "status": "pending"
+    },
+    {
+      "id": "task-012",
+      "category": "feature",
+      "title": "Create Sidebar component with PRD list",
+      "description": "Build the sidebar navigation showing all PRDs in the current repository. **Use `/frontend-design` skill for implementation.**",
+      "steps": [
+        "Create `components/layout/Sidebar.vue`",
+        "Display list of PRDs from usePrd composable",
+        "Show PRD name with task count badge if available",
+        "Highlight currently selected PRD",
+        "Show empty state when no PRDs found",
+        "Show loading state while fetching"
+      ],
+      "passes": [
+        "Sidebar shows all PRDs for current repo",
+        "Each PRD shows name and task progress (e.g., '3/8')",
+        "Clicking PRD navigates to PRD view",
+        "Current PRD is visually highlighted",
+        "Empty state shows helpful message",
+        "Sidebar scrolls independently if many PRDs"
+      ],
+      "dependencies": ["task-003", "task-009"],
+      "priority": "high",
+      "status": "pending"
+    },
+    {
+      "id": "task-013",
+      "category": "feature",
+      "title": "Create index page with onboarding",
+      "description": "Build the landing page that prompts users to add a repository on first visit. **Use `/frontend-design` skill for implementation.**",
+      "steps": [
+        "Create `pages/index.vue`",
+        "Check if any repos are configured",
+        "If no repos, show onboarding UI with path input",
+        "If repos exist but none selected, prompt to select",
+        "If repo selected, redirect to first PRD or show empty state"
+      ],
+      "passes": [
+        "First-time visitors see onboarding prompt",
+        "Can add first repo from index page",
+        "After adding repo, redirects to PRD list",
+        "Users with repos see PRD list or redirect"
+      ],
+      "dependencies": ["task-010", "task-011", "task-012"],
+      "priority": "high",
+      "status": "pending"
+    },
+    {
+      "id": "task-014",
+      "category": "feature",
+      "title": "Create PrdMeta component",
+      "description": "Build the component that displays PRD metadata (author, date, status, shortcut link). **Use `/frontend-design` skill for implementation.**",
+      "steps": [
+        "Create `components/prd/PrdMeta.vue`",
+        "Accept metadata props (author, date, status, shortcutStory)",
+        "Display as horizontal row of badges/labels",
+        "Make shortcut story a clickable link",
+        "Handle missing metadata gracefully"
+      ],
+      "passes": [
+        "Displays author, date, and status when present",
+        "Shortcut story renders as external link",
+        "Missing fields don't break layout",
+        "Styling matches overall design"
+      ],
+      "dependencies": ["task-003"],
+      "priority": "medium",
+      "status": "pending"
+    },
+    {
+      "id": "task-015",
+      "category": "feature",
+      "title": "Create PrdViewer component with markdown rendering",
+      "description": "Build the markdown viewer that renders PRD documents with syntax highlighting. **Use `/frontend-design` skill for implementation.**",
+      "steps": [
+        "Create `components/prd/PrdViewer.vue`",
+        "Accept markdown content as prop",
+        "Use marked or @nuxt/content for markdown parsing",
+        "Configure shiki for syntax highlighting",
+        "Style tables, checkboxes, code blocks appropriately",
+        "Ensure links open in new tab"
+      ],
+      "passes": [
+        "Markdown renders with proper formatting",
+        "Code blocks have syntax highlighting",
+        "Tables render with borders and padding",
+        "Checkboxes display (read-only)",
+        "Links have target='_blank'",
+        "Styling respects dark/light mode"
+      ],
+      "dependencies": ["task-003"],
+      "priority": "critical",
+      "status": "pending"
+    },
+    {
+      "id": "task-016",
+      "category": "feature",
+      "title": "Create TaskCard component",
+      "description": "Build the task card that displays in the kanban board columns. **Use `/frontend-design` skill for implementation.**",
+      "steps": [
+        "Create `components/tasks/TaskCard.vue`",
+        "Accept task object as prop",
+        "Display task title, category badge, priority indicator",
+        "Show dependency count if blocked",
+        "Emit click event for detail view",
+        "Style with Card component from shadcn-vue"
+      ],
+      "passes": [
+        "Card shows task title",
+        "Category displays as colored badge",
+        "Priority shown with icon or color",
+        "Blocked tasks show 'Blocked by X' indicator",
+        "Click triggers detail view opening",
+        "Hover state provides visual feedback"
+      ],
+      "dependencies": ["task-003", "task-002"],
+      "priority": "high",
+      "status": "pending"
+    },
+    {
+      "id": "task-017",
+      "category": "feature",
+      "title": "Create TaskColumn component",
+      "description": "Build the column component for the kanban board (Pending, In Progress, Completed). **Use `/frontend-design` skill for implementation.**",
+      "steps": [
+        "Create `components/tasks/TaskColumn.vue`",
+        "Accept status and tasks array as props",
+        "Display column header with task count",
+        "Render TaskCard for each task in column",
+        "Use ScrollArea for overflow",
+        "Apply status-specific styling (colors)"
+      ],
+      "passes": [
+        "Column shows header with status name and count",
+        "All tasks for status are rendered as cards",
+        "Column scrolls when tasks overflow",
+        "Each status has distinct visual style"
+      ],
+      "dependencies": ["task-003", "task-016"],
+      "priority": "high",
+      "status": "pending"
+    },
+    {
+      "id": "task-018",
+      "category": "feature",
+      "title": "Create TaskBoard component",
+      "description": "Build the main kanban board that displays all three status columns. **Use `/frontend-design` skill for implementation.**",
+      "steps": [
+        "Create `components/tasks/TaskBoard.vue`",
+        "Accept tasks array as prop",
+        "Group tasks by status (pending, in_progress, completed)",
+        "Render three TaskColumn components",
+        "Handle empty states per column",
+        "Lay out columns in horizontal flex"
+      ],
+      "passes": [
+        "Board shows three columns side-by-side",
+        "Tasks appear in correct column based on status",
+        "Empty columns show placeholder text",
+        "Board is responsive (stacks on narrow screens)"
+      ],
+      "dependencies": ["task-017"],
+      "priority": "critical",
+      "status": "pending"
+    },
+    {
+      "id": "task-019",
+      "category": "feature",
+      "title": "Create TaskDetail component",
+      "description": "Build the slide-in panel that shows full task details. **Use `/frontend-design` skill for implementation.**",
+      "steps": [
+        "Create `components/tasks/TaskDetail.vue`",
+        "Use Sheet component from shadcn-vue",
+        "Display task title, description, category, priority",
+        "Show steps as numbered list",
+        "Show passes criteria as checklist",
+        "Show dependencies with links to dependent tasks",
+        "Show timestamps if present (startedAt, completedAt)"
+      ],
+      "passes": [
+        "Sheet slides in from right when task selected",
+        "All task fields are displayed",
+        "Steps render as ordered list",
+        "Passes render as checkbox list",
+        "Dependencies are listed with task titles",
+        "Close button dismisses sheet"
+      ],
+      "dependencies": ["task-003", "task-002"],
+      "priority": "high",
+      "status": "pending"
+    },
+    {
+      "id": "task-020",
+      "category": "feature",
+      "title": "Create PRD page with tabs",
+      "description": "Build the main PRD view page with tabs for Document and Task Board views. **Use `/frontend-design` skill for implementation.**",
+      "steps": [
+        "Create `pages/[repo]/[prd].vue`",
+        "Use Tabs component for Document/Board toggle",
+        "Fetch PRD document, tasks, and progress on mount",
+        "Render PrdMeta at top",
+        "Render PrdViewer or TaskBoard based on active tab",
+        "Handle loading and error states"
+      ],
+      "passes": [
+        "Page loads PRD content for given repo/prd params",
+        "Tabs switch between Document and Board views",
+        "Document view shows rendered markdown",
+        "Board view shows task kanban",
+        "Loading state shows skeleton/spinner",
+        "Error state shows helpful message"
+      ],
+      "dependencies": ["task-009", "task-014", "task-015", "task-018", "task-019"],
+      "priority": "critical",
+      "status": "pending"
+    },
+    {
+      "id": "task-021",
+      "category": "integration",
+      "title": "Wire up full navigation flow",
+      "description": "Connect all components to create the complete navigation experience.",
+      "steps": [
+        "Ensure RepoSelector updates affect Sidebar PRD list",
+        "Ensure Sidebar PRD clicks navigate to correct page",
+        "Ensure browser back/forward works correctly",
+        "Persist selected tab (Document/Board) preference",
+        "Handle deep links (direct URL to PRD)"
+      ],
+      "passes": [
+        "Changing repo updates sidebar immediately",
+        "Clicking PRD in sidebar navigates correctly",
+        "Browser navigation works as expected",
+        "Direct URL to /repo-id/prd-slug loads correctly",
+        "Tab preference persists across PRDs"
+      ],
+      "dependencies": ["task-013", "task-020"],
+      "priority": "high",
+      "status": "pending"
+    },
+    {
+      "id": "task-022",
+      "category": "feature",
+      "title": "Implement file watching for auto-refresh",
+      "description": "Add server-side file watching to notify clients when PRD/task files change.",
+      "steps": [
+        "Install chokidar dependency",
+        "Create file watcher service in `server/utils/watcher.ts`",
+        "Watch docs/prd/*.md and .claude/state/*/*.json for each repo",
+        "Create SSE endpoint `server/api/watch.get.ts`",
+        "Create `composables/useFileWatch.ts` to connect to SSE",
+        "Trigger data refresh when relevant files change"
+      ],
+      "passes": [
+        "Changing a .md file triggers client refresh",
+        "Changing tasks.json triggers client refresh",
+        "Changing progress.json triggers client refresh",
+        "Only watches configured repo paths",
+        "Refresh is debounced (not excessive)"
+      ],
+      "dependencies": ["task-020"],
+      "priority": "medium",
+      "status": "pending"
+    },
+    {
+      "id": "task-023",
+      "category": "integration",
+      "title": "Add empty states and error handling",
+      "description": "Implement helpful empty states and error messages throughout the app. **Use `/frontend-design` skill for implementation.**",
+      "steps": [
+        "Create empty state for no repos configured",
+        "Create empty state for no PRDs in repo",
+        "Create empty state for PRD without tasks",
+        "Create error state for invalid repo path",
+        "Create error state for file read errors",
+        "Ensure all API errors surface to UI"
+      ],
+      "passes": [
+        "No repos shows onboarding prompt",
+        "No PRDs shows 'No PRDs found' with hint",
+        "No tasks shows 'No tasks yet' message",
+        "Invalid path shows clear error with fix suggestion",
+        "API errors display in toast or inline message"
+      ],
+      "dependencies": ["task-021"],
+      "priority": "medium",
+      "status": "pending"
+    },
+    {
+      "id": "task-024",
+      "category": "testing",
+      "title": "Manual testing with real PRD data",
+      "description": "Test the application end-to-end using the example PRD data from code-hospitality-monorepo.",
+      "steps": [
+        "Start the app with `npm run dev`",
+        "Add code-hospitality-monorepo as a repository",
+        "Verify both PRDs appear in sidebar",
+        "Open waiting-for-approval-page-update PRD",
+        "Verify document renders correctly",
+        "Switch to Board view, verify tasks display",
+        "Click a task, verify detail panel works",
+        "Open offer-preview-button PRD, verify in-progress tasks show",
+        "Test repo switching",
+        "Test dark/light mode"
+      ],
+      "passes": [
+        "Both PRDs from test repo are listed",
+        "Document view renders markdown correctly",
+        "Task board shows correct status distribution",
+        "Task details display all fields",
+        "Repo switching works without page reload",
+        "Theme follows system preference"
+      ],
+      "dependencies": ["task-023"],
+      "priority": "high",
+      "status": "pending"
+    },
+    {
+      "id": "task-025",
+      "category": "testing",
+      "title": "Test edge cases and error scenarios",
+      "description": "Verify the app handles edge cases gracefully.",
+      "steps": [
+        "Test with repo that has no docs/prd directory",
+        "Test with PRD that has no .claude/state",
+        "Test with malformed tasks.json",
+        "Test with very long PRD document",
+        "Test with PRD containing unusual markdown",
+        "Test removing the currently selected repo",
+        "Test with repo path that becomes invalid"
+      ],
+      "passes": [
+        "Missing directories show empty states, not crashes",
+        "Malformed JSON shows error message",
+        "Long documents scroll correctly",
+        "Unusual markdown degrades gracefully",
+        "Removing current repo clears selection",
+        "Invalid path shows re-validation prompt"
+      ],
+      "dependencies": ["task-024"],
+      "priority": "medium",
+      "status": "pending"
+    }
+  ]
+}
