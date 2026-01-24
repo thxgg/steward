@@ -1,11 +1,11 @@
 {
   "prdName": "PRD Viewer",
   "totalTasks": 25,
-  "completed": 20,
+  "completed": 21,
   "inProgress": 0,
   "blocked": 0,
   "startedAt": "2026-01-24T13:35:51Z",
-  "lastUpdated": "2026-01-24T21:45:56Z",
+  "lastUpdated": "2026-01-24T22:46:54Z",
   "patterns": [
     {
       "name": "Tailwind CSS v4 + Nuxt 4 Setup",
@@ -200,6 +200,15 @@
       "implemented": "Created PRD page at pages/[repo]/[prd].vue with Document and Task Board tabs. Fetches PRD document and tasks in parallel on mount. Shows PrdMeta header, PrdViewer for document content, TasksBoard for kanban. TasksDetail sheet opens on task click. Tab preference persisted to localStorage. Loading spinner and error states with helpful messages.",
       "filesChanged": ["app/pages/[repo]/[prd].vue"],
       "learnings": "Use Promise.all to fetch document and tasks in parallel for better performance."
+    },
+    {
+      "taskId": "task-021",
+      "status": "completed",
+      "startedAt": "2026-01-24T22:40:00Z",
+      "completedAt": "2026-01-24T22:46:54Z",
+      "implemented": "Wired up full navigation flow: RepoSelector auto-navigates to first PRD on repo change, Sidebar uses NuxtLink for PRD navigation, added routeRules for SPA fallback to support deep links and browser refresh, tab preference persists in localStorage, page calls selectRepo to ensure repo context on direct URL access.",
+      "filesChanged": ["app/components/layout/RepoSelector.vue", "app/pages/index.vue", "nuxt.config.ts", "app/pages/[repo]/[prd].vue"],
+      "learnings": "Use routeRules with ssr: false for SPA fallback on dynamic routes. Extract array element to variable before null check to satisfy TypeScript."
     }
   ]
 }
