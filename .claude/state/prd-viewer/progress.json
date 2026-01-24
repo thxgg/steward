@@ -1,7 +1,7 @@
 {
   "prdName": "PRD Viewer",
   "totalTasks": 25,
-  "completed": 24,
+  "completed": 25,
   "inProgress": 0,
   "blocked": 0,
   "startedAt": "2026-01-24T13:35:51Z",
@@ -236,6 +236,15 @@
       "implemented": "Manual testing with real PRD data using browser automation. Verified: (1) Onboarding shows 'Select repository' prompt, (2) Repo selector shows all configured repos with switch capability, (3) Sidebar shows PRDs with task progress badges (e.g., 23/25), (4) Document view renders markdown with headings, lists, code, tables, (5) Task board shows three columns with correct task distribution, (6) Task detail panel shows all fields including steps, passes, dependencies with titles, timestamps, (7) Theme toggle works, (8) Repo switching navigates to first PRD, (9) Direct URL navigation works.",
       "filesChanged": [],
       "learnings": "Browser automation with agent-browser works well for end-to-end testing. Use wait --load networkidle after navigation for reliable state. Snapshot provides accessibility tree which is useful for verifying UI structure."
+    },
+    {
+      "taskId": "task-025",
+      "status": "completed",
+      "startedAt": "2026-01-24T23:25:51Z",
+      "completedAt": "2026-01-24T23:29:39Z",
+      "implemented": "Tested edge cases: (1) Repo with no docs/prd shows empty state with helpful hint, (2) PRD with no .claude/state shows document with disabled Task Board tab, (3) Malformed tasks.json handled gracefully - document loads, Task Board tab disabled, (4) Long documents scroll correctly, (5) Removing currently selected repo clears selection and shows prompt, (6) Invalid path in add dialog shows 'Directory does not exist' error. All scenarios handled without crashes.",
+      "filesChanged": [],
+      "learnings": "Graceful degradation is key - missing files should disable features rather than crash. Toast notifications provide good feedback for user actions like repo removal."
     }
   ]
 }
