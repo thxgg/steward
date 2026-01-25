@@ -1,11 +1,11 @@
 {
   "prdName": "Git Diff Viewer",
   "totalTasks": 15,
-  "completed": 11,
+  "completed": 12,
   "inProgress": 0,
   "blocked": 0,
   "startedAt": "2026-01-25T10:43:40Z",
-  "lastUpdated": "2026-01-25T11:12:14Z",
+  "lastUpdated": "2026-01-25T11:18:43Z",
   "patterns": [],
   "taskLogs": [
     {
@@ -106,6 +106,15 @@
       "implemented": "Created GET /api/repos/[repoId]/prd/[prdSlug]/tasks/[taskId]/commits endpoint that reads progress.json, finds the taskLog entry matching taskId, and returns the commits array. Returns empty array if progress.json doesn't exist. Returns 404 if taskId not found in taskLogs. Handles invalid JSON gracefully.",
       "filesChanged": ["server/api/repos/[repoId]/prd/[prdSlug]/tasks/[taskId]/commits.get.ts"],
       "learnings": "Follow existing API patterns: use getRepos for repo lookup, check for ENOENT to handle missing files, re-throw HTTP errors from createError."
+    },
+    {
+      "taskId": "task-012",
+      "status": "completed",
+      "startedAt": "2026-01-25T11:16:58Z",
+      "completedAt": "2026-01-25T11:18:43Z",
+      "implemented": "Added synchronized scrolling to DiffViewer component. The side-by-side layout already uses a row-based design where both panels are in the same flex row, ensuring natural scroll synchronization. Added a toggle button in a toolbar that shows 'Sync scroll' (linked icon) or 'Scroll unlocked' (unlinked icon) for UX clarity. Smooth scrolling is native browser behavior.",
+      "filesChanged": ["app/components/git/DiffViewer.vue"],
+      "learnings": "The row-based side-by-side diff layout naturally synchronizes scrolling because both panels are in the same container. This is often better than separate scrollable panels which would require complex event synchronization and can cause jank."
     }
   ]
 }
