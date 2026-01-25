@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { FileText, Settings, Moon, Sun, LayoutGrid } from 'lucide-vue-next'
+import { FileText, Settings, Moon, Sun, LayoutGrid, Folder, Check } from 'lucide-vue-next'
 import {
   CommandDialog,
   CommandEmpty,
@@ -14,11 +14,16 @@ const open = defineModel<boolean>('open', { default: false })
 
 const router = useRouter()
 const { prds } = usePrd()
-const { currentRepoId } = useRepos()
+const { repos, currentRepoId, selectRepo } = useRepos()
 
 function navigateToPrd(slug: string) {
   if (!currentRepoId.value) return
   router.push(`/${currentRepoId.value}/${slug}`)
+  open.value = false
+}
+
+function switchRepo(repoId: string) {
+  selectRepo(repoId)
   open.value = false
 }
 </script>
@@ -41,7 +46,22 @@ function navigateToPrd(slug: string) {
         </CommandItem>
       </CommandGroup>
 
-      <CommandSeparator v-if="prds?.length" />
+      <CommandSeparator v-if="prds?.length && repos?.length" />
+
+      <CommandGroup v-if="repos?.length" heading="Repositories">
+        <CommandItem
+          v-for="repo in repos"
+          :key="repo.id"
+          :value="`repo-${repo.id} ${repo.name}`"
+          @select="switchRepo(repo.id)"
+        >
+          <Folder class="size-4" />
+          <span class="flex-1">{{ repo.name }}</span>
+          <Check v-if="repo.id === currentRepoId" class="size-4 text-primary" />
+        </CommandItem>
+      </CommandGroup>
+
+      <CommandSeparator v-if="repos?.length" />
 
       <CommandGroup heading="Actions">
         <CommandItem value="toggle-theme">

@@ -1,11 +1,11 @@
 {
   "prdName": "Keyboard Shortcuts & Command Palette",
   "totalTasks": 12,
-  "completed": 5,
+  "completed": 6,
   "inProgress": 0,
   "blocked": 0,
   "startedAt": "2026-01-25T01:53:47Z",
-  "lastUpdated": "2026-01-25T02:07:06Z",
+  "lastUpdated": "2026-01-25T02:08:54Z",
   "patterns": [
     {
       "name": "shadcn-vue component installation",
@@ -13,6 +13,15 @@
     }
   ],
   "taskLogs": [
+    {
+      "taskId": "task-006",
+      "status": "completed",
+      "startedAt": "2026-01-25T02:08:02Z",
+      "completedAt": "2026-01-25T02:08:54Z",
+      "implemented": "Added Repositories group to CommandPalette showing all available repos. Uses Folder icon for each repo and Check icon to indicate the currently selected repository. Selecting a repo calls selectRepo() and closes the palette.",
+      "filesChanged": ["app/components/CommandPalette.vue"],
+      "learnings": "Use flex-1 on span to push trailing icons (like Check) to the right in CommandItem."
+    },
     {
       "taskId": "task-005",
       "status": "completed",
