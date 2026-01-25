@@ -60,12 +60,12 @@ function toggleColorMode() {
 onShortcut('Meta+.', toggleColorMode)
 onShortcut('Ctrl+.', toggleColorMode)
 
-// Cmd/Ctrl+Shift+N to open add repository dialog
+// Cmd/Ctrl+Shift+A to open add repository dialog
 function openAddRepoDialog() {
   repoSelectorRef.value?.openAddDialog()
 }
-onShortcut('Meta+Shift+n', openAddRepoDialog)
-onShortcut('Ctrl+Shift+n', openAddRepoDialog)
+onShortcut('Meta+Shift+a', openAddRepoDialog)
+onShortcut('Ctrl+Shift+a', openAddRepoDialog)
 
 // Cmd/Ctrl+/ or Cmd/Ctrl+? to open shortcuts help
 function openShortcutsHelp() {
