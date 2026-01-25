@@ -37,8 +37,7 @@ export function usePrd() {
     if (!currentRepoId.value) return null
     try {
       return await $fetch<PrdDocument>(`/api/repos/${currentRepoId.value}/prd/${slug}`)
-    } catch (error) {
-      console.error('Failed to fetch PRD document:', error)
+    } catch {
       return null
     }
   }
@@ -47,10 +46,8 @@ export function usePrd() {
   async function fetchTasks(slug: string): Promise<TasksFile | null> {
     if (!currentRepoId.value) return null
     try {
-      const result = await $fetch<TasksFile | null>(`/api/repos/${currentRepoId.value}/prd/${slug}/tasks`)
-      return result
-    } catch (error) {
-      console.error('Failed to fetch tasks:', error)
+      return await $fetch<TasksFile | null>(`/api/repos/${currentRepoId.value}/prd/${slug}/tasks`)
+    } catch {
       return null
     }
   }
@@ -59,10 +56,8 @@ export function usePrd() {
   async function fetchProgress(slug: string): Promise<ProgressFile | null> {
     if (!currentRepoId.value) return null
     try {
-      const result = await $fetch<ProgressFile | null>(`/api/repos/${currentRepoId.value}/prd/${slug}/progress`)
-      return result
-    } catch (error) {
-      console.error('Failed to fetch progress:', error)
+      return await $fetch<ProgressFile | null>(`/api/repos/${currentRepoId.value}/prd/${slug}/progress`)
+    } catch {
       return null
     }
   }

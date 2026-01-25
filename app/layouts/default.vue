@@ -13,7 +13,6 @@ function toggleColorMode() {
 // File watching for auto-refresh
 useFileWatch((event) => {
   if (event.type === 'connected') {
-    console.log('[layout] File watcher connected')
     return
   }
 
@@ -21,8 +20,6 @@ useFileWatch((event) => {
   if (event.repoId !== currentRepoId.value) {
     return
   }
-
-  console.log('[layout] File change detected:', event.category, event.path)
 
   // Refresh PRD list for any changes
   if (event.category === 'prd' || event.category === 'tasks') {

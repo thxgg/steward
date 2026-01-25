@@ -67,11 +67,12 @@ export async function removeRepo(id: string): Promise<boolean> {
 }
 
 export async function validateRepoPath(path: string): Promise<{ valid: boolean; error?: string }> {
+  // Normalize the path
   const resolvedPath = resolve(path)
 
-  // Check for path traversal attempts
-  if (resolvedPath.includes('..')) {
-    return { valid: false, error: 'Path traversal not allowed' }
+  // Ensure path is absolute (starts with / on Unix or drive letter on Windows)
+  if (!resolvedPath.startsWith('/') && !/^[A-Za-z]:/.test(resolvedPath)) {
+    return { valid: false, error: 'Path must be absolute' }
   }
 
   try {

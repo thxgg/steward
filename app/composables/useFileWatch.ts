@@ -29,7 +29,7 @@ export function useFileWatch(callback: FileWatchCallback) {
           const event = JSON.parse(e.data) as FileChangeEvent
           callback(event)
         } catch {
-          console.error('[useFileWatch] Failed to parse event:', e.data)
+          // Ignore malformed events
         }
       }
 
@@ -47,9 +47,8 @@ export function useFileWatch(callback: FileWatchCallback) {
       }
 
       eventSource.value = es
-    } catch (err) {
+    } catch {
       error.value = 'Failed to connect'
-      console.error('[useFileWatch] Failed to connect:', err)
     }
   }
 

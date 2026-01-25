@@ -83,7 +83,6 @@ async function loadData() {
     document.value = doc
     tasksFile.value = tasks
   } catch (err) {
-    console.error('Failed to load PRD:', err)
     const fetchErr = err as { statusCode?: number; data?: { message?: string } }
     if (fetchErr.statusCode === 404) {
       error.value = `PRD "${prdSlug.value}" not found. Check if the file exists in docs/prd/.`

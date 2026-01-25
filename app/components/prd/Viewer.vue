@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { marked } from 'marked'
 import { codeToHtml } from 'shiki'
+import DOMPurify from 'dompurify'
 
 const props = defineProps<{
   content: string
@@ -8,6 +9,12 @@ const props = defineProps<{
 
 const renderedHtml = ref('')
 const isLoading = ref(true)
+
+// Configure DOMPurify to allow shiki's style attributes
+const purifyConfig = {
+  ADD_TAGS: ['style'],
+  ADD_ATTR: ['style', 'class', 'target', 'rel']
+}
 
 // Configure marked to open links in new tab
 const renderer = new marked.Renderer()
@@ -17,8 +24,6 @@ renderer.link = ({ href, title, text }) => {
 }
 
 // Custom code block renderer with shiki
-const highlightedCodeBlocks = new Map<string, string>()
-
 async function highlightCode(code: string, lang: string): Promise<string> {
   try {
     return await codeToHtml(code, {
@@ -80,7 +85,8 @@ async function renderMarkdown(content: string): Promise<string> {
     html = html.replace(placeholder, highlighted)
   }
 
-  return html
+  // Sanitize the final HTML to prevent XSS
+  return DOMPurify.sanitize(html, purifyConfig)
 }
 
 // Render on mount and when content changes

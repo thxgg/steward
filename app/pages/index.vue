@@ -27,8 +27,8 @@ async function browseDirectory(path?: string) {
     })
     browserPath.value = data.current
     browserDirs.value = data.directories
-  } catch (err) {
-    console.error('Browse error:', err)
+  } catch {
+    // Silently fail - directory browser will show empty state
   } finally {
     browserLoading.value = false
   }
