@@ -94,6 +94,11 @@ async function loadData() {
     document.value = doc
     tasksFile.value = tasks
     progressFile.value = progress
+
+    // Auto-switch to document tab if no tasks exist
+    if (!tasks) {
+      activeTab.value = 'document'
+    }
   } catch (err) {
     const fetchErr = err as { statusCode?: number; data?: { message?: string } }
     if (fetchErr.statusCode === 404) {
