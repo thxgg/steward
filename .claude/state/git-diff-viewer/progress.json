@@ -1,11 +1,11 @@
 {
   "prdName": "Git Diff Viewer",
   "totalTasks": 15,
-  "completed": 5,
+  "completed": 6,
   "inProgress": 0,
   "blocked": 0,
   "startedAt": "2026-01-25T10:43:40Z",
-  "lastUpdated": "2026-01-25T10:53:45Z",
+  "lastUpdated": "2026-01-25T10:56:10Z",
   "patterns": [],
   "taskLogs": [
     {
@@ -52,6 +52,15 @@
       "implemented": "Created CommitList component that accepts commits (SHA array) and repoId props, fetches commit details via useGit, displays shortSha in monospace, truncated message, author, relative date, file count and +/- stats. Loading skeleton for pending fetches, empty state message. Clicking commit emits select event.",
       "filesChanged": ["app/components/git/CommitList.vue"],
       "learnings": "Use object destructuring in watch callback to preserve proper types. formatRelativeDate helper for human-readable dates."
+    },
+    {
+      "taskId": "task-006",
+      "status": "completed",
+      "startedAt": "2026-01-25T10:55:25Z",
+      "completedAt": "2026-01-25T10:56:10Z",
+      "implemented": "Created ChangesMinimap component with files (FileDiff[]) and selectedFile props. Displays files in scrollable list with status icons (FilePlus/FileEdit/FileX/ArrowRight). Shows proportional colored bars for additions (green) and deletions (red). Highlights selected file, handles renames with oldPath → path display. Emits select event on click.",
+      "filesChanged": ["app/components/git/ChangesMinimap.vue"],
+      "learnings": "Calculate maxChanges across all files for proportional bar sizing. Use inline ArrowRight icon for rename display in text."
     }
   ]
 }
