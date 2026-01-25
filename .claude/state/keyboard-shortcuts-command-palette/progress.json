@@ -1,11 +1,11 @@
 {
   "prdName": "Keyboard Shortcuts & Command Palette",
   "totalTasks": 12,
-  "completed": 10,
+  "completed": 11,
   "inProgress": 0,
   "blocked": 0,
   "startedAt": "2026-01-25T01:53:47Z",
-  "lastUpdated": "2026-01-25T02:29:17Z",
+  "lastUpdated": "2026-01-25T02:40:35Z",
   "patterns": [
     {
       "name": "shadcn-vue component installation",
@@ -13,6 +13,15 @@
     }
   ],
   "taskLogs": [
+    {
+      "taskId": "task-011",
+      "status": "completed",
+      "startedAt": "2026-01-25T02:39:35Z",
+      "completedAt": "2026-01-25T02:40:35Z",
+      "implemented": "Added keyboard shortcut hints to command palette Actions group. Used CommandShortcut component to show hints. Added platform detection (Mac vs Windows) to display correct modifier key (⌘ vs Ctrl+). Hints shown for: Toggle theme (⌘.), Switch tab (⌘\\), Keyboard shortcuts (⌘/).",
+      "filesChanged": ["app/components/CommandPalette.vue"],
+      "learnings": "CommandShortcut component from shadcn-vue provides consistent styling. Use flex-1 on text to push shortcuts to the right."
+    },
     {
       "taskId": "task-010",
       "status": "completed",
