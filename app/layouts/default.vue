@@ -39,7 +39,7 @@ onShortcut('Ctrl+j', () => {
   commandPaletteOpen.value = true
 })
 
-// Cmd/Ctrl+\ to toggle Document/Task Board tabs
+// Cmd/Ctrl+Shift+T to toggle Document/Task Board tabs
 function toggleTab() {
   if (!import.meta.client) return
   const currentTab = localStorage.getItem('prd-viewer-tab') || 'document'
@@ -50,8 +50,8 @@ function toggleTab() {
     newValue: newTab
   }))
 }
-onShortcut('Meta+\\', toggleTab)
-onShortcut('Ctrl+\\', toggleTab)
+onShortcut('Meta+Shift+t', toggleTab)
+onShortcut('Ctrl+Shift+t', toggleTab)
 
 // Cmd/Ctrl+. to toggle theme
 function toggleColorMode() {
@@ -60,12 +60,12 @@ function toggleColorMode() {
 onShortcut('Meta+.', toggleColorMode)
 onShortcut('Ctrl+.', toggleColorMode)
 
-// Cmd/Ctrl+Shift+A to open add repository dialog
+// Cmd/Ctrl+, to open add repository dialog
 function openAddRepoDialog() {
   repoSelectorRef.value?.openAddDialog()
 }
-onShortcut('Meta+Shift+a', openAddRepoDialog)
-onShortcut('Ctrl+Shift+a', openAddRepoDialog)
+onShortcut('Meta+,', openAddRepoDialog)
+onShortcut('Ctrl+,', openAddRepoDialog)
 
 // Cmd/Ctrl+/ or Cmd/Ctrl+? to open shortcuts help
 function openShortcutsHelp() {
