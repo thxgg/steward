@@ -24,6 +24,7 @@ function navigateToPrd(slug: string) {
 
 function switchRepo(repoId: string) {
   selectRepo(repoId)
+  router.push('/')
   open.value = false
 }
 </script>
