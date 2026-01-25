@@ -342,3 +342,26 @@ export async function isBinaryFile(repoPath: string, sha: string, filePath: stri
     return false
   }
 }
+
+/**
+ * Get file content at a specific commit
+ */
+export async function getFileContent(
+  repoPath: string,
+  sha: string,
+  filePath: string
+): Promise<string> {
+  // Validate SHA format
+  if (!/^[0-9a-f]{4,40}$/i.test(sha)) {
+    throw new Error(`Invalid commit SHA: ${sha}`)
+  }
+
+  // Validate path is within repo
+  if (!validatePathInRepo(repoPath, filePath)) {
+    throw new Error('File path is outside repository')
+  }
+
+  // Get file content at commit
+  const output = await execGit(repoPath, ['show', `${sha}:${filePath}`])
+  return output
+}

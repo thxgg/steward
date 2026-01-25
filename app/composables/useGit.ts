@@ -7,6 +7,7 @@ export function useGit() {
   const isLoadingCommits = ref(false)
   const isLoadingDiff = ref(false)
   const isLoadingFileDiff = ref(false)
+  const isLoadingFileContent = ref(false)
 
   /**
    * Fetch commit details for an array of SHAs
@@ -90,14 +91,46 @@ export function useGit() {
     }
   }
 
+  /**
+   * Fetch file content at a specific commit
+   */
+  async function fetchFileContent(
+    repoId: string,
+    commitSha: string,
+    filePath: string
+  ): Promise<string | null> {
+    if (!repoId || !commitSha || !filePath) {
+      return null
+    }
+
+    isLoadingFileContent.value = true
+    try {
+      const result = await $fetch<{ content: string }>(
+        `/api/repos/${repoId}/git/file-content`,
+        {
+          query: { commit: commitSha, file: filePath },
+        }
+      )
+      return result.content
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      showError('Failed to fetch file content', message)
+      return null
+    } finally {
+      isLoadingFileContent.value = false
+    }
+  }
+
   return {
     // Functions
     fetchCommits,
     fetchDiff,
     fetchFileDiff,
+    fetchFileContent,
     // Loading states
     isLoadingCommits: readonly(isLoadingCommits),
     isLoadingDiff: readonly(isLoadingDiff),
     isLoadingFileDiff: readonly(isLoadingFileDiff),
+    isLoadingFileContent: readonly(isLoadingFileContent),
   }
 }

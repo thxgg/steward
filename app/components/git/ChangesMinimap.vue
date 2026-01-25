@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { FilePlus, FileEdit, FileX, ArrowRight } from 'lucide-vue-next'
-import { ScrollArea } from '~/components/ui/scroll-area'
 import type { FileDiff, FileStatus } from '~/types/git'
 
 const props = defineProps<{
@@ -70,8 +69,7 @@ function handleClick(path: string) {
 </script>
 
 <template>
-  <ScrollArea class="h-full">
-    <div class="space-y-0.5 p-2">
+  <div class="space-y-0.5 p-2">
       <button
         v-for="file in files"
         :key="file.path"
@@ -141,6 +139,5 @@ function handleClick(path: string) {
       >
         No files changed
       </div>
-    </div>
-  </ScrollArea>
+  </div>
 </template>

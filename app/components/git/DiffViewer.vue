@@ -13,6 +13,12 @@ const props = defineProps<{
   binary?: boolean
   /** Old file path (for renames) */
   oldPath?: string
+  /** Full file content (for full file view) */
+  fileContent?: string | null
+  /** Whether to show full file with changes highlighted */
+  showFullFile?: boolean
+  /** Loading state for file content */
+  isLoadingContent?: boolean
 }>()
 
 // Line limit for large files (truncation threshold)
@@ -38,6 +44,31 @@ const isLargeFile = computed(() => totalLines.value > LINE_LIMIT)
 
 // Check if file has no actual changes (empty diff)
 const isEmpty = computed(() => props.hunks.length === 0 && !props.binary)
+
+// Build a set of changed line numbers for full file highlighting
+const changedLines = computed(() => {
+  const added = new Set<number>()
+  const removed = new Set<number>()
+
+  for (const hunk of props.hunks) {
+    for (const line of hunk.lines) {
+      if (line.type === 'add' && line.newNumber !== undefined) {
+        added.add(line.newNumber)
+      }
+      if (line.type === 'remove' && line.oldNumber !== undefined) {
+        removed.add(line.oldNumber)
+      }
+    }
+  }
+
+  return { added, removed }
+})
+
+// Full file lines for the full file view
+const fullFileLines = computed(() => {
+  if (!props.fileContent) return []
+  return props.fileContent.split('\n')
+})
 
 // Detect language from file extension
 function detectLanguage(path: string): string {
@@ -313,12 +344,55 @@ function getHighlightedContent(pairId: string, side: 'old' | 'new'): string {
   const highlighted = highlightedLines.value.get(`${pairId}-${side}`)
   return highlighted?.old || ''
 }
+
+// Highlighted full file lines
+const highlightedFullFile = ref<string[]>([])
+const isLoadingFullFile = ref(false)
+
+// Highlight full file when content changes
+watch(
+  () => [props.fileContent, props.filePath] as const,
+  async ([content]) => {
+    if (!content) {
+      highlightedFullFile.value = []
+      return
+    }
+
+    isLoadingFullFile.value = true
+    const lang = language.value
+    const lines = content.split('\n')
+    const highlighted: string[] = []
+
+    // Highlight in batches
+    const batchSize = 100
+    for (let i = 0; i < lines.length; i += batchSize) {
+      const batch = lines.slice(i, i + batchSize)
+      const results = await Promise.all(
+        batch.map(async (line) => {
+          const result = await highlightLine(line, lang)
+          return result.light
+        })
+      )
+      highlighted.push(...results)
+    }
+
+    highlightedFullFile.value = highlighted
+    isLoadingFullFile.value = false
+  },
+  { immediate: true }
+)
+
+// Get line type for full file view
+function getFullFileLineType(lineNum: number): 'add' | 'remove' | 'context' {
+  if (changedLines.value.added.has(lineNum)) return 'add'
+  return 'context'
+}
 </script>
 
 <template>
   <div class="diff-viewer">
     <!-- Loading state -->
-    <div v-if="isLoading && !binary" class="flex items-center justify-center py-8">
+    <div v-if="(isLoading || isLoadingContent || isLoadingFullFile) && !binary" class="flex items-center justify-center py-8">
       <div class="size-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
     </div>
 
@@ -331,8 +405,8 @@ function getHighlightedContent(pairId: string, side: 'old' | 'new'): string {
       </div>
     </div>
 
-    <!-- Empty diff state -->
-    <div v-else-if="isEmpty" class="flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground">
+    <!-- Empty diff state (only for changes view) -->
+    <div v-else-if="isEmpty && !showFullFile" class="flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground">
       <AlertTriangle class="size-10 opacity-50" />
       <div class="text-center">
         <p class="font-medium">No changes</p>
@@ -340,8 +414,8 @@ function getHighlightedContent(pairId: string, side: 'old' | 'new'): string {
       </div>
     </div>
 
-    <!-- Large file warning (truncated) -->
-    <div v-else-if="isLargeFile && !showAll" class="diff-container">
+    <!-- Large file warning (truncated) - only for changes view -->
+    <div v-else-if="isLargeFile && !showAll && !showFullFile" class="diff-container">
       <div class="flex flex-col items-center justify-center gap-3 border-b border-border bg-muted/30 py-6">
         <AlertTriangle class="size-8 text-yellow-500" />
         <div class="text-center">
@@ -357,7 +431,31 @@ function getHighlightedContent(pairId: string, side: 'old' | 'new'): string {
       </div>
     </div>
 
-    <!-- Normal diff view -->
+    <!-- Full file view -->
+    <div v-else-if="showFullFile && fileContent" class="diff-container">
+      <div class="full-file-view">
+        <div
+          v-for="(line, index) in fullFileLines"
+          :key="index"
+          class="full-file-line"
+          :class="{
+            'diff-add': getFullFileLineType(index + 1) === 'add',
+          }"
+        >
+          <div class="diff-gutter">
+            <span class="line-number">{{ index + 1 }}</span>
+          </div>
+          <div class="diff-content">
+            <span
+              class="diff-code"
+              v-html="highlightedFullFile[index] || escapeHtml(line)"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Normal diff view (changes only) -->
     <div v-else class="diff-container">
       <!-- Sync scroll toggle -->
       <div class="diff-toolbar">
@@ -528,6 +626,35 @@ function getHighlightedContent(pairId: string, side: 'old' | 'new'): string {
 
 .diff-context {
   background: transparent;
+}
+
+/* Full file view */
+.full-file-view {
+  min-width: 100%;
+}
+
+.full-file-line {
+  display: flex;
+}
+
+.full-file-line .diff-gutter {
+  width: 4rem;
+}
+
+.full-file-line.diff-add {
+  background: hsl(142 76% 36% / 0.15);
+}
+
+.full-file-line.diff-add .diff-gutter {
+  background: hsl(142 76% 36% / 0.25);
+}
+
+.dark .full-file-line.diff-add {
+  background: hsl(142 76% 36% / 0.1);
+}
+
+.dark .full-file-line.diff-add .diff-gutter {
+  background: hsl(142 76% 36% / 0.2);
 }
 
 /* Hunk separator */

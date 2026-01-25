@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AlertCircle, RefreshCw, Loader2, Keyboard } from 'lucide-vue-next'
+import { AlertCircle, RefreshCw, Loader2, Keyboard, FileCode, FileDiff as FileDiffIcon } from 'lucide-vue-next'
 import { ScrollArea } from '~/components/ui/scroll-area'
 import { Button } from '~/components/ui/button'
 import {
@@ -21,14 +21,18 @@ const emit = defineEmits<{
   close: []
 }>()
 
-const { fetchDiff, fetchFileDiff, isLoadingDiff, isLoadingFileDiff } = useGit()
+const { fetchDiff, fetchFileDiff, fetchFileContent, isLoadingDiff, isLoadingFileDiff, isLoadingFileContent } = useGit()
 
 // State
 const files = ref<FileDiff[]>([])
 const selectedFile = ref<string | undefined>()
 const hunks = ref<DiffHunk[]>([])
+const fileContent = ref<string | null>(null)
 const error = ref<string | null>(null)
 const fileDiffError = ref<string | null>(null)
+
+// View mode: 'changes' shows only hunks, 'full' shows entire file with changes highlighted
+const viewMode = ref<'changes' | 'full'>('changes')
 
 // Get the selected file's metadata
 const selectedFileDiff = computed(() => files.value.find(f => f.path === selectedFile.value))
@@ -60,13 +64,35 @@ async function loadDiff() {
 async function loadFileDiff() {
   if (!selectedFile.value) {
     hunks.value = []
+    fileContent.value = null
     return
   }
 
   fileDiffError.value = null
+
+  // Fetch hunks (always needed for highlighting changes)
   const result = await fetchFileDiff(props.repoId, props.commitSha, selectedFile.value)
   hunks.value = result
+
+  // Fetch full file content if in full mode
+  if (viewMode.value === 'full') {
+    const content = await fetchFileContent(props.repoId, props.commitSha, selectedFile.value)
+    fileContent.value = content
+  }
 }
+
+// Toggle view mode
+function toggleViewMode() {
+  viewMode.value = viewMode.value === 'changes' ? 'full' : 'changes'
+}
+
+// Reload file content when switching to full mode
+watch(viewMode, async (mode) => {
+  if (mode === 'full' && selectedFile.value && !fileContent.value) {
+    const content = await fetchFileContent(props.repoId, props.commitSha, selectedFile.value)
+    fileContent.value = content
+  }
+})
 
 // Handle file selection from minimap
 function handleFileSelect(path: string) {
@@ -250,7 +276,7 @@ onUnmounted(() => {
     <!-- Main content -->
     <div v-else class="flex flex-1 overflow-hidden">
       <!-- Minimap sidebar -->
-      <div class="w-56 shrink-0 border-r border-border">
+      <div class="flex w-56 shrink-0 flex-col border-r border-border">
         <div class="flex items-center justify-between border-b border-border px-3 py-2">
           <span class="text-xs font-medium text-muted-foreground">
             {{ files.length }} file{{ files.length !== 1 ? 's' : '' }} changed
@@ -282,27 +308,47 @@ onUnmounted(() => {
             </Tooltip>
           </TooltipProvider>
         </div>
-        <GitChangesMinimap
-          :files="files"
-          :selected-file="selectedFile"
-          class="h-[calc(100%-2.5rem)]"
-          @select="handleFileSelect"
-        />
+        <div class="min-h-0 flex-1 overflow-y-auto">
+          <GitChangesMinimap
+            :files="files"
+            :selected-file="selectedFile"
+            @select="handleFileSelect"
+          />
+        </div>
       </div>
 
       <!-- Diff viewer area -->
       <div class="flex flex-1 flex-col overflow-hidden">
         <!-- File header with rename support -->
         <div v-if="selectedFile" class="flex items-center gap-2 border-b border-border px-4 py-2">
-          <span v-if="selectedFileDiff?.oldPath" class="truncate font-mono text-sm">
+          <span v-if="selectedFileDiff?.oldPath" class="min-w-0 flex-1 truncate font-mono text-sm">
             <span class="text-muted-foreground">{{ selectedFileDiff.oldPath }}</span>
             <span class="mx-2 text-muted-foreground">→</span>
             <span>{{ selectedFile }}</span>
           </span>
-          <span v-else class="truncate font-mono text-sm">{{ selectedFile }}</span>
-          <span v-if="selectedFileDiff?.binary" class="ml-2 rounded bg-yellow-500/10 px-1.5 py-0.5 text-xs text-yellow-600 dark:text-yellow-400">
+          <span v-else class="min-w-0 flex-1 truncate font-mono text-sm">{{ selectedFile }}</span>
+          <span v-if="selectedFileDiff?.binary" class="rounded bg-yellow-500/10 px-1.5 py-0.5 text-xs text-yellow-600 dark:text-yellow-400">
             binary
           </span>
+          <!-- View mode toggle -->
+          <TooltipProvider v-if="!selectedFileDiff?.binary">
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  class="h-7 shrink-0 gap-1.5 text-xs"
+                  @click="toggleViewMode"
+                >
+                  <component :is="viewMode === 'changes' ? FileDiffIcon : FileCode" class="size-3.5" />
+                  {{ viewMode === 'changes' ? 'Changes' : 'Full file' }}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {{ viewMode === 'changes' ? 'Show full file with changes' : 'Show changes only' }}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
         <!-- File diff loading -->
@@ -334,6 +380,9 @@ onUnmounted(() => {
               :file-path="selectedFile"
               :binary="selectedFileDiff?.binary"
               :old-path="selectedFileDiff?.oldPath"
+              :file-content="fileContent"
+              :show-full-file="viewMode === 'full'"
+              :is-loading-content="isLoadingFileContent"
             />
           </div>
         </ScrollArea>
