@@ -76,6 +76,16 @@ export interface ProgressPattern {
 }
 
 /**
+ * Commit reference with repository context for pseudo-monorepos
+ */
+export interface CommitRef {
+  /** Git commit SHA */
+  sha: string
+  /** Relative path to git repo from registered repo root (e.g., "code-hospitality-backend") */
+  repo: string
+}
+
+/**
  * Log entry for a completed task
  */
 export interface TaskLog {
@@ -93,8 +103,8 @@ export interface TaskLog {
   filesChanged?: string[]
   /** Learnings or patterns discovered */
   learnings?: string
-  /** Git commit SHAs associated with this task */
-  commits?: string[]
+  /** Git commit SHAs associated with this task - supports both legacy strings and CommitRef objects */
+  commits?: (string | CommitRef)[]
 }
 
 /**

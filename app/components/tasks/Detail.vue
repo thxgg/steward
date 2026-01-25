@@ -25,14 +25,14 @@ import {
 import { Badge } from '~/components/ui/badge'
 import { Separator } from '~/components/ui/separator'
 import { Button } from '~/components/ui/button'
-import type { Task } from '~/types/task'
+import type { Task, CommitRef } from '~/types/task'
 
 const props = defineProps<{
   task: Task | null
   /** Map of task ID to task title for displaying dependency names */
   taskTitles?: Map<string, string>
-  /** Git commit SHAs associated with this task */
-  commits?: string[]
+  /** Git commit SHAs associated with this task - supports both legacy strings and CommitRef objects */
+  commits?: (string | CommitRef)[]
   /** Repository ID for fetching commit details */
   repoId?: string
 }>()

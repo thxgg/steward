@@ -1,5 +1,5 @@
 // Repository types
-export type { RepoConfig, AddRepoRequest } from './repo'
+export type { RepoConfig, AddRepoRequest, GitRepoInfo } from './repo'
 
 // PRD types
 export type { PrdListItem, PrdMetadata, PrdDocument } from './prd'
@@ -13,6 +13,7 @@ export type {
   TasksPrdInfo,
   TasksFile,
   ProgressPattern,
+  CommitRef,
   TaskLog,
   ProgressFile,
 } from './task'

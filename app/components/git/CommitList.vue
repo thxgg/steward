@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { GitCommit as GitCommitIcon, Plus, Minus, FileText } from 'lucide-vue-next'
 import type { GitCommit } from '~/types/git'
+import type { CommitRef } from '~/types/task'
 
 const props = defineProps<{
-  /** Array of commit SHAs to display */
-  commits: string[]
+  /** Array of commit SHAs to display - supports both legacy strings and CommitRef objects */
+  commits: (string | CommitRef)[]
   /** Repository ID for API calls */
   repoId: string
 }>()
@@ -18,12 +19,21 @@ const { fetchCommits, isLoadingCommits } = useGit()
 // Fetched commit details
 const commitDetails = ref<GitCommit[]>([])
 
+// Extract SHA from commit entry (handles both string and CommitRef)
+function getSha(commit: string | CommitRef): string {
+  return typeof commit === 'string' ? commit : commit.sha
+}
+
+// Get all SHAs from commits array
+const commitShas = computed(() => props.commits.map(getSha))
+
 // Fetch commit details when props change
 watch(
   () => ({ commits: props.commits, repoId: props.repoId }),
   async ({ commits, repoId }) => {
     if (commits.length > 0 && repoId) {
-      commitDetails.value = await fetchCommits(repoId, commits)
+      const shas = commits.map(getSha)
+      commitDetails.value = await fetchCommits(repoId, shas)
     } else {
       commitDetails.value = []
     }

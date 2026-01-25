@@ -18,6 +18,8 @@ export interface GitCommit {
   additions: number
   /** Total lines deleted */
   deletions: number
+  /** Relative path to git repo for pseudo-monorepos (e.g., "code-hospitality-backend") */
+  repoPath?: string
 }
 
 /**
