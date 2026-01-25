@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { Circle, PlayCircle, CheckCircle2 } from 'lucide-vue-next'
-import { ScrollArea } from '~/components/ui/scroll-area'
 import type { Task, TaskStatus } from '~/types/task'
 
 const props = defineProps<{
@@ -58,7 +57,7 @@ function handleTaskClick(task: Task) {
 </script>
 
 <template>
-  <div class="flex h-full w-64 shrink-0 flex-col rounded-lg border border-border bg-card">
+  <div class="flex h-full min-w-56 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">
     <!-- Column Header -->
     <div
       class="flex items-center gap-2 rounded-t-lg border-b border-border px-3 py-2"
@@ -76,7 +75,7 @@ function handleTaskClick(task: Task) {
     </div>
 
     <!-- Task Cards -->
-    <ScrollArea class="flex-1 p-1.5">
+    <div class="scrollbar-hide min-h-0 flex-1 overflow-y-auto p-1.5">
       <div class="space-y-1.5">
         <TasksCard
           v-for="task in tasks"
@@ -94,6 +93,16 @@ function handleTaskClick(task: Task) {
           No tasks
         </div>
       </div>
-    </ScrollArea>
+    </div>
   </div>
 </template>
+
+<style scoped>
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+</style>

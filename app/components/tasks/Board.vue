@@ -65,11 +65,3 @@ function handleTaskClick(task: Task) {
   </div>
 </template>
 
-<style scoped>
-/* On narrow screens, allow horizontal scroll */
-@media (max-width: 768px) {
-  .flex {
-    min-width: max-content;
-  }
-}
-</style>
