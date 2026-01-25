@@ -11,6 +11,16 @@ import {
 } from '~/components/ui/command'
 
 const open = defineModel<boolean>('open', { default: false })
+
+const router = useRouter()
+const { prds } = usePrd()
+const { currentRepoId } = useRepos()
+
+function navigateToPrd(slug: string) {
+  if (!currentRepoId.value) return
+  router.push(`/${currentRepoId.value}/${slug}`)
+  open.value = false
+}
 </script>
 
 <template>
@@ -19,18 +29,19 @@ const open = defineModel<boolean>('open', { default: false })
     <CommandList>
       <CommandEmpty>No results found.</CommandEmpty>
 
-      <CommandGroup heading="Navigation">
-        <CommandItem value="placeholder-prd-1">
+      <CommandGroup v-if="prds?.length" heading="Documents">
+        <CommandItem
+          v-for="prd in prds"
+          :key="prd.slug"
+          :value="`prd-${prd.slug} ${prd.name}`"
+          @select="navigateToPrd(prd.slug)"
+        >
           <FileText class="size-4" />
-          <span>Example PRD 1</span>
-        </CommandItem>
-        <CommandItem value="placeholder-prd-2">
-          <FileText class="size-4" />
-          <span>Example PRD 2</span>
+          <span>{{ prd.name }}</span>
         </CommandItem>
       </CommandGroup>
 
-      <CommandSeparator />
+      <CommandSeparator v-if="prds?.length" />
 
       <CommandGroup heading="Actions">
         <CommandItem value="toggle-theme">
