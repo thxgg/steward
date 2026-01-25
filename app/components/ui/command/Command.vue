@@ -7,16 +7,35 @@ import { reactive, ref, watch } from "vue"
 import { cn } from "@/lib/utils"
 import { provideCommandContext } from "."
 
-const props = withDefaults(defineProps<ListboxRootProps & { class?: HTMLAttributes["class"] }>(), {
+const props = withDefaults(defineProps<ListboxRootProps & { class?: HTMLAttributes["class"], loop?: boolean }>(), {
   modelValue: "",
   loop: true,
 })
 
 const emits = defineEmits<ListboxRootEmits>()
 
-const delegatedProps = reactiveOmit(props, "class")
+const delegatedProps = reactiveOmit(props, "class", "loop")
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
+
+function handleKeydown(event: KeyboardEvent) {
+  if (!props.loop) return
+
+  const items = document.querySelectorAll('[data-slot="command-item"]:not([data-disabled])')
+  if (items.length === 0) return
+
+  const highlighted = document.querySelector('[data-slot="command-item"][data-highlighted]')
+  const itemsArray = Array.from(items) as HTMLElement[]
+  const currentIndex = highlighted ? itemsArray.indexOf(highlighted as HTMLElement) : -1
+
+  if (event.key === 'ArrowDown' && currentIndex === itemsArray.length - 1) {
+    event.preventDefault()
+    itemsArray[0]?.focus()
+  } else if (event.key === 'ArrowUp' && currentIndex === 0) {
+    event.preventDefault()
+    itemsArray[itemsArray.length - 1]?.focus()
+  }
+}
 
 const allItems = ref<Map<string, string>>(new Map())
 const allGroups = ref<Map<string, Set<string>>>(new Map())
@@ -82,6 +101,7 @@ provideCommandContext({
     data-slot="command"
     v-bind="forwarded"
     :class="cn('bg-popover text-popover-foreground flex h-full w-full flex-col overflow-hidden rounded-md', props.class)"
+    @keydown="handleKeydown"
   >
     <slot />
   </ListboxRoot>
