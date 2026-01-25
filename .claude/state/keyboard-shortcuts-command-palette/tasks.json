@@ -262,7 +262,10 @@
       ],
       "dependencies": ["task-001"],
       "priority": "medium",
-      "status": "pending",
+      "status": "completed",
+      "startedAt": "2026-01-25T02:25:14Z",
+      "completedAt": "2026-01-25T02:26:03Z",
+      "passes": true,
       "affectedFiles": [
         "app/components/ShortcutsHelp.vue"
       ]
