@@ -1,11 +1,11 @@
 {
   "prdName": "Git Diff Viewer",
   "totalTasks": 15,
-  "completed": 4,
+  "completed": 5,
   "inProgress": 0,
   "blocked": 0,
   "startedAt": "2026-01-25T10:43:40Z",
-  "lastUpdated": "2026-01-25T10:51:26Z",
+  "lastUpdated": "2026-01-25T10:53:45Z",
   "patterns": [],
   "taskLogs": [
     {
@@ -43,6 +43,15 @@
       "implemented": "Created useGit composable with fetchCommits, fetchDiff, and fetchFileDiff functions. Each function has reactive loading state (isLoadingCommits, isLoadingDiff, isLoadingFileDiff) exposed as readonly refs. Errors show toast notifications via useToast.",
       "filesChanged": ["app/composables/useGit.ts"],
       "learnings": "Use readonly() wrapper for loading states to prevent external mutation. Follow existing composable patterns with $fetch for API calls."
+    },
+    {
+      "taskId": "task-005",
+      "status": "completed",
+      "startedAt": "2026-01-25T10:52:42Z",
+      "completedAt": "2026-01-25T10:53:45Z",
+      "implemented": "Created CommitList component that accepts commits (SHA array) and repoId props, fetches commit details via useGit, displays shortSha in monospace, truncated message, author, relative date, file count and +/- stats. Loading skeleton for pending fetches, empty state message. Clicking commit emits select event.",
+      "filesChanged": ["app/components/git/CommitList.vue"],
+      "learnings": "Use object destructuring in watch callback to preserve proper types. formatRelativeDate helper for human-readable dates."
     }
   ]
 }
