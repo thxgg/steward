@@ -1,11 +1,11 @@
 {
   "prdName": "Git Diff Viewer",
   "totalTasks": 15,
-  "completed": 13,
+  "completed": 14,
   "inProgress": 0,
   "blocked": 0,
   "startedAt": "2026-01-25T10:43:40Z",
-  "lastUpdated": "2026-01-25T11:22:46Z",
+  "lastUpdated": "2026-01-25T11:27:12Z",
   "patterns": [],
   "taskLogs": [
     {
@@ -124,6 +124,16 @@
       "implemented": "Handled edge cases in diff viewer: (1) Binary files - added binary field to FileDiff type, detect in git numstat output (- -), show 'Binary file' placeholder with FileWarning icon. (2) Large files - LINE_LIMIT=10000, show warning with line count and 'Show full diff' button. (3) Empty diffs - show 'No changes' message for files touched but unchanged. (4) Renamed files - DiffPanel header shows oldPath → newPath with arrow, badge for binary files.",
       "filesChanged": ["app/types/git.ts", "server/utils/git.ts", "app/components/git/DiffViewer.vue", "app/components/git/DiffPanel.vue"],
       "learnings": "Git numstat shows binary files as '- - filepath' (dashes for additions/deletions). Adding a computed for selected file metadata allows passing binary/oldPath props to child components."
+    },
+    {
+      "taskId": "task-014",
+      "status": "completed",
+      "startedAt": "2026-01-25T11:25:00Z",
+      "completedAt": "2026-01-25T11:27:12Z",
+      "implemented": "Added keyboard navigation to DiffPanel: j/k or arrow keys navigate between files (with wrap-around), [ and ] jump between hunk separators, Escape emits close event handled by TaskDetail. Added Tooltip UI component (shadcn-vue) for keyboard hints displayed via Keyboard icon in minimap header. Document-level keydown listener added on mount, removed on unmount. Input field detection prevents shortcuts while typing.",
+      "filesChanged": ["app/components/git/DiffPanel.vue", "app/components/tasks/Detail.vue", "app/components/ui/tooltip/*"],
+      "learnings": "Use document-level keydown listeners for global shortcuts with proper cleanup. Check for input/textarea targets to avoid interfering with typing. ScrollIntoView with smooth behavior provides nice UX for hunk navigation.",
+      "commits": ["373de8974c541d1514d81182c4091d5863ef6285"]
     }
   ]
 }
