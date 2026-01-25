@@ -1,11 +1,11 @@
 {
   "prdName": "Git Diff Viewer",
   "totalTasks": 15,
-  "completed": 6,
+  "completed": 7,
   "inProgress": 0,
   "blocked": 0,
   "startedAt": "2026-01-25T10:43:40Z",
-  "lastUpdated": "2026-01-25T10:56:10Z",
+  "lastUpdated": "2026-01-25T10:59:25Z",
   "patterns": [],
   "taskLogs": [
     {
@@ -61,6 +61,15 @@
       "implemented": "Created ChangesMinimap component with files (FileDiff[]) and selectedFile props. Displays files in scrollable list with status icons (FilePlus/FileEdit/FileX/ArrowRight). Shows proportional colored bars for additions (green) and deletions (red). Highlights selected file, handles renames with oldPath → path display. Emits select event on click.",
       "filesChanged": ["app/components/git/ChangesMinimap.vue"],
       "learnings": "Calculate maxChanges across all files for proportional bar sizing. Use inline ArrowRight icon for rename display in text."
+    },
+    {
+      "taskId": "task-007",
+      "status": "completed",
+      "startedAt": "2026-01-25T10:57:29Z",
+      "completedAt": "2026-01-25T10:59:25Z",
+      "implemented": "Created DiffViewer component with side-by-side layout showing old (left) and new (right) content. Features: line numbers in gutters, syntax highlighting via shiki with dual themes (github-light/dark), green background for additions, red for deletions, neutral for context. Pairs removals/additions together, shows hunk separators between non-contiguous sections, detects language from file extension.",
+      "filesChanged": ["app/components/git/DiffViewer.vue"],
+      "learnings": "For side-by-side diff, pair consecutive removals with consecutive additions for visual alignment. Shiki dual themes with CSS display toggling works well for light/dark mode. Batch highlighting prevents overwhelming with many lines."
     }
   ]
 }
