@@ -1,0 +1,342 @@
+{
+  "prd": {
+    "name": "Multi-Git Repository Support for Pseudo-Monorepos",
+    "source": "docs/prd/multi-git-repo-support.md",
+    "createdAt": "2026-01-25T16:00:00Z"
+  },
+  "tasks": [
+    {
+      "id": "task-001",
+      "category": "setup",
+      "title": "Add CommitRef and GitRepoInfo types",
+      "description": "Add new TypeScript types to support multi-repo commits. CommitRef stores commit SHA with repo context. GitRepoInfo stores discovered git repo metadata.",
+      "steps": [
+        "Add CommitRef interface to app/types/task.ts with sha and repo fields",
+        "Update TaskLog.commits type to (string | CommitRef)[]",
+        "Add GitRepoInfo interface to app/types/repo.ts with relativePath, absolutePath, and name fields",
+        "Add optional gitRepos field to RepoConfig interface",
+        "Add repoPath field to GitCommit interface in app/types/git.ts"
+      ],
+      "passes": [
+        "CommitRef type exists with sha: string and repo: string",
+        "TaskLog.commits accepts both string[] and CommitRef[]",
+        "GitRepoInfo type has relativePath, absolutePath, and name fields",
+        "RepoConfig has optional gitRepos?: GitRepoInfo[]",
+        "GitCommit has optional repoPath?: string",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "priority": "critical",
+      "status": "completed",
+      "startedAt": "2026-01-25T14:25:35Z",
+      "completedAt": "2026-01-25T14:27:48Z"
+    },
+    {
+      "id": "task-002",
+      "category": "feature",
+      "title": "Implement git repo discovery utility",
+      "description": "Create discoverGitRepos() function that scans a directory for .git folders up to depth 2. Returns array of GitRepoInfo objects.",
+      "steps": [
+        "Create discoverGitRepos(basePath: string, maxDepth?: number) function in server/utils/repos.ts",
+        "Use fs.readdir to scan directories recursively up to maxDepth (default 2)",
+        "Check each directory for .git folder using fs.stat",
+        "Build GitRepoInfo object with relative and absolute paths",
+        "Return empty array if basePath itself is a git repo (standard case)",
+        "Handle errors gracefully (permission denied, etc.)"
+      ],
+      "passes": [
+        "Function discovers git repos in immediate subfolders",
+        "Function discovers git repos up to depth 2",
+        "Function returns empty array when basePath is a git repo",
+        "Function handles non-existent paths gracefully",
+        "Function skips node_modules and other common ignored directories"
+      ],
+      "dependencies": ["task-001"],
+      "priority": "critical",
+      "status": "completed",
+      "startedAt": "2026-01-25T14:28:57Z",
+      "completedAt": "2026-01-25T14:30:07Z"
+    },
+    {
+      "id": "task-003",
+      "category": "feature",
+      "title": "Update addRepo to discover and store git repos",
+      "description": "Modify addRepo() to call discoverGitRepos() and store results in RepoConfig. Update repos.json schema.",
+      "steps": [
+        "Import discoverGitRepos in server/utils/repos.ts",
+        "Call discoverGitRepos() after path validation in addRepo()",
+        "Add gitRepos field to the RepoConfig being created",
+        "Ensure repos.json is updated with the new field",
+        "Add getRepoById() helper if not exists for easy repo lookup"
+      ],
+      "passes": [
+        "Adding a pseudo-monorepo stores discovered git repos in repos.json",
+        "Adding a standard repo (git at root) works unchanged",
+        "gitRepos field is empty array or undefined for standard repos",
+        "Existing repos without gitRepos field still load correctly"
+      ],
+      "dependencies": ["task-002"],
+      "priority": "critical",
+      "status": "completed",
+      "startedAt": "2026-01-25T14:31:55Z",
+      "completedAt": "2026-01-25T14:33:15Z"
+    },
+    {
+      "id": "task-004",
+      "category": "feature",
+      "title": "Implement commit resolution utilities",
+      "description": "Add resolveCommitRepo() and findRepoForCommit() functions to resolve commit SHAs to their git repo paths.",
+      "steps": [
+        "Add resolveCommitRepo(repoConfig, commitEntry) that handles both string and CommitRef",
+        "Add findRepoForCommit(repoConfig, sha) that searches discovered repos",
+        "Use git cat-file -t to check if commit exists in a repo",
+        "Run checks in parallel for performance",
+        "Return the GitRepoInfo where commit was found"
+      ],
+      "passes": [
+        "resolveCommitRepo returns immediately for CommitRef objects (O(1))",
+        "resolveCommitRepo calls findRepoForCommit for string SHAs",
+        "findRepoForCommit checks root path first if it's a git repo",
+        "findRepoForCommit searches discovered repos in parallel",
+        "findRepoForCommit throws descriptive error when commit not found"
+      ],
+      "dependencies": ["task-001", "task-003"],
+      "priority": "critical",
+      "status": "completed",
+      "startedAt": "2026-01-25T14:35:05Z",
+      "completedAt": "2026-01-25T14:36:31Z"
+    },
+    {
+      "id": "task-005",
+      "category": "feature",
+      "title": "Update commits API to return repo context",
+      "description": "Modify the task commits endpoint to parse CommitRef objects and return normalized response with repo info.",
+      "steps": [
+        "Update server/api/repos/[repoId]/prd/[prdSlug]/tasks/[taskId]/commits.get.ts",
+        "Parse commits from progress.json handling both string and CommitRef formats",
+        "For string commits, use findRepoForCommit to resolve repo",
+        "Return normalized array of { sha, repo } objects",
+        "Include repoPath in the response for each commit"
+      ],
+      "passes": [
+        "API returns CommitRef[] format consistently",
+        "Legacy string commits are resolved and returned with repo",
+        "New CommitRef commits pass through with repo info",
+        "API handles missing progress.json gracefully",
+        "Error response when commit cannot be resolved"
+      ],
+      "dependencies": ["task-004"],
+      "priority": "high",
+      "status": "completed",
+      "startedAt": "2026-01-25T14:38:05Z",
+      "completedAt": "2026-01-25T14:40:21Z"
+    },
+    {
+      "id": "task-006",
+      "category": "feature",
+      "title": "Update git diff API to accept repo path",
+      "description": "Modify the diff endpoint to accept a repo query parameter and use the correct git repo path.",
+      "steps": [
+        "Add optional 'repo' query parameter to diff.get.ts",
+        "If repo provided, resolve full path using repoConfig.path + repo",
+        "If repo not provided, fall back to repoConfig.path (backwards compatible)",
+        "Validate the resolved path is within discovered gitRepos",
+        "Pass correct path to getCommitDiff()"
+      ],
+      "passes": [
+        "API accepts ?repo=code-hospitality-backend parameter",
+        "Diff is fetched from correct subfolder git repo",
+        "API works without repo param for standard repos",
+        "API validates repo path is within discovered repos",
+        "Error when repo path is not a valid discovered repo"
+      ],
+      "dependencies": ["task-003"],
+      "priority": "high",
+      "status": "completed",
+      "startedAt": "2026-01-25T14:45:00Z",
+      "completedAt": "2026-01-25T14:50:00Z"
+    },
+    {
+      "id": "task-007",
+      "category": "feature",
+      "title": "Update git file-diff and file-content APIs",
+      "description": "Add repo parameter support to file-diff.get.ts and file-content.get.ts endpoints.",
+      "steps": [
+        "Add optional 'repo' query parameter to file-diff.get.ts",
+        "Add optional 'repo' query parameter to file-content.get.ts",
+        "Resolve git repo path same as diff.get.ts",
+        "Update getFileDiff and getFileContent calls with correct path"
+      ],
+      "passes": [
+        "file-diff API accepts repo parameter",
+        "file-content API accepts repo parameter",
+        "Both APIs work without repo param for standard repos",
+        "File diffs are fetched from correct subfolder repo"
+      ],
+      "dependencies": ["task-006"],
+      "priority": "high",
+      "status": "completed",
+      "startedAt": "2026-01-25T14:50:00Z",
+      "completedAt": "2026-01-25T14:55:00Z"
+    },
+    {
+      "id": "task-008",
+      "category": "feature",
+      "title": "Update git commits info API",
+      "description": "Modify commits.get.ts to accept repo parameter and return repoPath in GitCommit response.",
+      "steps": [
+        "Add optional 'repo' query parameter to commits.get.ts",
+        "Resolve git repo path from repo parameter",
+        "Add repoPath field to returned GitCommit objects",
+        "Handle multiple commits with potentially different repos"
+      ],
+      "passes": [
+        "API accepts repo parameter for each commit lookup",
+        "GitCommit response includes repoPath field",
+        "API works for standard repos without repo param"
+      ],
+      "dependencies": ["task-006"],
+      "priority": "high",
+      "status": "completed",
+      "startedAt": "2026-01-25T14:55:00Z",
+      "completedAt": "2026-01-25T15:00:00Z"
+    },
+    {
+      "id": "task-009",
+      "category": "integration",
+      "title": "Update useGit composable to pass repo context",
+      "description": "Modify frontend composable to accept and pass repo path to all git API calls.",
+      "steps": [
+        "Update fetchDiff to accept optional repoPath parameter",
+        "Update fetchFileDiff to accept optional repoPath parameter",
+        "Update fetchFileContent to accept optional repoPath parameter",
+        "Update fetchCommitInfo to accept optional repoPath parameter",
+        "Pass repo as query parameter in API calls"
+      ],
+      "passes": [
+        "All fetch functions accept optional repoPath",
+        "API calls include ?repo= when repoPath provided",
+        "Functions work without repoPath for backwards compatibility"
+      ],
+      "dependencies": ["task-007", "task-008"],
+      "priority": "high",
+      "status": "completed",
+      "startedAt": "2026-01-25T15:00:00Z",
+      "completedAt": "2026-01-25T15:03:00Z"
+    },
+    {
+      "id": "task-010",
+      "category": "feature",
+      "title": "Display repo indicator in TaskDetail",
+      "description": "Update TaskDetail.vue to show which repo each commit belongs to.",
+      "steps": [
+        "Update commits fetch to use new API response format",
+        "Store repo info with each commit in component state",
+        "Add repo badge/label next to commit info in the UI",
+        "Use folder name as display text (e.g., 'code-hospitality-backend')",
+        "Pass repoPath when opening diff viewer"
+      ],
+      "passes": [
+        "Repo name displayed for each commit in task details",
+        "Commits from different repos are visually distinguishable",
+        "Clicking commit opens diff from correct repo",
+        "Standard repos (single git) don't show unnecessary repo indicator"
+      ],
+      "dependencies": ["task-005", "task-009"],
+      "priority": "medium",
+      "status": "completed",
+      "startedAt": "2026-01-25T15:03:00Z",
+      "completedAt": "2026-01-25T15:07:00Z"
+    },
+    {
+      "id": "task-011",
+      "category": "integration",
+      "title": "Update DiffPanel to use repo context",
+      "description": "Ensure DiffPanel receives and uses repo path when fetching diffs.",
+      "steps": [
+        "Add repoPath prop to DiffPanel component",
+        "Pass repoPath to useGit composable calls",
+        "Update parent components to provide repoPath",
+        "Ensure file diffs and content use correct repo"
+      ],
+      "passes": [
+        "DiffPanel accepts repoPath prop",
+        "All diff fetches use provided repoPath",
+        "Diffs display correctly for pseudo-monorepo commits"
+      ],
+      "dependencies": ["task-009", "task-010"],
+      "priority": "medium",
+      "status": "completed",
+      "startedAt": "2026-01-25T15:07:00Z",
+      "completedAt": "2026-01-25T15:10:00Z"
+    },
+    {
+      "id": "task-012",
+      "category": "documentation",
+      "title": "Update complete-next-task skill to record repo",
+      "description": "Modify the skill to detect current git repo and write CommitRef objects instead of plain strings.",
+      "steps": [
+        "Detect current working directory's git repo root",
+        "Calculate relative path from registered repo path",
+        "Write commits as { sha, repo } objects to progress.json",
+        "Handle case where working in root git repo (standard case)"
+      ],
+      "passes": [
+        "Skill writes CommitRef objects for pseudo-monorepo commits",
+        "Skill writes plain strings for standard repo commits",
+        "Repo path is relative to registered repo root",
+        "Existing progress.json files are updated correctly"
+      ],
+      "dependencies": ["task-001"],
+      "priority": "medium",
+      "status": "completed",
+      "startedAt": "2026-01-25T14:50:22Z",
+      "completedAt": "2026-01-25T14:51:55Z"
+    },
+    {
+      "id": "task-013",
+      "category": "testing",
+      "title": "Test pseudo-monorepo workflow end-to-end",
+      "description": "Manually test the complete flow with a real pseudo-monorepo setup.",
+      "steps": [
+        "Add the code-hospitality-monorepo to PRD viewer",
+        "Verify git repos are discovered and stored",
+        "View an existing PRD with task commits",
+        "Verify commits display with repo indicator",
+        "Verify clicking commit shows correct diff",
+        "Test file-level diff viewing"
+      ],
+      "passes": [
+        "Pseudo-monorepo registers successfully with discovered repos",
+        "Existing commits resolve and display diffs",
+        "Repo indicator shows correct subfolder name",
+        "All diff operations work correctly",
+        "No errors in browser console or server logs"
+      ],
+      "dependencies": ["task-011"],
+      "priority": "high",
+      "status": "pending"
+    },
+    {
+      "id": "task-014",
+      "category": "testing",
+      "title": "Test backwards compatibility with standard repos",
+      "description": "Verify standard repos (git at root) continue working without regression.",
+      "steps": [
+        "Test adding a standard single-git-repo project",
+        "Verify no gitRepos field or empty array in config",
+        "Verify existing commit viewing still works",
+        "Verify diff viewing works without repo parameter"
+      ],
+      "passes": [
+        "Standard repos work unchanged",
+        "No repo indicator shown when not needed",
+        "Existing progress.json with string commits still works",
+        "No performance regression"
+      ],
+      "dependencies": ["task-011"],
+      "priority": "high",
+      "status": "pending"
+    }
+  ]
+}
