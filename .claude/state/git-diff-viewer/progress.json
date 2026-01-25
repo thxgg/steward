@@ -1,11 +1,11 @@
 {
   "prdName": "Git Diff Viewer",
   "totalTasks": 15,
-  "completed": 12,
+  "completed": 13,
   "inProgress": 0,
   "blocked": 0,
   "startedAt": "2026-01-25T10:43:40Z",
-  "lastUpdated": "2026-01-25T11:18:43Z",
+  "lastUpdated": "2026-01-25T11:22:46Z",
   "patterns": [],
   "taskLogs": [
     {
@@ -115,6 +115,15 @@
       "implemented": "Added synchronized scrolling to DiffViewer component. The side-by-side layout already uses a row-based design where both panels are in the same flex row, ensuring natural scroll synchronization. Added a toggle button in a toolbar that shows 'Sync scroll' (linked icon) or 'Scroll unlocked' (unlinked icon) for UX clarity. Smooth scrolling is native browser behavior.",
       "filesChanged": ["app/components/git/DiffViewer.vue"],
       "learnings": "The row-based side-by-side diff layout naturally synchronizes scrolling because both panels are in the same container. This is often better than separate scrollable panels which would require complex event synchronization and can cause jank."
+    },
+    {
+      "taskId": "task-013",
+      "status": "completed",
+      "startedAt": "2026-01-25T11:20:05Z",
+      "completedAt": "2026-01-25T11:22:46Z",
+      "implemented": "Handled edge cases in diff viewer: (1) Binary files - added binary field to FileDiff type, detect in git numstat output (- -), show 'Binary file' placeholder with FileWarning icon. (2) Large files - LINE_LIMIT=10000, show warning with line count and 'Show full diff' button. (3) Empty diffs - show 'No changes' message for files touched but unchanged. (4) Renamed files - DiffPanel header shows oldPath → newPath with arrow, badge for binary files.",
+      "filesChanged": ["app/types/git.ts", "server/utils/git.ts", "app/components/git/DiffViewer.vue", "app/components/git/DiffPanel.vue"],
+      "learnings": "Git numstat shows binary files as '- - filepath' (dashes for additions/deletions). Adding a computed for selected file metadata allows passing binary/oldPath props to child components."
     }
   ]
 }
