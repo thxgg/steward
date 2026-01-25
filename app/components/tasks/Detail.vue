@@ -162,7 +162,7 @@ watch(open, (isOpen) => {
 
       <!-- Diff View -->
       <div v-if="task && viewMode === 'diff' && selectedCommitSha && repoId" class="min-h-0 flex-1 overflow-hidden">
-        <GitDiffPanel :repo-id="repoId" :commit-sha="selectedCommitSha" class="h-full" />
+        <GitDiffPanel :repo-id="repoId" :commit-sha="selectedCommitSha" class="h-full" @close="handleBackToDetails" />
       </div>
 
       <!-- Details View -->

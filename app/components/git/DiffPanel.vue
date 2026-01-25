@@ -1,7 +1,13 @@
 <script setup lang="ts">
-import { AlertCircle, RefreshCw, Loader2 } from 'lucide-vue-next'
+import { AlertCircle, RefreshCw, Loader2, Keyboard } from 'lucide-vue-next'
 import { ScrollArea } from '~/components/ui/scroll-area'
 import { Button } from '~/components/ui/button'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '~/components/ui/tooltip'
 import type { FileDiff, DiffHunk } from '~/types/git'
 
 const props = defineProps<{
@@ -9,6 +15,10 @@ const props = defineProps<{
   repoId: string
   /** Commit SHA to display diff for */
   commitSha: string
+}>()
+
+const emit = defineEmits<{
+  close: []
 }>()
 
 const { fetchDiff, fetchFileDiff, isLoadingDiff, isLoadingFileDiff } = useGit()
@@ -85,10 +95,132 @@ watch(
   },
   { immediate: true }
 )
+
+// Keyboard navigation
+const panelRef = ref<HTMLElement | null>(null)
+const diffViewerRef = ref<HTMLElement | null>(null)
+
+// Navigate to next/previous file
+function navigateFile(direction: 'next' | 'prev') {
+  if (files.value.length === 0) return
+
+  const currentIndex = selectedFile.value
+    ? files.value.findIndex(f => f.path === selectedFile.value)
+    : -1
+
+  let newIndex: number
+  if (direction === 'next') {
+    newIndex = currentIndex < files.value.length - 1 ? currentIndex + 1 : 0
+  } else {
+    newIndex = currentIndex > 0 ? currentIndex - 1 : files.value.length - 1
+  }
+
+  const file = files.value[newIndex]
+  if (file) {
+    selectedFile.value = file.path
+  }
+}
+
+// Jump between hunks
+function jumpToHunk(direction: 'next' | 'prev') {
+  if (!diffViewerRef.value) return
+
+  const separators = diffViewerRef.value.querySelectorAll('.diff-separator')
+  if (separators.length === 0) return
+
+  const container = diffViewerRef.value.closest('.overflow-y-auto, [data-radix-scroll-area-viewport]')
+  if (!container) return
+
+  const scrollTop = container.scrollTop
+  const containerRect = container.getBoundingClientRect()
+
+  let targetSeparator: Element | null = null
+
+  if (direction === 'next') {
+    // Find the first separator below current scroll position
+    for (const sep of separators) {
+      const rect = sep.getBoundingClientRect()
+      const relativeTop = rect.top - containerRect.top + scrollTop
+      if (relativeTop > scrollTop + 50) {
+        targetSeparator = sep
+        break
+      }
+    }
+    // If no separator found below, wrap to first
+    if (!targetSeparator && separators.length > 0) {
+      targetSeparator = separators[0]!
+    }
+  } else {
+    // Find the last separator above current scroll position
+    for (let i = separators.length - 1; i >= 0; i--) {
+      const sep = separators[i]!
+      const rect = sep.getBoundingClientRect()
+      const relativeTop = rect.top - containerRect.top + scrollTop
+      if (relativeTop < scrollTop - 10) {
+        targetSeparator = sep
+        break
+      }
+    }
+    // If no separator found above, wrap to last
+    if (!targetSeparator && separators.length > 0) {
+      targetSeparator = separators[separators.length - 1]!
+    }
+  }
+
+  if (targetSeparator) {
+    targetSeparator.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+}
+
+// Handle keyboard events
+function handleKeydown(event: KeyboardEvent) {
+  // Skip if user is typing in an input
+  if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+    return
+  }
+
+  switch (event.key) {
+    case 'j':
+    case 'ArrowDown':
+      if (!event.ctrlKey && !event.metaKey) {
+        event.preventDefault()
+        navigateFile('next')
+      }
+      break
+    case 'k':
+    case 'ArrowUp':
+      if (!event.ctrlKey && !event.metaKey) {
+        event.preventDefault()
+        navigateFile('prev')
+      }
+      break
+    case '[':
+      event.preventDefault()
+      jumpToHunk('prev')
+      break
+    case ']':
+      event.preventDefault()
+      jumpToHunk('next')
+      break
+    case 'Escape':
+      event.preventDefault()
+      emit('close')
+      break
+  }
+}
+
+// Set up keyboard listeners when mounted
+onMounted(() => {
+  document.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown)
+})
 </script>
 
 <template>
-  <div class="flex h-full flex-col">
+  <div ref="panelRef" class="flex h-full flex-col" tabindex="-1">
     <!-- Error state -->
     <div v-if="error" class="flex flex-1 flex-col items-center justify-center gap-4 p-8">
       <AlertCircle class="size-12 text-destructive" />
@@ -119,10 +251,36 @@ watch(
     <div v-else class="flex flex-1 overflow-hidden">
       <!-- Minimap sidebar -->
       <div class="w-56 shrink-0 border-r border-border">
-        <div class="border-b border-border px-3 py-2">
+        <div class="flex items-center justify-between border-b border-border px-3 py-2">
           <span class="text-xs font-medium text-muted-foreground">
             {{ files.length }} file{{ files.length !== 1 ? 's' : '' }} changed
           </span>
+          <!-- Keyboard shortcuts hint -->
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <button class="text-muted-foreground/50 transition-colors hover:text-muted-foreground">
+                  <Keyboard class="size-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" align="end" class="max-w-xs">
+                <div class="space-y-1 text-xs">
+                  <div class="flex justify-between gap-4">
+                    <span class="text-muted-foreground">Navigate files</span>
+                    <span class="font-mono">j/k or ↑/↓</span>
+                  </div>
+                  <div class="flex justify-between gap-4">
+                    <span class="text-muted-foreground">Jump to hunk</span>
+                    <span class="font-mono">[ / ]</span>
+                  </div>
+                  <div class="flex justify-between gap-4">
+                    <span class="text-muted-foreground">Close</span>
+                    <span class="font-mono">Esc</span>
+                  </div>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
         <GitChangesMinimap
           :files="files"
@@ -170,12 +328,14 @@ watch(
 
         <!-- Diff viewer -->
         <ScrollArea v-else-if="selectedFile" class="flex-1">
-          <GitDiffViewer
-            :hunks="hunks"
-            :file-path="selectedFile"
-            :binary="selectedFileDiff?.binary"
-            :old-path="selectedFileDiff?.oldPath"
-          />
+          <div ref="diffViewerRef">
+            <GitDiffViewer
+              :hunks="hunks"
+              :file-path="selectedFile"
+              :binary="selectedFileDiff?.binary"
+              :old-path="selectedFileDiff?.oldPath"
+            />
+          </div>
         </ScrollArea>
 
         <!-- No file selected -->
