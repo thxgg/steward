@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { FileText, Settings, Moon, Sun, LayoutGrid, Folder, Check } from 'lucide-vue-next'
+import { FileText, Moon, Sun, LayoutGrid, Folder, Check, Keyboard } from 'lucide-vue-next'
 import {
   CommandDialog,
   CommandEmpty,
@@ -12,9 +12,24 @@ import {
 
 const open = defineModel<boolean>('open', { default: false })
 
+const emit = defineEmits<{
+  openShortcutsHelp: []
+}>()
+
 const router = useRouter()
+const colorMode = useColorMode()
 const { prds } = usePrd()
 const { repos, currentRepoId, selectRepo } = useRepos()
+
+// Get current tab from localStorage
+const currentTab = ref<'document' | 'board'>('document')
+
+if (import.meta.client) {
+  const saved = localStorage.getItem('prd-viewer-tab')
+  if (saved === 'document' || saved === 'board') {
+    currentTab.value = saved
+  }
+}
 
 function navigateToPrd(slug: string) {
   if (!currentRepoId.value) return
@@ -26,6 +41,30 @@ function switchRepo(repoId: string) {
   selectRepo(repoId)
   router.push('/')
   open.value = false
+}
+
+function toggleTheme() {
+  colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark'
+  open.value = false
+}
+
+function toggleTab() {
+  const newTab = currentTab.value === 'document' ? 'board' : 'document'
+  currentTab.value = newTab
+  if (import.meta.client) {
+    localStorage.setItem('prd-viewer-tab', newTab)
+    // Dispatch a storage event so the page can react
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: 'prd-viewer-tab',
+      newValue: newTab
+    }))
+  }
+  open.value = false
+}
+
+function openShortcutsHelp() {
+  open.value = false
+  emit('openShortcutsHelp')
 }
 </script>
 
@@ -65,18 +104,21 @@ function switchRepo(repoId: string) {
       <CommandSeparator v-if="repos?.length" />
 
       <CommandGroup heading="Actions">
-        <CommandItem value="toggle-theme">
+        <CommandItem value="toggle-theme light dark" @select="toggleTheme">
           <Sun class="size-4 dark:hidden" />
           <Moon class="hidden size-4 dark:block" />
           <span>Toggle theme</span>
         </CommandItem>
-        <CommandItem value="switch-tab">
+        <CommandItem
+          :value="`switch-tab ${currentTab === 'document' ? 'task board' : 'document'}`"
+          @select="toggleTab"
+        >
           <LayoutGrid class="size-4" />
-          <span>Switch to Task Board</span>
+          <span>Switch to {{ currentTab === 'document' ? 'Task Board' : 'Document' }}</span>
         </CommandItem>
-        <CommandItem value="settings">
-          <Settings class="size-4" />
-          <span>Open settings</span>
+        <CommandItem value="keyboard shortcuts help" @select="openShortcutsHelp">
+          <Keyboard class="size-4" />
+          <span>Keyboard shortcuts</span>
         </CommandItem>
       </CommandGroup>
     </CommandList>

@@ -28,13 +28,22 @@ const error = ref<string | null>(null)
 // Active tab (persisted in localStorage)
 const activeTab = ref('document')
 
-// Load tab preference from localStorage
+// Load tab preference from localStorage and listen for changes
 onMounted(() => {
   if (import.meta.client) {
     const saved = localStorage.getItem('prd-viewer-tab')
     if (saved === 'document' || saved === 'board') {
       activeTab.value = saved
     }
+
+    // Listen for storage events from command palette
+    window.addEventListener('storage', (event) => {
+      if (event.key === 'prd-viewer-tab' && event.newValue) {
+        if (event.newValue === 'document' || event.newValue === 'board') {
+          activeTab.value = event.newValue
+        }
+      }
+    })
   }
 })
 
