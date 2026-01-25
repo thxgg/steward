@@ -1,11 +1,11 @@
 {
   "prdName": "Git Diff Viewer",
   "totalTasks": 15,
-  "completed": 8,
+  "completed": 9,
   "inProgress": 0,
   "blocked": 0,
   "startedAt": "2026-01-25T10:43:40Z",
-  "lastUpdated": "2026-01-25T11:01:56Z",
+  "lastUpdated": "2026-01-25T11:05:26Z",
   "patterns": [],
   "taskLogs": [
     {
@@ -79,6 +79,15 @@
       "implemented": "Created DiffPanel container component that combines ChangesMinimap and DiffViewer. Accepts repoId and commitSha props. Fetches file list on mount/prop change, auto-selects first file, fetches file diff on selection change. Layout: 224px minimap sidebar with file count header, diff viewer with file path header in flex area. Includes loading, error (with retry), and empty states.",
       "filesChanged": ["app/components/git/DiffPanel.vue"],
       "learnings": "Use watch with immediate:true for initial data load on mount. Separate error states for file list vs file diff allows granular retry."
+    },
+    {
+      "taskId": "task-009",
+      "status": "completed",
+      "startedAt": "2026-01-25T11:03:10Z",
+      "completedAt": "2026-01-25T11:05:26Z",
+      "implemented": "Integrated diff viewer into TaskDetail panel. Added commits and repoId props to TaskDetail. Added 'Changes' section with GitCommitList that shows commits for tasks with recorded commits. Clicking a commit switches to diff view with GitDiffPanel (sheet expands to max-w-3xl). Back button returns to details view. PRD page now fetches progress.json in parallel to get task commit data.",
+      "filesChanged": ["app/components/tasks/Detail.vue", "app/pages/[repo]/[prd].vue"],
+      "learnings": "Use computed property to look up task commits from progress file by task ID. View mode state (details/diff) with ref allows seamless transitions. Reset state on task change and sheet close for clean UX."
     }
   ]
 }
