@@ -93,6 +93,8 @@ export interface TaskLog {
   filesChanged?: string[]
   /** Learnings or patterns discovered */
   learnings?: string
+  /** Git commit SHAs associated with this task */
+  commits?: string[]
 }
 
 /**

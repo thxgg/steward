@@ -16,3 +16,13 @@ export type {
   TaskLog,
   ProgressFile,
 } from './task'
+
+// Git types
+export type {
+  GitCommit,
+  FileStatus,
+  FileDiff,
+  DiffLineType,
+  DiffLine,
+  DiffHunk,
+} from './git'
