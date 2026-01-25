@@ -1,11 +1,11 @@
 {
   "prdName": "Git Diff Viewer",
   "totalTasks": 15,
-  "completed": 7,
+  "completed": 8,
   "inProgress": 0,
   "blocked": 0,
   "startedAt": "2026-01-25T10:43:40Z",
-  "lastUpdated": "2026-01-25T10:59:25Z",
+  "lastUpdated": "2026-01-25T11:01:56Z",
   "patterns": [],
   "taskLogs": [
     {
@@ -70,6 +70,15 @@
       "implemented": "Created DiffViewer component with side-by-side layout showing old (left) and new (right) content. Features: line numbers in gutters, syntax highlighting via shiki with dual themes (github-light/dark), green background for additions, red for deletions, neutral for context. Pairs removals/additions together, shows hunk separators between non-contiguous sections, detects language from file extension.",
       "filesChanged": ["app/components/git/DiffViewer.vue"],
       "learnings": "For side-by-side diff, pair consecutive removals with consecutive additions for visual alignment. Shiki dual themes with CSS display toggling works well for light/dark mode. Batch highlighting prevents overwhelming with many lines."
+    },
+    {
+      "taskId": "task-008",
+      "status": "completed",
+      "startedAt": "2026-01-25T11:00:46Z",
+      "completedAt": "2026-01-25T11:01:56Z",
+      "implemented": "Created DiffPanel container component that combines ChangesMinimap and DiffViewer. Accepts repoId and commitSha props. Fetches file list on mount/prop change, auto-selects first file, fetches file diff on selection change. Layout: 224px minimap sidebar with file count header, diff viewer with file path header in flex area. Includes loading, error (with retry), and empty states.",
+      "filesChanged": ["app/components/git/DiffPanel.vue"],
+      "learnings": "Use watch with immediate:true for initial data load on mount. Separate error states for file list vs file diff allows granular retry."
     }
   ]
 }
