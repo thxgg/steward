@@ -7,42 +7,24 @@ import { reactive, ref, watch } from "vue"
 import { cn } from "@/lib/utils"
 import { provideCommandContext } from "."
 
-const props = withDefaults(defineProps<ListboxRootProps & { class?: HTMLAttributes["class"], loop?: boolean }>(), {
+const props = withDefaults(defineProps<ListboxRootProps & { class?: HTMLAttributes["class"], defaultSearch?: string }>(), {
   modelValue: "",
   loop: true,
+  defaultSearch: "",
 })
 
 const emits = defineEmits<ListboxRootEmits>()
 
-const delegatedProps = reactiveOmit(props, "class", "loop")
+const delegatedProps = reactiveOmit(props, "class")
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
-
-function handleKeydown(event: KeyboardEvent) {
-  if (!props.loop) return
-
-  const items = document.querySelectorAll('[data-slot="command-item"]:not([data-disabled])')
-  if (items.length === 0) return
-
-  const highlighted = document.querySelector('[data-slot="command-item"][data-highlighted]')
-  const itemsArray = Array.from(items) as HTMLElement[]
-  const currentIndex = highlighted ? itemsArray.indexOf(highlighted as HTMLElement) : -1
-
-  if (event.key === 'ArrowDown' && currentIndex === itemsArray.length - 1) {
-    event.preventDefault()
-    itemsArray[0]?.focus()
-  } else if (event.key === 'ArrowUp' && currentIndex === 0) {
-    event.preventDefault()
-    itemsArray[itemsArray.length - 1]?.focus()
-  }
-}
 
 const allItems = ref<Map<string, string>>(new Map())
 const allGroups = ref<Map<string, Set<string>>>(new Map())
 
 const { contains } = useFilter({ sensitivity: "base" })
 const filterState = reactive({
-  search: "",
+  search: props.defaultSearch || "",
   filtered: {
     /** The count of all visible items. */
     count: 0,
@@ -51,6 +33,13 @@ const filterState = reactive({
     /** Set of groups with at least one visible item. */
     groups: new Set() as Set<string>,
   },
+})
+
+// Watch for changes to defaultSearch prop (e.g., when dialog opens with a filter)
+watch(() => props.defaultSearch, (newSearch) => {
+  if (newSearch !== undefined) {
+    filterState.search = newSearch
+  }
 })
 
 function filterItems() {
@@ -101,7 +90,6 @@ provideCommandContext({
     data-slot="command"
     v-bind="forwarded"
     :class="cn('bg-popover text-popover-foreground flex h-full w-full flex-col overflow-hidden rounded-md', props.class)"
-    @keydown="handleKeydown"
   >
     <slot />
   </ListboxRoot>

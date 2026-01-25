@@ -9,6 +9,10 @@ const route = useRoute()
 
 // Command palette state
 const commandPaletteOpen = ref(false)
+const commandPaletteFilter = ref('')
+
+// Ref to access RepoSelector methods
+const repoSelectorRef = ref<{ openAddDialog: () => void } | null>(null)
 
 // Register keyboard shortcuts
 const { onShortcut } = useKeyboard()
@@ -21,9 +25,43 @@ onShortcut('Ctrl+k', () => {
   commandPaletteOpen.value = true
 })
 
+// Cmd/Ctrl+J to open palette pre-filtered to PRDs
+onShortcut('Meta+j', () => {
+  commandPaletteFilter.value = 'prd-'
+  commandPaletteOpen.value = true
+})
+onShortcut('Ctrl+j', () => {
+  commandPaletteFilter.value = 'prd-'
+  commandPaletteOpen.value = true
+})
+
+// Cmd/Ctrl+Shift+T to toggle Document/Task Board tabs
+function toggleTab() {
+  if (!import.meta.client) return
+  const currentTab = localStorage.getItem('prd-viewer-tab') || 'document'
+  const newTab = currentTab === 'document' ? 'board' : 'document'
+  localStorage.setItem('prd-viewer-tab', newTab)
+  window.dispatchEvent(new StorageEvent('storage', {
+    key: 'prd-viewer-tab',
+    newValue: newTab
+  }))
+}
+onShortcut('Meta+Shift+t', toggleTab)
+onShortcut('Ctrl+Shift+t', toggleTab)
+
+// Cmd/Ctrl+. to toggle theme
 function toggleColorMode() {
   colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark'
 }
+onShortcut('Meta+.', toggleColorMode)
+onShortcut('Ctrl+.', toggleColorMode)
+
+// Cmd/Ctrl+, to open add repository dialog
+function openAddRepoDialog() {
+  repoSelectorRef.value?.openAddDialog()
+}
+onShortcut('Meta+,', openAddRepoDialog)
+onShortcut('Ctrl+,', openAddRepoDialog)
 
 // File watching for auto-refresh
 useFileWatch((event) => {
@@ -55,7 +93,7 @@ useFileWatch((event) => {
 <template>
   <div class="min-h-screen bg-background text-foreground">
     <!-- Command Palette -->
-    <CommandPalette v-model:open="commandPaletteOpen" />
+    <CommandPalette v-model:open="commandPaletteOpen" v-model:filter="commandPaletteFilter" />
     <!-- Fixed Header -->
     <header
       class="fixed top-0 left-0 right-0 z-50 h-14 border-b border-border bg-background/95 backdrop-blur-sm supports-[backdrop-filter]:bg-background/80"
@@ -71,7 +109,7 @@ useFileWatch((event) => {
         <!-- Right side: Repo Selector + Theme Toggle (ClientOnly to prevent hydration mismatch) -->
         <ClientOnly>
           <div class="flex items-center gap-3">
-            <LayoutRepoSelector />
+            <LayoutRepoSelector ref="repoSelectorRef" />
             <Button
               variant="ghost"
               size="icon"

@@ -11,6 +11,7 @@ import {
 } from '~/components/ui/command'
 
 const open = defineModel<boolean>('open', { default: false })
+const filter = defineModel<string>('filter', { default: '' })
 
 const emit = defineEmits<{
   openShortcutsHelp: []
@@ -66,10 +67,17 @@ function openShortcutsHelp() {
   open.value = false
   emit('openShortcutsHelp')
 }
+
+// Clear the filter when dialog closes
+watch(open, (isOpen) => {
+  if (!isOpen) {
+    filter.value = ''
+  }
+})
 </script>
 
 <template>
-  <CommandDialog v-model:open="open">
+  <CommandDialog v-model:open="open" :default-search="filter">
     <CommandInput placeholder="Type a command or search..." />
     <CommandList>
       <CommandEmpty>No results found.</CommandEmpty>

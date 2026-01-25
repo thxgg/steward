@@ -146,6 +146,13 @@ function handleDialogClose() {
   newRepoPath.value = ''
   addError.value = null
 }
+
+// Expose method to open the add dialog from outside (e.g., via keyboard shortcut)
+defineExpose({
+  openAddDialog: () => {
+    showAddDialog.value = true
+  }
+})
 </script>
 
 <template>

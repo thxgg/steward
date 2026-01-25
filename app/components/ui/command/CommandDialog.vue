@@ -7,9 +7,11 @@ import Command from "./Command.vue"
 const props = withDefaults(defineProps<DialogRootProps & {
   title?: string
   description?: string
+  defaultSearch?: string
 }>(), {
   title: "Command Palette",
   description: "Search for a command to run...",
+  defaultSearch: "",
 })
 const emits = defineEmits<DialogRootEmits>()
 
@@ -23,7 +25,7 @@ const forwarded = useForwardPropsEmits(props, emits)
         <DialogTitle>{{ title }}</DialogTitle>
         <DialogDescription>{{ description }}</DialogDescription>
       </DialogHeader>
-      <Command>
+      <Command :default-search="defaultSearch">
         <slot v-bind="slotProps" />
       </Command>
     </DialogContent>
