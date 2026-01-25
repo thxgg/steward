@@ -39,17 +39,30 @@ export async function addRepo(path: string, name?: string): Promise<RepoConfig> 
     throw new Error('Repository already added')
   }
 
+  // Discover git repos in subfolders (for pseudo-monorepos)
+  const gitRepos = await discoverGitRepos(resolvedPath)
+
   const repo: RepoConfig = {
     id: randomUUID(),
     name: name || basename(resolvedPath),
     path: resolvedPath,
-    addedAt: new Date().toISOString()
+    addedAt: new Date().toISOString(),
+    // Only include gitRepos if there are discovered repos (pseudo-monorepo case)
+    ...(gitRepos.length > 0 && { gitRepos }),
   }
 
   repos.push(repo)
   await saveRepos(repos)
 
   return repo
+}
+
+/**
+ * Get a repository by its ID
+ */
+export async function getRepoById(id: string): Promise<RepoConfig | undefined> {
+  const repos = await getRepos()
+  return repos.find(r => r.id === id)
 }
 
 export async function removeRepo(id: string): Promise<boolean> {
