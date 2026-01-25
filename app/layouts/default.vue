@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Button } from '~/components/ui/button'
 import CommandPalette from '~/components/CommandPalette.vue'
+import ShortcutsHelp from '~/components/ShortcutsHelp.vue'
 
 const colorMode = useColorMode()
 const { refreshPrds } = usePrd()
@@ -10,6 +11,9 @@ const route = useRoute()
 // Command palette state
 const commandPaletteOpen = ref(false)
 const commandPaletteFilter = ref('')
+
+// Shortcuts help modal state
+const shortcutsHelpOpen = ref(false)
 
 // Ref to access RepoSelector methods
 const repoSelectorRef = ref<{ openAddDialog: () => void } | null>(null)
@@ -63,6 +67,15 @@ function openAddRepoDialog() {
 onShortcut('Meta+,', openAddRepoDialog)
 onShortcut('Ctrl+,', openAddRepoDialog)
 
+// Cmd/Ctrl+/ or Cmd/Ctrl+? to open shortcuts help
+function openShortcutsHelp() {
+  shortcutsHelpOpen.value = true
+}
+onShortcut('Meta+/', openShortcutsHelp)
+onShortcut('Ctrl+/', openShortcutsHelp)
+onShortcut('Meta+Shift+/', openShortcutsHelp) // Cmd+? is Cmd+Shift+/
+onShortcut('Ctrl+Shift+/', openShortcutsHelp) // Ctrl+? is Ctrl+Shift+/
+
 // File watching for auto-refresh
 useFileWatch((event) => {
   if (event.type === 'connected') {
@@ -93,7 +106,14 @@ useFileWatch((event) => {
 <template>
   <div class="min-h-screen bg-background text-foreground">
     <!-- Command Palette -->
-    <CommandPalette v-model:open="commandPaletteOpen" v-model:filter="commandPaletteFilter" />
+    <CommandPalette
+      v-model:open="commandPaletteOpen"
+      v-model:filter="commandPaletteFilter"
+      @open-shortcuts-help="openShortcutsHelp"
+    />
+
+    <!-- Shortcuts Help Modal -->
+    <ShortcutsHelp v-model:open="shortcutsHelpOpen" />
     <!-- Fixed Header -->
     <header
       class="fixed top-0 left-0 right-0 z-50 h-14 border-b border-border bg-background/95 backdrop-blur-sm supports-[backdrop-filter]:bg-background/80"
