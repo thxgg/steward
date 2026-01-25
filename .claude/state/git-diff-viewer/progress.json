@@ -1,0 +1,21 @@
+{
+  "prdName": "Git Diff Viewer",
+  "totalTasks": 15,
+  "completed": 1,
+  "inProgress": 0,
+  "blocked": 0,
+  "startedAt": "2026-01-25T10:43:40Z",
+  "lastUpdated": "2026-01-25T10:44:40Z",
+  "patterns": [],
+  "taskLogs": [
+    {
+      "taskId": "task-001",
+      "status": "completed",
+      "startedAt": "2026-01-25T10:43:40Z",
+      "completedAt": "2026-01-25T10:44:40Z",
+      "implemented": "Created app/types/git.ts with GitCommit, FileDiff, DiffHunk, DiffLine interfaces. Added commits field to TaskLog interface. Exported new types from app/types/index.ts.",
+      "filesChanged": ["app/types/git.ts", "app/types/task.ts", "app/types/index.ts"],
+      "learnings": "Following existing type definition patterns in the codebase with JSDoc comments for documentation."
+    }
+  ]
+}
