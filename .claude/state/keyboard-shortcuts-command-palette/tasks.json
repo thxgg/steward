@@ -229,10 +229,16 @@
       ],
       "dependencies": ["task-004"],
       "priority": "high",
-      "status": "pending",
+      "status": "completed",
+      "startedAt": "2026-01-25T02:19:58Z",
+      "completedAt": "2026-01-25T02:23:54Z",
+      "passes": true,
       "affectedFiles": [
         "app/layouts/default.vue",
-        "app/composables/useKeyboard.ts"
+        "app/components/ui/command/Command.vue",
+        "app/components/ui/command/CommandDialog.vue",
+        "app/components/CommandPalette.vue",
+        "app/components/layout/RepoSelector.vue"
       ]
     },
     {

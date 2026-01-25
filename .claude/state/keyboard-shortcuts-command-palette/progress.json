@@ -1,11 +1,11 @@
 {
   "prdName": "Keyboard Shortcuts & Command Palette",
   "totalTasks": 12,
-  "completed": 7,
+  "completed": 8,
   "inProgress": 0,
   "blocked": 0,
   "startedAt": "2026-01-25T01:53:47Z",
-  "lastUpdated": "2026-01-25T02:12:20Z",
+  "lastUpdated": "2026-01-25T02:23:54Z",
   "patterns": [
     {
       "name": "shadcn-vue component installation",
@@ -13,6 +13,21 @@
     }
   ],
   "taskLogs": [
+    {
+      "taskId": "task-008",
+      "status": "completed",
+      "startedAt": "2026-01-25T02:19:58Z",
+      "completedAt": "2026-01-25T02:23:54Z",
+      "implemented": "Added 4 direct keyboard shortcuts: 1) Cmd/Ctrl+J opens palette pre-filtered to PRDs via new defaultSearch prop on Command component, 2) Cmd/Ctrl+Shift+T toggles Document/Task Board tabs using localStorage and StorageEvent, 3) Cmd/Ctrl+. toggles theme via toggleColorMode, 4) Cmd/Ctrl+, opens add repository dialog via exposed method on RepoSelector. Updated Command.vue to accept defaultSearch prop and watch for changes. Updated CommandDialog to forward defaultSearch. Added filter model to CommandPalette that clears when dialog closes.",
+      "filesChanged": [
+        "app/layouts/default.vue",
+        "app/components/ui/command/Command.vue",
+        "app/components/ui/command/CommandDialog.vue",
+        "app/components/CommandPalette.vue",
+        "app/components/layout/RepoSelector.vue"
+      ],
+      "learnings": "defineExpose allows exposing component methods to parent. Watch prop changes to update internal reactive state. Filter model with clear-on-close pattern works well for pre-filtered searches."
+    },
     {
       "taskId": "task-007",
       "status": "completed",
