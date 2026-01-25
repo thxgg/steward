@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { codeToHtml } from 'shiki'
+import { Link, Link2Off } from 'lucide-vue-next'
+import { Button } from '~/components/ui/button'
 import type { DiffHunk, DiffLine } from '~/types/git'
 
 const props = defineProps<{
@@ -8,6 +10,11 @@ const props = defineProps<{
   /** File path for syntax detection */
   filePath: string
 }>()
+
+// Synchronized scrolling state
+// Note: The side-by-side layout uses a single row container, so scrolling
+// is naturally synchronized. This toggle is for UX clarity and future flexibility.
+const syncScrollEnabled = ref(true)
 
 // Detect language from file extension
 function detectLanguage(path: string): string {
@@ -296,6 +303,19 @@ function getHighlightedContent(pairId: string, side: 'old' | 'new'): string {
     </div>
 
     <div v-else class="diff-container">
+      <!-- Sync scroll toggle -->
+      <div class="diff-toolbar">
+        <Button
+          variant="ghost"
+          size="sm"
+          class="h-7 gap-1.5 text-xs"
+          :class="{ 'text-primary': syncScrollEnabled }"
+          @click="syncScrollEnabled = !syncScrollEnabled"
+        >
+          <component :is="syncScrollEnabled ? Link : Link2Off" class="size-3.5" />
+          {{ syncScrollEnabled ? 'Sync scroll' : 'Scroll unlocked' }}
+        </Button>
+      </div>
       <!-- Side-by-side view -->
       <div class="diff-table">
         <template v-for="item in displayItems" :key="item.type === 'line' ? item.pair?.id : `sep-${item.hunkIndex}`">
@@ -369,6 +389,14 @@ function getHighlightedContent(pairId: string, side: 'old' | 'new'): string {
 
 .diff-container {
   overflow-x: auto;
+}
+
+.diff-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--muted) / 0.3);
 }
 
 .diff-table {
