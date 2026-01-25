@@ -2,6 +2,8 @@ import { spawn } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import { join, resolve, relative, isAbsolute } from 'node:path'
 import type { GitCommit, FileDiff, DiffHunk, DiffLine, FileStatus, DiffLineType } from '~/types/git'
+import type { RepoConfig, GitRepoInfo } from '~/types/repo'
+import type { CommitRef } from '~/types/task'
 
 /**
  * Execute a git command and return stdout
@@ -364,4 +366,113 @@ export async function getFileContent(
   // Get file content at commit
   const output = await execGit(repoPath, ['show', `${sha}:${filePath}`])
   return output
+}
+
+/**
+ * Check if a commit exists in a repository
+ */
+async function commitExistsInRepo(repoPath: string, sha: string): Promise<boolean> {
+  try {
+    await execGit(repoPath, ['cat-file', '-t', sha])
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Result of resolving a commit to its repository
+ */
+export interface ResolvedCommit {
+  /** Commit SHA */
+  sha: string
+  /** Relative path to the git repo (empty string for root repo) */
+  repoPath: string
+  /** Absolute path to the git repo */
+  absolutePath: string
+}
+
+/**
+ * Find which repository contains a given commit SHA.
+ * Checks the root path first (if it's a git repo), then searches discovered repos in parallel.
+ *
+ * @param repoConfig - The repository configuration with optional gitRepos
+ * @param sha - The commit SHA to find
+ * @returns The GitRepoInfo where the commit was found, or throws if not found
+ */
+export async function findRepoForCommit(
+  repoConfig: RepoConfig,
+  sha: string
+): Promise<ResolvedCommit> {
+  // Validate SHA format
+  if (!/^[0-9a-f]{4,40}$/i.test(sha)) {
+    throw new Error(`Invalid commit SHA: ${sha}`)
+  }
+
+  // Check if root path is a git repo first
+  if (await isGitRepo(repoConfig.path)) {
+    if (await commitExistsInRepo(repoConfig.path, sha)) {
+      return {
+        sha,
+        repoPath: '',
+        absolutePath: repoConfig.path,
+      }
+    }
+  }
+
+  // If no discovered repos, commit not found
+  if (!repoConfig.gitRepos || repoConfig.gitRepos.length === 0) {
+    throw new Error(`Commit ${sha.substring(0, 7)} not found in repository "${repoConfig.name}"`)
+  }
+
+  // Search discovered repos in parallel
+  const results = await Promise.all(
+    repoConfig.gitRepos.map(async (gitRepo): Promise<ResolvedCommit | null> => {
+      if (await commitExistsInRepo(gitRepo.absolutePath, sha)) {
+        return {
+          sha,
+          repoPath: gitRepo.relativePath,
+          absolutePath: gitRepo.absolutePath,
+        }
+      }
+      return null
+    })
+  )
+
+  // Find first match
+  const found = results.find((r): r is ResolvedCommit => r !== null)
+  if (found) {
+    return found
+  }
+
+  throw new Error(
+    `Commit ${sha.substring(0, 7)} not found in repository "${repoConfig.name}" or any of its ${repoConfig.gitRepos.length} discovered git repos`
+  )
+}
+
+/**
+ * Resolve a commit entry (string or CommitRef) to its repository information.
+ * For CommitRef objects, returns immediately (O(1)).
+ * For string SHAs, searches repositories to find the commit.
+ *
+ * @param repoConfig - The repository configuration
+ * @param commitEntry - Either a commit SHA string or a CommitRef object
+ * @returns Resolved commit information with repo path
+ */
+export async function resolveCommitRepo(
+  repoConfig: RepoConfig,
+  commitEntry: string | CommitRef
+): Promise<ResolvedCommit> {
+  // If it's a CommitRef object, we already have the repo info (O(1))
+  if (typeof commitEntry === 'object' && commitEntry.sha && commitEntry.repo) {
+    return {
+      sha: commitEntry.sha,
+      repoPath: commitEntry.repo,
+      absolutePath: join(repoConfig.path, commitEntry.repo),
+    }
+  }
+
+  // It's a string SHA, need to search for it
+  const sha = typeof commitEntry === 'string' ? commitEntry : commitEntry.sha
+  return findRepoForCommit(repoConfig, sha)
 }
