@@ -57,8 +57,8 @@ async function browseDirectory(path?: string) {
     })
     browserPath.value = data.current
     browserDirs.value = data.directories
-  } catch (err) {
-    console.error('Browse error:', err)
+  } catch {
+    // Silently fail - directory browser will show empty state
   } finally {
     browserLoading.value = false
   }
@@ -235,15 +235,15 @@ function handleDialogClose() {
 
     <!-- Add Repository Sheet -->
     <Sheet :open="showAddDialog" @update:open="showAddDialog = $event">
-      <SheetContent side="right" @escape-key-down="handleDialogClose">
-        <SheetHeader>
+      <SheetContent side="right" class="flex h-full flex-col" @escape-key-down="handleDialogClose">
+        <SheetHeader class="px-6">
           <SheetTitle>Add Repository</SheetTitle>
           <SheetDescription>
             Enter the absolute path to a repository containing PRD documents.
           </SheetDescription>
         </SheetHeader>
 
-        <form id="add-repo-form" class="flex-1 space-y-4 px-4" @submit.prevent="handleAddRepo">
+        <form id="add-repo-form" class="min-h-0 flex-1 space-y-4 overflow-y-auto px-6" @submit.prevent="handleAddRepo">
           <div class="space-y-2">
             <label for="repo-path" class="text-sm font-medium">
               Repository Path
@@ -321,7 +321,7 @@ function handleDialogClose() {
           </div>
         </form>
 
-        <SheetFooter>
+        <SheetFooter class="px-6 pb-6">
           <Button
             type="button"
             variant="outline"

@@ -17,6 +17,7 @@ import {
   SheetHeader,
   SheetTitle,
   SheetDescription,
+  SheetFooter,
   SheetClose
 } from '~/components/ui/sheet'
 import { Badge } from '~/components/ui/badge'
@@ -101,13 +102,13 @@ function getTaskTitle(taskId: string): string {
 
 <template>
   <Sheet v-model:open="open">
-    <SheetContent class="w-full overflow-y-auto px-6 sm:max-w-lg">
-      <SheetHeader v-if="task" class="pr-6">
+    <SheetContent class="flex h-full w-full flex-col sm:max-w-lg">
+      <SheetHeader v-if="task" class="px-6 pr-12">
         <SheetTitle class="text-left text-lg">{{ task.title }}</SheetTitle>
         <SheetDescription class="sr-only">Task details</SheetDescription>
       </SheetHeader>
 
-      <div v-if="task" class="mt-4 space-y-4">
+      <div v-if="task" class="min-h-0 flex-1 space-y-4 overflow-y-auto px-6">
         <!-- Status, Category, Priority row -->
         <div class="flex flex-wrap items-center gap-2">
           <Badge :variant="categoryConfig.variant">
@@ -200,12 +201,12 @@ function getTaskTitle(taskId: string): string {
         </div>
       </div>
 
-      <!-- Close button -->
-      <div class="mt-6">
+      <!-- Close button - always at bottom -->
+      <SheetFooter class="px-6 pb-6">
         <SheetClose as-child>
           <Button variant="outline" class="w-full">Close</Button>
         </SheetClose>
-      </div>
+      </SheetFooter>
     </SheetContent>
   </Sheet>
 </template>
