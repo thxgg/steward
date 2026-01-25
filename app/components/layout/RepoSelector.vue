@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onClickOutside } from '@vueuse/core'
 import { ChevronDown, Plus, FolderOpen, Check, Trash2, Folder } from 'lucide-vue-next'
 import {
   Sheet,
@@ -12,12 +13,28 @@ import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 
 const router = useRouter()
+const route = useRoute()
 const { repos, currentRepo, currentRepoId, selectRepo, addRepo, removeRepo } = useRepos()
 const { showSuccess, showError } = useToast()
 
 // Dropdown state
 const open = ref(false)
 const searchQuery = ref('')
+const dropdownRef = ref<HTMLElement | null>(null)
+
+// Close dropdown when clicking outside
+onClickOutside(dropdownRef, () => {
+  if (open.value) {
+    open.value = false
+    searchQuery.value = ''
+  }
+})
+
+// Close dropdown when route changes (e.g., command palette navigation)
+watch(() => route.fullPath, () => {
+  open.value = false
+  searchQuery.value = ''
+})
 
 async function handleSelectRepo(id: string) {
   selectRepo(id)
@@ -156,7 +173,7 @@ defineExpose({
 </script>
 
 <template>
-  <div class="relative">
+  <div ref="dropdownRef" class="relative">
     <!-- Simple dropdown for repo selection -->
     <button
       type="button"
@@ -232,13 +249,6 @@ defineExpose({
         </button>
       </div>
     </div>
-
-    <!-- Click outside to close -->
-    <div
-      v-if="open"
-      class="fixed inset-0 z-[9998]"
-      @click="open = false"
-    />
 
     <!-- Add Repository Sheet -->
     <Sheet :open="showAddDialog" @update:open="showAddDialog = $event">
