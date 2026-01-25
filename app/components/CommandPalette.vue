@@ -7,8 +7,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-  CommandSeparator,
-  CommandShortcut
+  CommandSeparator
 } from '~/components/ui/command'
 
 const open = defineModel<boolean>('open', { default: false })
@@ -81,7 +80,7 @@ const isMac = computed(() => {
   if (!import.meta.client) return true
   return navigator.platform.toUpperCase().indexOf('MAC') >= 0
 })
-const modKey = computed(() => isMac.value ? '⌘' : 'Ctrl+')
+const modKey = computed(() => isMac.value ? '⌘' : 'Ctrl')
 </script>
 
 <template>
@@ -124,7 +123,10 @@ const modKey = computed(() => isMac.value ? '⌘' : 'Ctrl+')
           <Sun class="size-4 dark:hidden" />
           <Moon class="hidden size-4 dark:block" />
           <span class="flex-1">Toggle theme</span>
-          <CommandShortcut>{{ modKey }}.</CommandShortcut>
+          <div class="ml-auto flex items-center gap-1">
+            <kbd class="inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">{{ modKey }}</kbd>
+            <kbd class="inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">.</kbd>
+          </div>
         </CommandItem>
         <CommandItem
           :value="`switch-tab ${currentTab === 'document' ? 'task board' : 'document'}`"
@@ -132,12 +134,18 @@ const modKey = computed(() => isMac.value ? '⌘' : 'Ctrl+')
         >
           <LayoutGrid class="size-4" />
           <span class="flex-1">Switch to {{ currentTab === 'document' ? 'Task Board' : 'Document' }}</span>
-          <CommandShortcut>{{ modKey }}\</CommandShortcut>
+          <div class="ml-auto flex items-center gap-1">
+            <kbd class="inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">{{ modKey }}</kbd>
+            <kbd class="inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">\</kbd>
+          </div>
         </CommandItem>
         <CommandItem value="keyboard shortcuts help" @select="openShortcutsHelp">
           <Keyboard class="size-4" />
           <span class="flex-1">Keyboard shortcuts</span>
-          <CommandShortcut>{{ modKey }}/</CommandShortcut>
+          <div class="ml-auto flex items-center gap-1">
+            <kbd class="inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">{{ modKey }}</kbd>
+            <kbd class="inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">/</kbd>
+          </div>
         </CommandItem>
       </CommandGroup>
     </CommandList>
