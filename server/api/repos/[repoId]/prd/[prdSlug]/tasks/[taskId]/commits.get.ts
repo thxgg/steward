@@ -1,0 +1,67 @@
+import { promises as fs } from 'node:fs'
+import { join } from 'node:path'
+import { getRepos } from '~~/server/utils/repos'
+import type { ProgressFile } from '~/types/task'
+
+export default defineEventHandler(async (event) => {
+  const repoId = getRouterParam(event, 'repoId')
+  const prdSlug = getRouterParam(event, 'prdSlug')
+  const taskId = getRouterParam(event, 'taskId')
+
+  if (!repoId || !prdSlug || !taskId) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Repository ID, PRD slug, and task ID are required'
+    })
+  }
+
+  const repos = await getRepos()
+  const repo = repos.find(r => r.id === repoId)
+
+  if (!repo) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: 'Repository not found'
+    })
+  }
+
+  const progressPath = join(repo.path, '.claude', 'state', prdSlug, 'progress.json')
+
+  try {
+    const content = await fs.readFile(progressPath, 'utf-8')
+    const progress: ProgressFile = JSON.parse(content)
+
+    // Find task log entry matching taskId
+    const taskLog = progress.taskLogs.find(log => log.taskId === taskId)
+
+    if (!taskLog) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: `Task "${taskId}" not found in progress.json`
+      })
+    }
+
+    // Return commits array (empty if no commits recorded)
+    return taskLog.commits || []
+  } catch (error) {
+    // Handle file not found - return empty array
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return []
+    }
+
+    // Re-throw HTTP errors
+    if ((error as { statusCode?: number }).statusCode) {
+      throw error
+    }
+
+    // Invalid JSON
+    if (error instanceof SyntaxError) {
+      throw createError({
+        statusCode: 500,
+        statusMessage: `Invalid JSON in progress.json: ${error.message}`
+      })
+    }
+
+    throw error
+  }
+})
