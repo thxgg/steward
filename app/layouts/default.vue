@@ -39,7 +39,7 @@ onShortcut('Ctrl+j', () => {
   commandPaletteOpen.value = true
 })
 
-// Cmd/Ctrl+Shift+T to toggle Document/Task Board tabs
+// Cmd/Ctrl+\ to toggle Document/Task Board tabs
 function toggleTab() {
   if (!import.meta.client) return
   const currentTab = localStorage.getItem('prd-viewer-tab') || 'document'
@@ -50,8 +50,8 @@ function toggleTab() {
     newValue: newTab
   }))
 }
-onShortcut('Meta+Shift+t', toggleTab)
-onShortcut('Ctrl+Shift+t', toggleTab)
+onShortcut('Meta+\\', toggleTab)
+onShortcut('Ctrl+\\', toggleTab)
 
 // Cmd/Ctrl+. to toggle theme
 function toggleColorMode() {

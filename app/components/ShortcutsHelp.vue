@@ -31,7 +31,7 @@ const shortcutGroups = computed(() => [
     name: 'Actions',
     shortcuts: [
       { keys: [modKey.value, '.'], description: 'Toggle dark/light theme' },
-      { keys: [modKey.value, 'Shift', 'T'], description: 'Switch between Document and Task Board' },
+      { keys: [modKey.value, '\\'], description: 'Switch between Document and Task Board' },
       { keys: [modKey.value, ','], description: 'Add repository' }
     ]
   },
