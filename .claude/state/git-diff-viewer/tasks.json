@@ -282,7 +282,9 @@
       ],
       "dependencies": ["task-001"],
       "priority": "medium",
-      "status": "pending"
+      "status": "completed",
+      "startedAt": "2026-01-25T11:11:05Z",
+      "completedAt": "2026-01-25T11:12:14Z"
     },
     {
       "id": "task-011",

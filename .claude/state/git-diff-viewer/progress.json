@@ -1,11 +1,11 @@
 {
   "prdName": "Git Diff Viewer",
   "totalTasks": 15,
-  "completed": 10,
+  "completed": 11,
   "inProgress": 0,
   "blocked": 0,
   "startedAt": "2026-01-25T10:43:40Z",
-  "lastUpdated": "2026-01-25T11:08:05Z",
+  "lastUpdated": "2026-01-25T11:12:14Z",
   "patterns": [],
   "taskLogs": [
     {
@@ -97,6 +97,15 @@
       "implemented": "Updated the /complete-next-task skill to capture commit SHAs after committing. Added step 10 that runs git rev-parse HEAD to get the commit SHA and stores it in the taskLog.commits array in progress.json. Updated step 8 to show the commits field (empty initially). Updated skill description to mention commit capture for traceability.",
       "filesChanged": ["~/.claude/skills/complete-next-task/SKILL.md"],
       "learnings": "Place commit capture step after the commit but before the chore status update commit, so only the implementation commits are captured."
+    },
+    {
+      "taskId": "task-010",
+      "status": "completed",
+      "startedAt": "2026-01-25T11:11:05Z",
+      "completedAt": "2026-01-25T11:12:14Z",
+      "implemented": "Created GET /api/repos/[repoId]/prd/[prdSlug]/tasks/[taskId]/commits endpoint that reads progress.json, finds the taskLog entry matching taskId, and returns the commits array. Returns empty array if progress.json doesn't exist. Returns 404 if taskId not found in taskLogs. Handles invalid JSON gracefully.",
+      "filesChanged": ["server/api/repos/[repoId]/prd/[prdSlug]/tasks/[taskId]/commits.get.ts"],
+      "learnings": "Follow existing API patterns: use getRepos for repo lookup, check for ENOENT to handle missing files, re-throw HTTP errors from createError."
     }
   ]
 }
