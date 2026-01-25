@@ -21,18 +21,11 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  // Check if it's a git repository
-  if (!await isGitRepo(repo.path)) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'Repository is not a git repository',
-    })
-  }
-
-  // Get commit SHA and file path from query parameters
+  // Get query parameters
   const query = getQuery(event)
   const commit = query.commit as string | undefined
   const file = query.file as string | undefined
+  const repoPath = query.repo as string | undefined
 
   if (!commit) {
     throw createError({
@@ -48,8 +41,39 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  // Resolve the git repo path
+  let gitRepoPath = repo.path
+
+  if (repoPath) {
+    // Validate that repoPath is within discovered gitRepos
+    if (!repo.gitRepos || repo.gitRepos.length === 0) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'repo parameter provided but no git repos discovered in this repository',
+      })
+    }
+
+    const matchedRepo = repo.gitRepos.find(gr => gr.relativePath === repoPath)
+    if (!matchedRepo) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: `repo "${repoPath}" is not a discovered git repo. Available: ${repo.gitRepos.map(gr => gr.relativePath).join(', ')}`,
+      })
+    }
+
+    gitRepoPath = matchedRepo.absolutePath
+  }
+
+  // Check if resolved path is a git repository
+  if (!await isGitRepo(gitRepoPath)) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Resolved path is not a git repository',
+    })
+  }
+
   // Validate file path is within repo
-  if (!validatePathInRepo(repo.path, file)) {
+  if (!validatePathInRepo(gitRepoPath, file)) {
     throw createError({
       statusCode: 400,
       statusMessage: 'Invalid file path: path traversal not allowed',
@@ -57,7 +81,7 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const hunks = await getFileDiff(repo.path, commit, file)
+    const hunks = await getFileDiff(gitRepoPath, commit, file)
     return hunks
   } catch (error) {
     const message = (error as Error).message
