@@ -1,5 +1,5 @@
 import type { PrdListItem, PrdDocument } from '~/types/prd'
-import type { TasksFile, ProgressFile } from '~/types/task'
+import type { TasksFile, ProgressFile, CommitRef } from '~/types/task'
 
 export function usePrd() {
   const { currentRepoId } = useRepos()
@@ -62,12 +62,25 @@ export function usePrd() {
     }
   }
 
+  // Fetch resolved commits for a task (returns { sha, repo }[] format)
+  async function fetchTaskCommits(slug: string, taskId: string): Promise<CommitRef[]> {
+    if (!currentRepoId.value) return []
+    try {
+      return await $fetch<CommitRef[]>(
+        `/api/repos/${currentRepoId.value}/prd/${slug}/tasks/${taskId}/commits`
+      )
+    } catch {
+      return []
+    }
+  }
+
   return {
     prds,
     prdsStatus,
     refreshPrds,
     fetchDocument,
     fetchTasks,
-    fetchProgress
+    fetchProgress,
+    fetchTaskCommits
   }
 }
