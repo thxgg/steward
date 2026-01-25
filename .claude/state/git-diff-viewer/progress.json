@@ -1,11 +1,11 @@
 {
   "prdName": "Git Diff Viewer",
   "totalTasks": 15,
-  "completed": 1,
+  "completed": 2,
   "inProgress": 0,
   "blocked": 0,
   "startedAt": "2026-01-25T10:43:40Z",
-  "lastUpdated": "2026-01-25T10:44:40Z",
+  "lastUpdated": "2026-01-25T10:47:47Z",
   "patterns": [],
   "taskLogs": [
     {
@@ -16,6 +16,15 @@
       "implemented": "Created app/types/git.ts with GitCommit, FileDiff, DiffHunk, DiffLine interfaces. Added commits field to TaskLog interface. Exported new types from app/types/index.ts.",
       "filesChanged": ["app/types/git.ts", "app/types/task.ts", "app/types/index.ts"],
       "learnings": "Following existing type definition patterns in the codebase with JSDoc comments for documentation."
+    },
+    {
+      "taskId": "task-002",
+      "status": "completed",
+      "startedAt": "2026-01-25T10:46:06Z",
+      "completedAt": "2026-01-25T10:47:47Z",
+      "implemented": "Created server/utils/git.ts with execGit helper for spawning git commands, isGitRepo check, validatePathInRepo for security, getCommitInfo for commit details, getCommitDiff for file list with stats, getFileDiff for diff hunks parsing, and isBinaryFile detection.",
+      "filesChanged": ["server/utils/git.ts"],
+      "learnings": "Git output parsing requires careful handling of tabs as delimiters. numstat uses tabs between additions/deletions/path. name-status format varies for renames (R100). Use non-null assertions (!) for array indices after length check."
     }
   ]
 }
