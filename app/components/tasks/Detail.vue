@@ -140,7 +140,7 @@ watch(open, (isOpen) => {
 
 <template>
   <Sheet v-model:open="open">
-    <SheetContent class="flex h-full w-full flex-col sm:max-w-lg" :class="{ 'sm:!max-w-none !max-w-none': viewMode === 'diff' }">
+    <SheetContent class="flex h-full w-full flex-col overflow-hidden sm:max-w-lg" :class="{ 'sm:!max-w-none !max-w-none': viewMode === 'diff' }">
       <!-- Header with back button when viewing diff -->
       <SheetHeader v-if="task" class="px-6 pr-12">
         <div class="flex items-center gap-2">

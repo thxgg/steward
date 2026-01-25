@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { codeToHtml } from 'shiki'
+import { codeToHtml } from 'shiki/bundle/web'
 import { Link, Link2Off, FileWarning, AlertTriangle, ChevronDown } from 'lucide-vue-next'
 import { Button } from '~/components/ui/button'
 import type { DiffHunk, DiffLine } from '~/types/git'
@@ -119,10 +119,11 @@ function detectLanguage(path: string): string {
   return langMap[ext] || 'text'
 }
 
+// Detect language from file path
 const language = computed(() => detectLanguage(props.filePath))
 
 // Highlighted lines state
-const highlightedLines = ref<Map<string, { old: string; new: string }>>(new Map())
+const highlightedLines = ref<Map<string, string>>(new Map())
 const isLoading = ref(true)
 
 // Generate line pairs for side-by-side view
@@ -254,27 +255,56 @@ const displayItems = computed<DisplayItem[]>(() => {
   return items
 })
 
-// Highlight code with shiki
-async function highlightLine(content: string, lang: string): Promise<{ light: string; dark: string }> {
+// Highlight code with shiki using dual themes for instant theme switching
+async function highlightLine(content: string, lang: string): Promise<string> {
   if (!content.trim()) {
-    return { light: '', dark: '' }
+    return ''
   }
 
   try {
     const html = await codeToHtml(content, {
       lang,
       themes: {
-        light: 'github-light',
-        dark: 'github-dark',
+        light: 'catppuccin-latte',
+        dark: 'catppuccin-mocha',
       },
     })
     // Extract just the code content from shiki output
     // Shiki wraps in <pre><code>...</code></pre>
     const codeMatch = html.match(/<code[^>]*>([\s\S]*?)<\/code>/)
-    const code = codeMatch ? codeMatch[1] : content
-    return { light: code || '', dark: code || '' }
+    return codeMatch ? codeMatch[1] || '' : escapeHtml(content)
   } catch {
-    return { light: escapeHtml(content), dark: escapeHtml(content) }
+    return escapeHtml(content)
+  }
+}
+
+// Highlight full file content at once (preserves context for Vue/JSX files)
+// then split into individual lines
+async function highlightFullContent(content: string, lang: string): Promise<string[]> {
+  if (!content) {
+    return []
+  }
+
+  try {
+    const html = await codeToHtml(content, {
+      lang,
+      themes: {
+        light: 'catppuccin-latte',
+        dark: 'catppuccin-mocha',
+      },
+    })
+    // Extract the code content from shiki output
+    const codeMatch = html.match(/<code[^>]*>([\s\S]*?)<\/code>/)
+    if (!codeMatch || !codeMatch[1]) {
+      return content.split('\n').map(escapeHtml)
+    }
+
+    // Split by newlines, preserving HTML tags that span lines
+    // Shiki outputs each line's content, with newlines as literal \n
+    const highlightedContent = codeMatch[1]
+    return highlightedContent.split('\n')
+  } catch {
+    return content.split('\n').map(escapeHtml)
   }
 }
 
@@ -287,37 +317,78 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#039;')
 }
 
-// Highlight all lines on mount and when hunks change
+// Highlighted full file lines (used for both full file view and diff view)
+const highlightedFullFile = ref<string[]>([])
+const isLoadingFullFile = ref(false)
+
+// Highlight full file when content changes
+// Uses full-content highlighting to preserve context (important for Vue/JSX)
 watch(
-  () => [props.hunks, props.filePath] as const,
+  () => [props.fileContent, props.filePath] as const,
+  async ([content]) => {
+    if (!content) {
+      highlightedFullFile.value = []
+      return
+    }
+
+    isLoadingFullFile.value = true
+    const lang = language.value
+
+    // Highlight entire file at once to preserve context for Vue/JSX files
+    highlightedFullFile.value = await highlightFullContent(content, lang)
+    isLoadingFullFile.value = false
+  },
+  { immediate: true }
+)
+
+// Highlight diff lines - uses full file context when available
+watch(
+  () => [props.hunks, props.filePath, highlightedFullFile.value] as const,
   async () => {
     isLoading.value = true
     const lang = language.value
-    const newHighlighted = new Map<string, { old: string; new: string }>()
+    const newHighlighted = new Map<string, string>()
+    const fullFileLines = highlightedFullFile.value
 
-    // Collect all unique lines to highlight
-    const linesToHighlight: { key: string; content: string; side: 'old' | 'new' }[] = []
+    // Collect lines that need individual highlighting (removed lines from old file)
+    const linesToHighlight: { key: string; content: string }[] = []
 
     for (const item of displayItems.value) {
       if (item.type === 'line' && item.pair) {
+        // Left side (old file) - removed lines need individual highlighting
         if (item.pair.left.content && item.pair.left.type !== 'empty') {
-          linesToHighlight.push({
-            key: `${item.pair.id}-old`,
-            content: item.pair.left.content,
-            side: 'old',
-          })
+          const key = `${item.pair.id}-old`
+          // For context lines, we can use the new file's highlighting if line numbers match
+          if (item.pair.left.type === 'context' && item.pair.left.lineNum && fullFileLines.length > 0) {
+            // Context lines exist in both files at same content, use new file highlight
+            const lineIndex = item.pair.right.lineNum ? item.pair.right.lineNum - 1 : -1
+            if (lineIndex >= 0 && lineIndex < fullFileLines.length) {
+              newHighlighted.set(key, fullFileLines[lineIndex] || '')
+            } else {
+              linesToHighlight.push({ key, content: item.pair.left.content })
+            }
+          } else {
+            // Removed lines - must highlight individually
+            linesToHighlight.push({ key, content: item.pair.left.content })
+          }
         }
+
+        // Right side (new file) - use full file highlighting when available
         if (item.pair.right.content && item.pair.right.type !== 'empty') {
-          linesToHighlight.push({
-            key: `${item.pair.id}-new`,
-            content: item.pair.right.content,
-            side: 'new',
-          })
+          const key = `${item.pair.id}-new`
+          const lineNum = item.pair.right.lineNum
+          if (lineNum && fullFileLines.length > 0 && lineNum <= fullFileLines.length) {
+            // Use pre-highlighted line from full file
+            newHighlighted.set(key, fullFileLines[lineNum - 1] || '')
+          } else {
+            // Fallback to individual highlighting
+            linesToHighlight.push({ key, content: item.pair.right.content })
+          }
         }
       }
     }
 
-    // Highlight in parallel (batch to avoid overwhelming)
+    // Highlight remaining lines individually (removed lines)
     const batchSize = 50
     for (let i = 0; i < linesToHighlight.length; i += batchSize) {
       const batch = linesToHighlight.slice(i, i + batchSize)
@@ -329,7 +400,7 @@ watch(
       )
 
       for (const { key, result } of results) {
-        newHighlighted.set(key, { old: result.light, new: result.dark })
+        newHighlighted.set(key, result)
       }
     }
 
@@ -341,46 +412,8 @@ watch(
 
 // Get highlighted content for a line
 function getHighlightedContent(pairId: string, side: 'old' | 'new'): string {
-  const highlighted = highlightedLines.value.get(`${pairId}-${side}`)
-  return highlighted?.old || ''
+  return highlightedLines.value.get(`${pairId}-${side}`) || ''
 }
-
-// Highlighted full file lines
-const highlightedFullFile = ref<string[]>([])
-const isLoadingFullFile = ref(false)
-
-// Highlight full file when content changes
-watch(
-  () => [props.fileContent, props.filePath] as const,
-  async ([content]) => {
-    if (!content) {
-      highlightedFullFile.value = []
-      return
-    }
-
-    isLoadingFullFile.value = true
-    const lang = language.value
-    const lines = content.split('\n')
-    const highlighted: string[] = []
-
-    // Highlight in batches
-    const batchSize = 100
-    for (let i = 0; i < lines.length; i += batchSize) {
-      const batch = lines.slice(i, i + batchSize)
-      const results = await Promise.all(
-        batch.map(async (line) => {
-          const result = await highlightLine(line, lang)
-          return result.light
-        })
-      )
-      highlighted.push(...results)
-    }
-
-    highlightedFullFile.value = highlighted
-    isLoadingFullFile.value = false
-  },
-  { immediate: true }
-)
 
 // Get line type for full file view
 function getFullFileLineType(lineNum: number): 'add' | 'remove' | 'context' {
@@ -539,6 +572,7 @@ function getFullFileLineType(lineNum: number): 'add' | 'remove' | 'context' {
   font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace;
   font-size: 0.8125rem;
   line-height: 1.5;
+  color: hsl(var(--foreground));
 }
 
 .diff-container {
@@ -593,10 +627,19 @@ function getFullFileLineType(lineNum: number): 'add' | 'remove' | 'context' {
   padding: 0 0.5rem;
   white-space: pre;
   overflow-x: auto;
+  color: hsl(var(--foreground));
+  /* Hide scrollbar while keeping scroll functionality */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.diff-content::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
 }
 
 .diff-code {
   display: inline;
+  color: inherit;
 }
 
 /* Line type styles */
@@ -694,16 +737,19 @@ function getFullFileLineType(lineNum: number): 'add' | 'remove' | 'context' {
   background: hsl(0 84% 60% / 0.2);
 }
 
-/* Shiki theme switching */
-:deep(.shiki) {
+/* Shiki output styling */
+:deep(.shiki),
+:deep(.shiki span) {
   background: transparent !important;
 }
+</style>
 
-.dark :deep(.shiki.github-light) {
-  display: none !important;
-}
-
-:not(.dark) :deep(.shiki.github-dark) {
-  display: none !important;
+<style>
+/* Shiki dual-theme switching - must be global to reach html.dark
+   We target spans with --shiki-dark variable since we extract only
+   the inner content from Shiki's output (without the .shiki wrapper) */
+html.dark .diff-viewer span[style*="--shiki-dark"] {
+  color: var(--shiki-dark) !important;
+  background-color: transparent !important;
 }
 </style>

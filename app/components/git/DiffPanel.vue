@@ -246,7 +246,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="panelRef" class="flex h-full flex-col" tabindex="-1">
+  <div ref="panelRef" class="flex h-full flex-col overflow-hidden" tabindex="-1">
     <!-- Error state -->
     <div v-if="error" class="flex flex-1 flex-col items-center justify-center gap-4 p-8">
       <AlertCircle class="size-12 text-destructive" />
@@ -274,7 +274,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Main content -->
-    <div v-else class="flex flex-1 overflow-hidden">
+    <div v-else class="flex min-h-0 flex-1 overflow-hidden">
       <!-- Minimap sidebar -->
       <div class="flex w-56 shrink-0 flex-col border-r border-border">
         <div class="flex items-center justify-between border-b border-border px-3 py-2">
@@ -318,7 +318,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Diff viewer area -->
-      <div class="flex flex-1 flex-col overflow-hidden">
+      <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
         <!-- File header with rename support -->
         <div v-if="selectedFile" class="flex items-center gap-2 border-b border-border px-4 py-2">
           <span v-if="selectedFileDiff?.oldPath" class="min-w-0 flex-1 truncate font-mono text-sm">
@@ -372,8 +372,8 @@ onUnmounted(() => {
           </Button>
         </div>
 
-        <!-- Diff viewer -->
-        <ScrollArea v-else-if="selectedFile" class="flex-1">
+        <!-- Diff viewer (min-h-0 enables flex item to shrink for scrolling) -->
+        <ScrollArea v-else-if="selectedFile" class="h-0 flex-1 overflow-hidden">
           <div ref="diffViewerRef">
             <GitDiffViewer
               :hunks="hunks"
