@@ -7,7 +7,8 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-  CommandSeparator
+  CommandSeparator,
+  CommandShortcut
 } from '~/components/ui/command'
 
 const open = defineModel<boolean>('open', { default: false })
@@ -74,6 +75,13 @@ watch(open, (isOpen) => {
     filter.value = ''
   }
 })
+
+// Detect platform for shortcut hints
+const isMac = computed(() => {
+  if (!import.meta.client) return true
+  return navigator.platform.toUpperCase().indexOf('MAC') >= 0
+})
+const modKey = computed(() => isMac.value ? '⌘' : 'Ctrl+')
 </script>
 
 <template>
@@ -115,18 +123,21 @@ watch(open, (isOpen) => {
         <CommandItem value="toggle-theme light dark" @select="toggleTheme">
           <Sun class="size-4 dark:hidden" />
           <Moon class="hidden size-4 dark:block" />
-          <span>Toggle theme</span>
+          <span class="flex-1">Toggle theme</span>
+          <CommandShortcut>{{ modKey }}.</CommandShortcut>
         </CommandItem>
         <CommandItem
           :value="`switch-tab ${currentTab === 'document' ? 'task board' : 'document'}`"
           @select="toggleTab"
         >
           <LayoutGrid class="size-4" />
-          <span>Switch to {{ currentTab === 'document' ? 'Task Board' : 'Document' }}</span>
+          <span class="flex-1">Switch to {{ currentTab === 'document' ? 'Task Board' : 'Document' }}</span>
+          <CommandShortcut>{{ modKey }}\</CommandShortcut>
         </CommandItem>
         <CommandItem value="keyboard shortcuts help" @select="openShortcutsHelp">
           <Keyboard class="size-4" />
-          <span>Keyboard shortcuts</span>
+          <span class="flex-1">Keyboard shortcuts</span>
+          <CommandShortcut>{{ modKey }}/</CommandShortcut>
         </CommandItem>
       </CommandGroup>
     </CommandList>
