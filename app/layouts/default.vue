@@ -1,10 +1,25 @@
 <script setup lang="ts">
 import { Button } from '~/components/ui/button'
+import CommandPalette from '~/components/CommandPalette.vue'
 
 const colorMode = useColorMode()
 const { refreshPrds } = usePrd()
 const { currentRepoId } = useRepos()
 const route = useRoute()
+
+// Command palette state
+const commandPaletteOpen = ref(false)
+
+// Register keyboard shortcuts
+const { onShortcut } = useKeyboard()
+
+// Cmd/Ctrl+K to open command palette
+onShortcut('Meta+k', () => {
+  commandPaletteOpen.value = true
+})
+onShortcut('Ctrl+k', () => {
+  commandPaletteOpen.value = true
+})
 
 function toggleColorMode() {
   colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark'
@@ -39,6 +54,8 @@ useFileWatch((event) => {
 
 <template>
   <div class="min-h-screen bg-background text-foreground">
+    <!-- Command Palette -->
+    <CommandPalette v-model:open="commandPaletteOpen" />
     <!-- Fixed Header -->
     <header
       class="fixed top-0 left-0 right-0 z-50 h-14 border-b border-border bg-background/95 backdrop-blur-sm supports-[backdrop-filter]:bg-background/80"

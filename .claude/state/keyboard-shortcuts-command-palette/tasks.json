@@ -113,7 +113,10 @@
       ],
       "dependencies": ["task-002", "task-003"],
       "priority": "critical",
-      "status": "pending",
+      "status": "completed",
+      "startedAt": "2026-01-25T02:03:12Z",
+      "completedAt": "2026-01-25T02:04:02Z",
+      "passes": true,
       "affectedFiles": [
         "app/layouts/default.vue"
       ]
