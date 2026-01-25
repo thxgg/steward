@@ -1,11 +1,11 @@
 {
   "prdName": "Git Diff Viewer",
   "totalTasks": 15,
-  "completed": 3,
+  "completed": 4,
   "inProgress": 0,
   "blocked": 0,
   "startedAt": "2026-01-25T10:43:40Z",
-  "lastUpdated": "2026-01-25T10:49:50Z",
+  "lastUpdated": "2026-01-25T10:51:26Z",
   "patterns": [],
   "taskLogs": [
     {
@@ -34,6 +34,15 @@
       "implemented": "Created three git API endpoints: GET /commits?shas= returns array of GitCommit objects, GET /diff?commit= returns array of FileDiff objects, GET /file-diff?commit=&file= returns DiffHunk array. All endpoints validate repo is git, check params, and return appropriate errors.",
       "filesChanged": ["server/api/repos/[repoId]/git/commits.get.ts", "server/api/repos/[repoId]/git/diff.get.ts", "server/api/repos/[repoId]/git/file-diff.get.ts"],
       "learnings": "Follow existing API patterns in codebase: use getRepos to lookup repo by ID, createError for HTTP errors, getQuery for query params."
+    },
+    {
+      "taskId": "task-004",
+      "status": "completed",
+      "startedAt": "2026-01-25T10:50:47Z",
+      "completedAt": "2026-01-25T10:51:26Z",
+      "implemented": "Created useGit composable with fetchCommits, fetchDiff, and fetchFileDiff functions. Each function has reactive loading state (isLoadingCommits, isLoadingDiff, isLoadingFileDiff) exposed as readonly refs. Errors show toast notifications via useToast.",
+      "filesChanged": ["app/composables/useGit.ts"],
+      "learnings": "Use readonly() wrapper for loading states to prevent external mutation. Follow existing composable patterns with $fetch for API calls."
     }
   ]
 }

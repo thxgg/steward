@@ -108,7 +108,9 @@
       ],
       "dependencies": ["task-003"],
       "priority": "high",
-      "status": "pending"
+      "status": "completed",
+      "startedAt": "2026-01-25T10:50:47Z",
+      "completedAt": "2026-01-25T10:51:26Z"
     },
     {
       "id": "task-005",
