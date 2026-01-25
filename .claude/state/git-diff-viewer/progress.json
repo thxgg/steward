@@ -1,11 +1,11 @@
 {
   "prdName": "Git Diff Viewer",
   "totalTasks": 15,
-  "completed": 14,
+  "completed": 15,
   "inProgress": 0,
   "blocked": 0,
   "startedAt": "2026-01-25T10:43:40Z",
-  "lastUpdated": "2026-01-25T11:27:12Z",
+  "lastUpdated": "2026-01-25T11:31:45Z",
   "patterns": [],
   "taskLogs": [
     {
@@ -134,6 +134,16 @@
       "filesChanged": ["app/components/git/DiffPanel.vue", "app/components/tasks/Detail.vue", "app/components/ui/tooltip/*"],
       "learnings": "Use document-level keydown listeners for global shortcuts with proper cleanup. Check for input/textarea targets to avoid interfering with typing. ScrollIntoView with smooth behavior provides nice UX for hunk navigation.",
       "commits": ["373de8974c541d1514d81182c4091d5863ef6285"]
+    },
+    {
+      "taskId": "task-015",
+      "status": "completed",
+      "startedAt": "2026-01-25T11:29:25Z",
+      "completedAt": "2026-01-25T11:31:45Z",
+      "implemented": "Verified all git diff viewer functionality with real git data: (1) Git utilities work correctly with getCommitInfo, getCommitDiff, getFileDiff. (2) All API endpoints return correct data structure. (3) Rename detection works (tested with commit 22d064a showing oldPath). (4) Binary detection functional. (5) TypeScript compilation passes (nuxi typecheck, vue-tsc). (6) Production build succeeds.",
+      "filesChanged": [],
+      "learnings": "Testing tasks can be done by directly invoking server utilities with tsx, testing API endpoints via curl, and running type/build checks. No manual browser testing was needed for comprehensive verification.",
+      "commits": []
     }
   ]
 }
