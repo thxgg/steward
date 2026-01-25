@@ -78,6 +78,13 @@ watch(() => filterState.search, () => {
   filterItems()
 })
 
+// Also re-filter when items are added (important for pre-filtered searches)
+watch(() => allItems.value.size, () => {
+  if (filterState.search) {
+    filterItems()
+  }
+})
+
 provideCommandContext({
   allItems,
   allGroups,

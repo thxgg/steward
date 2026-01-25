@@ -32,7 +32,7 @@ const shortcutGroups = computed(() => [
     shortcuts: [
       { keys: [modKey.value, '.'], description: 'Toggle dark/light theme' },
       { keys: [modKey.value, '\\'], description: 'Switch between Document and Task Board' },
-      { keys: [modKey.value, ','], description: 'Add repository' }
+      { keys: [modKey.value, 'Shift', 'N'], description: 'Add repository' }
     ]
   },
   {
