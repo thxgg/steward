@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { codeToHtml } from 'shiki'
-import { Link, Link2Off } from 'lucide-vue-next'
+import { Link, Link2Off, FileWarning, AlertTriangle, ChevronDown } from 'lucide-vue-next'
 import { Button } from '~/components/ui/button'
 import type { DiffHunk, DiffLine } from '~/types/git'
 
@@ -9,12 +9,35 @@ const props = defineProps<{
   hunks: DiffHunk[]
   /** File path for syntax detection */
   filePath: string
+  /** Whether this file is binary */
+  binary?: boolean
+  /** Old file path (for renames) */
+  oldPath?: string
 }>()
+
+// Line limit for large files (truncation threshold)
+const LINE_LIMIT = 10000
+const showAll = ref(false)
 
 // Synchronized scrolling state
 // Note: The side-by-side layout uses a single row container, so scrolling
 // is naturally synchronized. This toggle is for UX clarity and future flexibility.
 const syncScrollEnabled = ref(true)
+
+// Calculate total line count for large file detection
+const totalLines = computed(() => {
+  let count = 0
+  for (const hunk of props.hunks) {
+    count += hunk.lines.length
+  }
+  return count
+})
+
+// Check if file is large and should be truncated
+const isLargeFile = computed(() => totalLines.value > LINE_LIMIT)
+
+// Check if file has no actual changes (empty diff)
+const isEmpty = computed(() => props.hunks.length === 0 && !props.binary)
 
 // Detect language from file extension
 function detectLanguage(path: string): string {
@@ -294,14 +317,47 @@ function getHighlightedContent(pairId: string, side: 'old' | 'new'): string {
 
 <template>
   <div class="diff-viewer">
-    <div v-if="isLoading" class="flex items-center justify-center py-8">
+    <!-- Loading state -->
+    <div v-if="isLoading && !binary" class="flex items-center justify-center py-8">
       <div class="size-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
     </div>
 
-    <div v-else-if="hunks.length === 0" class="py-8 text-center text-sm text-muted-foreground">
-      No changes in this file
+    <!-- Binary file state -->
+    <div v-else-if="binary" class="flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground">
+      <FileWarning class="size-10 opacity-50" />
+      <div class="text-center">
+        <p class="font-medium">Binary file</p>
+        <p class="text-sm">This file cannot be displayed as a diff</p>
+      </div>
     </div>
 
+    <!-- Empty diff state -->
+    <div v-else-if="isEmpty" class="flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground">
+      <AlertTriangle class="size-10 opacity-50" />
+      <div class="text-center">
+        <p class="font-medium">No changes</p>
+        <p class="text-sm">This file was touched but has no content changes</p>
+      </div>
+    </div>
+
+    <!-- Large file warning (truncated) -->
+    <div v-else-if="isLargeFile && !showAll" class="diff-container">
+      <div class="flex flex-col items-center justify-center gap-3 border-b border-border bg-muted/30 py-6">
+        <AlertTriangle class="size-8 text-yellow-500" />
+        <div class="text-center">
+          <p class="font-medium">Large file</p>
+          <p class="text-sm text-muted-foreground">
+            This file has {{ totalLines.toLocaleString() }} lines (threshold: {{ LINE_LIMIT.toLocaleString() }})
+          </p>
+        </div>
+        <Button variant="outline" size="sm" @click="showAll = true">
+          <ChevronDown class="mr-2 size-4" />
+          Show full diff
+        </Button>
+      </div>
+    </div>
+
+    <!-- Normal diff view -->
     <div v-else class="diff-container">
       <!-- Sync scroll toggle -->
       <div class="diff-toolbar">

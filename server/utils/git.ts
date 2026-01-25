@@ -141,9 +141,10 @@ export async function getCommitDiff(repoPath: string, sha: string): Promise<File
   const nameStatusLines = nameStatusOutput.trim().split('\n').filter(l => l.trim())
 
   const files: FileDiff[] = []
-  const statsMap = new Map<string, { additions: number; deletions: number }>()
+  const statsMap = new Map<string, { additions: number; deletions: number; binary: boolean }>()
 
   // Parse numstat (additions, deletions, path)
+  // Binary files show as "-\t-\tfilepath"
   for (const line of numstatLines) {
     const parts = line.split('\t')
     if (parts.length >= 3) {
@@ -151,9 +152,11 @@ export async function getCommitDiff(repoPath: string, sha: string): Promise<File
       const deleted = parts[1]!
       const pathParts = parts.slice(2)
       const path = pathParts.join('\t') // Handle paths with tabs (rare but possible)
+      const isBinary = added === '-' && deleted === '-'
       statsMap.set(path, {
-        additions: added === '-' ? 0 : parseInt(added, 10) || 0,
-        deletions: deleted === '-' ? 0 : parseInt(deleted, 10) || 0,
+        additions: isBinary ? 0 : parseInt(added, 10) || 0,
+        deletions: isBinary ? 0 : parseInt(deleted, 10) || 0,
+        binary: isBinary,
       })
     }
   }
@@ -199,7 +202,7 @@ export async function getCommitDiff(repoPath: string, sha: string): Promise<File
     const stats = statsMap.get(path) ||
                   (oldPath ? statsMap.get(`${oldPath} => ${path}`) : undefined) ||
                   statsMap.get(`${oldPath}\t${path}`) ||
-                  { additions: 0, deletions: 0 }
+                  { additions: 0, deletions: 0, binary: false }
 
     files.push({
       path,
@@ -207,6 +210,7 @@ export async function getCommitDiff(repoPath: string, sha: string): Promise<File
       oldPath,
       additions: stats.additions,
       deletions: stats.deletions,
+      binary: stats.binary,
     })
   }
 

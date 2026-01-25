@@ -39,6 +39,8 @@ export interface FileDiff {
   additions: number
   /** Lines deleted in this file */
   deletions: number
+  /** Whether this is a binary file */
+  binary?: boolean
 }
 
 /**

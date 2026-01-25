@@ -20,6 +20,9 @@ const hunks = ref<DiffHunk[]>([])
 const error = ref<string | null>(null)
 const fileDiffError = ref<string | null>(null)
 
+// Get the selected file's metadata
+const selectedFileDiff = computed(() => files.value.find(f => f.path === selectedFile.value))
+
 // Fetch file list on mount and when commitSha changes
 async function loadDiff() {
   error.value = null
@@ -131,9 +134,17 @@ watch(
 
       <!-- Diff viewer area -->
       <div class="flex flex-1 flex-col overflow-hidden">
-        <!-- File header -->
+        <!-- File header with rename support -->
         <div v-if="selectedFile" class="flex items-center gap-2 border-b border-border px-4 py-2">
-          <span class="truncate font-mono text-sm">{{ selectedFile }}</span>
+          <span v-if="selectedFileDiff?.oldPath" class="truncate font-mono text-sm">
+            <span class="text-muted-foreground">{{ selectedFileDiff.oldPath }}</span>
+            <span class="mx-2 text-muted-foreground">→</span>
+            <span>{{ selectedFile }}</span>
+          </span>
+          <span v-else class="truncate font-mono text-sm">{{ selectedFile }}</span>
+          <span v-if="selectedFileDiff?.binary" class="ml-2 rounded bg-yellow-500/10 px-1.5 py-0.5 text-xs text-yellow-600 dark:text-yellow-400">
+            binary
+          </span>
         </div>
 
         <!-- File diff loading -->
@@ -159,7 +170,12 @@ watch(
 
         <!-- Diff viewer -->
         <ScrollArea v-else-if="selectedFile" class="flex-1">
-          <GitDiffViewer :hunks="hunks" :file-path="selectedFile" />
+          <GitDiffViewer
+            :hunks="hunks"
+            :file-path="selectedFile"
+            :binary="selectedFileDiff?.binary"
+            :old-path="selectedFileDiff?.oldPath"
+          />
         </ScrollArea>
 
         <!-- No file selected -->
