@@ -1,11 +1,11 @@
 {
   "prdName": "Git Diff Viewer",
   "totalTasks": 15,
-  "completed": 2,
+  "completed": 3,
   "inProgress": 0,
   "blocked": 0,
   "startedAt": "2026-01-25T10:43:40Z",
-  "lastUpdated": "2026-01-25T10:47:47Z",
+  "lastUpdated": "2026-01-25T10:49:50Z",
   "patterns": [],
   "taskLogs": [
     {
@@ -25,6 +25,15 @@
       "implemented": "Created server/utils/git.ts with execGit helper for spawning git commands, isGitRepo check, validatePathInRepo for security, getCommitInfo for commit details, getCommitDiff for file list with stats, getFileDiff for diff hunks parsing, and isBinaryFile detection.",
       "filesChanged": ["server/utils/git.ts"],
       "learnings": "Git output parsing requires careful handling of tabs as delimiters. numstat uses tabs between additions/deletions/path. name-status format varies for renames (R100). Use non-null assertions (!) for array indices after length check."
+    },
+    {
+      "taskId": "task-003",
+      "status": "completed",
+      "startedAt": "2026-01-25T10:48:53Z",
+      "completedAt": "2026-01-25T10:49:50Z",
+      "implemented": "Created three git API endpoints: GET /commits?shas= returns array of GitCommit objects, GET /diff?commit= returns array of FileDiff objects, GET /file-diff?commit=&file= returns DiffHunk array. All endpoints validate repo is git, check params, and return appropriate errors.",
+      "filesChanged": ["server/api/repos/[repoId]/git/commits.get.ts", "server/api/repos/[repoId]/git/diff.get.ts", "server/api/repos/[repoId]/git/file-diff.get.ts"],
+      "learnings": "Follow existing API patterns in codebase: use getRepos to lookup repo by ID, createError for HTTP errors, getQuery for query params."
     }
   ]
 }
