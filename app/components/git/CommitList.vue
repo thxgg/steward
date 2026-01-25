@@ -1,42 +1,67 @@
 <script setup lang="ts">
-import { GitCommit as GitCommitIcon, Plus, Minus, FileText } from 'lucide-vue-next'
+import { GitCommit as GitCommitIcon, Plus, Minus, FileText, FolderGit2 } from 'lucide-vue-next'
+import { Badge } from '~/components/ui/badge'
 import type { GitCommit } from '~/types/git'
 import type { CommitRef } from '~/types/task'
 
 const props = defineProps<{
-  /** Array of commit SHAs to display - supports both legacy strings and CommitRef objects */
-  commits: (string | CommitRef)[]
+  /** Array of commits to display - expects CommitRef objects with sha and repo */
+  commits: CommitRef[]
   /** Repository ID for API calls */
   repoId: string
 }>()
 
 const emit = defineEmits<{
-  select: [sha: string]
+  select: [sha: string, repo?: string]
 }>()
 
 const { fetchCommits, isLoadingCommits } = useGit()
 
-// Fetched commit details
-const commitDetails = ref<GitCommit[]>([])
+// Fetched commit details (keyed by sha for lookup)
+const commitDetails = ref<Map<string, GitCommit>>(new Map())
 
-// Extract SHA from commit entry (handles both string and CommitRef)
-function getSha(commit: string | CommitRef): string {
-  return typeof commit === 'string' ? commit : commit.sha
-}
-
-// Get all SHAs from commits array
-const commitShas = computed(() => props.commits.map(getSha))
+// Check if any commits have repo info (indicates pseudo-monorepo)
+const hasMultipleRepos = computed(() => {
+  const repos = new Set(props.commits.map(c => c.repo).filter(Boolean))
+  return repos.size > 1
+})
 
 // Fetch commit details when props change
+// Group commits by repo to make efficient API calls
 watch(
   () => ({ commits: props.commits, repoId: props.repoId }),
   async ({ commits, repoId }) => {
-    if (commits.length > 0 && repoId) {
-      const shas = commits.map(getSha)
-      commitDetails.value = await fetchCommits(repoId, shas)
-    } else {
-      commitDetails.value = []
+    if (commits.length === 0 || !repoId) {
+      commitDetails.value = new Map()
+      return
     }
+
+    // Group commits by repo
+    const commitsByRepo = new Map<string, string[]>()
+    for (const commit of commits) {
+      const repoPath = commit.repo || ''
+      if (!commitsByRepo.has(repoPath)) {
+        commitsByRepo.set(repoPath, [])
+      }
+      commitsByRepo.get(repoPath)!.push(commit.sha)
+    }
+
+    // Fetch commits for each repo in parallel
+    const results = await Promise.all(
+      Array.from(commitsByRepo.entries()).map(async ([repoPath, shas]) => {
+        const fetched = await fetchCommits(repoId, shas, repoPath || undefined)
+        return fetched.map(c => ({ ...c, repoPath }))
+      })
+    )
+
+    // Build map of sha -> commit details
+    const detailsMap = new Map<string, GitCommit>()
+    for (const repoResults of results) {
+      for (const commit of repoResults) {
+        detailsMap.set(commit.sha, commit)
+      }
+    }
+    commitDetails.value = detailsMap
   },
   { immediate: true }
 )
@@ -64,8 +89,13 @@ function formatRelativeDate(isoDate: string): string {
   }
 }
 
-function handleClick(sha: string) {
-  emit('select', sha)
+function handleClick(commit: CommitRef) {
+  emit('select', commit.sha, commit.repo)
+}
+
+// Get commit details by SHA
+function getDetails(sha: string): GitCommit | undefined {
+  return commitDetails.value.get(sha)
 }
 </script>
 
@@ -100,39 +130,46 @@ function handleClick(sha: string) {
     <!-- Commit list -->
     <template v-else>
       <button
-        v-for="commit in commitDetails"
+        v-for="commit in commits"
         :key="commit.sha"
         class="w-full rounded-lg border bg-card p-3 text-left transition-colors hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring"
-        @click="handleClick(commit.sha)"
+        @click="handleClick(commit)"
       >
         <div class="flex items-start gap-3">
           <GitCommitIcon class="mt-0.5 size-5 shrink-0 text-muted-foreground" />
           <div class="min-w-0 flex-1">
-            <!-- SHA and stats -->
-            <div class="flex items-center gap-2">
+            <!-- SHA, stats, and repo badge -->
+            <div class="flex flex-wrap items-center gap-2">
               <code class="font-mono text-xs font-medium text-primary">
-                {{ commit.shortSha }}
+                {{ getDetails(commit.sha)?.shortSha || commit.sha.substring(0, 7) }}
               </code>
-              <span class="flex items-center gap-1 text-xs text-muted-foreground">
-                <FileText class="size-3" />
-                {{ commit.filesChanged }}
-              </span>
-              <span class="flex items-center gap-0.5 text-xs text-green-600 dark:text-green-400">
-                <Plus class="size-3" />{{ commit.additions }}
-              </span>
-              <span class="flex items-center gap-0.5 text-xs text-red-600 dark:text-red-400">
-                <Minus class="size-3" />{{ commit.deletions }}
-              </span>
+              <template v-if="getDetails(commit.sha)">
+                <span class="flex items-center gap-1 text-xs text-muted-foreground">
+                  <FileText class="size-3" />
+                  {{ getDetails(commit.sha)!.filesChanged }}
+                </span>
+                <span class="flex items-center gap-0.5 text-xs text-green-600 dark:text-green-400">
+                  <Plus class="size-3" />{{ getDetails(commit.sha)!.additions }}
+                </span>
+                <span class="flex items-center gap-0.5 text-xs text-red-600 dark:text-red-400">
+                  <Minus class="size-3" />{{ getDetails(commit.sha)!.deletions }}
+                </span>
+              </template>
+              <!-- Repo badge - only show for pseudo-monorepos with multiple repos -->
+              <Badge v-if="commit.repo && hasMultipleRepos" variant="secondary" class="gap-1 text-xs">
+                <FolderGit2 class="size-3" />
+                {{ commit.repo }}
+              </Badge>
             </div>
 
             <!-- Message -->
             <p class="mt-1 truncate text-sm">
-              {{ commit.message }}
+              {{ getDetails(commit.sha)?.message || 'Loading...' }}
             </p>
 
             <!-- Author and date -->
-            <p class="mt-1 text-xs text-muted-foreground">
-              {{ commit.author }} &middot; {{ formatRelativeDate(commit.date) }}
+            <p v-if="getDetails(commit.sha)" class="mt-1 text-xs text-muted-foreground">
+              {{ getDetails(commit.sha)!.author }} &middot; {{ formatRelativeDate(getDetails(commit.sha)!.date) }}
             </p>
           </div>
         </div>

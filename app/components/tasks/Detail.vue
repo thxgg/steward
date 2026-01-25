@@ -31,8 +31,8 @@ const props = defineProps<{
   task: Task | null
   /** Map of task ID to task title for displaying dependency names */
   taskTitles?: Map<string, string>
-  /** Git commit SHAs associated with this task - supports both legacy strings and CommitRef objects */
-  commits?: (string | CommitRef)[]
+  /** Git commits associated with this task (resolved with repo context) */
+  commits?: CommitRef[]
   /** Repository ID for fetching commit details */
   repoId?: string
 }>()
@@ -111,10 +111,12 @@ const hasCommits = computed(() => props.commits && props.commits.length > 0 && p
 // View state: 'details' or 'diff'
 const viewMode = ref<'details' | 'diff'>('details')
 const selectedCommitSha = ref<string | null>(null)
+const selectedCommitRepo = ref<string | null>(null)
 
-// Handle commit selection
-function handleCommitSelect(sha: string) {
+// Handle commit selection (now receives sha and repo)
+function handleCommitSelect(sha: string, repo?: string) {
   selectedCommitSha.value = sha
+  selectedCommitRepo.value = repo || null
   viewMode.value = 'diff'
 }
 
@@ -122,18 +124,21 @@ function handleCommitSelect(sha: string) {
 function handleBackToDetails() {
   viewMode.value = 'details'
   selectedCommitSha.value = null
+  selectedCommitRepo.value = null
 }
 
 // Reset view when task changes or sheet closes
 watch(() => props.task, () => {
   viewMode.value = 'details'
   selectedCommitSha.value = null
+  selectedCommitRepo.value = null
 })
 
 watch(open, (isOpen) => {
   if (!isOpen) {
     viewMode.value = 'details'
     selectedCommitSha.value = null
+    selectedCommitRepo.value = null
   }
 })
 </script>
@@ -162,7 +167,7 @@ watch(open, (isOpen) => {
 
       <!-- Diff View -->
       <div v-if="task && viewMode === 'diff' && selectedCommitSha && repoId" class="min-h-0 flex-1 overflow-hidden">
-        <GitDiffPanel :repo-id="repoId" :commit-sha="selectedCommitSha" class="h-full" @close="handleBackToDetails" />
+        <GitDiffPanel :repo-id="repoId" :commit-sha="selectedCommitSha" :repo-path="selectedCommitRepo || undefined" class="h-full" @close="handleBackToDetails" />
       </div>
 
       <!-- Details View -->

@@ -3,7 +3,7 @@ import { FileText, LayoutGrid, AlertCircle, Loader2, RefreshCw } from 'lucide-vu
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { Button } from '~/components/ui/button'
 import type { PrdDocument } from '~/types/prd'
-import type { Task, TasksFile, ProgressFile } from '~/types/task'
+import type { Task, TasksFile, ProgressFile, CommitRef } from '~/types/task'
 
 // Disable SSR for this page - requires client-side localStorage for repo context
 definePageMeta({
@@ -12,7 +12,7 @@ definePageMeta({
 
 const route = useRoute()
 const { selectRepo } = useRepos()
-const { fetchDocument, fetchTasks, fetchProgress } = usePrd()
+const { fetchDocument, fetchTasks, fetchProgress, fetchTaskCommits } = usePrd()
 const { showError } = useToast()
 
 // Get route params
@@ -122,17 +122,15 @@ onMounted(loadData)
 watch([repoId, prdSlug], loadData)
 
 // Handle task click
-function handleTaskClick(task: Task) {
+async function handleTaskClick(task: Task) {
   selectedTask.value = task
   detailOpen.value = true
+  // Fetch resolved commits from API (includes repo context)
+  selectedTaskCommits.value = await fetchTaskCommits(prdSlug.value, task.id)
 }
 
-// Get commits for selected task from progress file
-const selectedTaskCommits = computed(() => {
-  if (!selectedTask.value || !progressFile.value) return []
-  const taskLog = progressFile.value.taskLogs.find(log => log.taskId === selectedTask.value?.id)
-  return taskLog?.commits || []
-})
+// Resolved commits for selected task (fetched from API with repo context)
+const selectedTaskCommits = ref<CommitRef[]>([])
 </script>
 
 <template>

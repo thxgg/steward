@@ -15,6 +15,8 @@ const props = defineProps<{
   repoId: string
   /** Commit SHA to display diff for */
   commitSha: string
+  /** Optional relative path to git repo (for pseudo-monorepos) */
+  repoPath?: string
 }>()
 
 const emit = defineEmits<{
@@ -44,7 +46,7 @@ async function loadDiff() {
   selectedFile.value = undefined
   hunks.value = []
 
-  const result = await fetchDiff(props.repoId, props.commitSha)
+  const result = await fetchDiff(props.repoId, props.commitSha, props.repoPath)
 
   if (result.length === 0 && !isLoadingDiff.value) {
     // Check if it was an error (empty could be valid, but error is set by toast)
@@ -71,12 +73,12 @@ async function loadFileDiff() {
   fileDiffError.value = null
 
   // Fetch hunks (always needed for highlighting changes)
-  const result = await fetchFileDiff(props.repoId, props.commitSha, selectedFile.value)
+  const result = await fetchFileDiff(props.repoId, props.commitSha, selectedFile.value, props.repoPath)
   hunks.value = result
 
   // Fetch full file content if in full mode
   if (viewMode.value === 'full') {
-    const content = await fetchFileContent(props.repoId, props.commitSha, selectedFile.value)
+    const content = await fetchFileContent(props.repoId, props.commitSha, selectedFile.value, props.repoPath)
     fileContent.value = content
   }
 }
@@ -89,7 +91,7 @@ function toggleViewMode() {
 // Reload file content when switching to full mode
 watch(viewMode, async (mode) => {
   if (mode === 'full' && selectedFile.value && !fileContent.value) {
-    const content = await fetchFileContent(props.repoId, props.commitSha, selectedFile.value)
+    const content = await fetchFileContent(props.repoId, props.commitSha, selectedFile.value, props.repoPath)
     fileContent.value = content
   }
 })
@@ -115,7 +117,7 @@ watch(selectedFile, () => {
 
 // Watch for prop changes
 watch(
-  () => [props.repoId, props.commitSha] as const,
+  () => [props.repoId, props.commitSha, props.repoPath] as const,
   () => {
     loadDiff()
   },
