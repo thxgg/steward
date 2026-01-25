@@ -9,6 +9,14 @@ A Nuxt 4 web application for viewing PRD documents and tracking task progress.
 - Tailwind CSS v4
 - TypeScript
 
+## Package Manager
+
+This project uses **bun**.
+
+- `bun install` - Install dependencies
+- `bun run dev` - Start dev server
+- `bun run build` - Build for production
+
 ## Development Guidelines
 
 ### Frontend Design
