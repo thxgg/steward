@@ -9,7 +9,9 @@ import {
   ListOrdered,
   CheckSquare,
   Link2,
-  Check
+  Check,
+  GitCommit,
+  ArrowLeft
 } from 'lucide-vue-next'
 import {
   Sheet,
@@ -29,6 +31,10 @@ const props = defineProps<{
   task: Task | null
   /** Map of task ID to task title for displaying dependency names */
   taskTitles?: Map<string, string>
+  /** Git commit SHAs associated with this task */
+  commits?: string[]
+  /** Repository ID for fetching commit details */
+  repoId?: string
 }>()
 
 const open = defineModel<boolean>('open', { default: false })
@@ -98,17 +104,69 @@ function formatDate(isoString?: string): string {
 function getTaskTitle(taskId: string): string {
   return props.taskTitles?.get(taskId) ?? taskId
 }
+
+// Has commits to show
+const hasCommits = computed(() => props.commits && props.commits.length > 0 && props.repoId)
+
+// View state: 'details' or 'diff'
+const viewMode = ref<'details' | 'diff'>('details')
+const selectedCommitSha = ref<string | null>(null)
+
+// Handle commit selection
+function handleCommitSelect(sha: string) {
+  selectedCommitSha.value = sha
+  viewMode.value = 'diff'
+}
+
+// Go back to details view
+function handleBackToDetails() {
+  viewMode.value = 'details'
+  selectedCommitSha.value = null
+}
+
+// Reset view when task changes or sheet closes
+watch(() => props.task, () => {
+  viewMode.value = 'details'
+  selectedCommitSha.value = null
+})
+
+watch(open, (isOpen) => {
+  if (!isOpen) {
+    viewMode.value = 'details'
+    selectedCommitSha.value = null
+  }
+})
 </script>
 
 <template>
   <Sheet v-model:open="open">
-    <SheetContent class="flex h-full w-full flex-col sm:max-w-lg">
+    <SheetContent class="flex h-full w-full flex-col sm:max-w-lg" :class="{ 'sm:max-w-3xl': viewMode === 'diff' }">
+      <!-- Header with back button when viewing diff -->
       <SheetHeader v-if="task" class="px-6 pr-12">
-        <SheetTitle class="text-left text-lg">{{ task.title }}</SheetTitle>
+        <div class="flex items-center gap-2">
+          <Button
+            v-if="viewMode === 'diff'"
+            variant="ghost"
+            size="icon"
+            class="size-8 shrink-0"
+            @click="handleBackToDetails"
+          >
+            <ArrowLeft class="size-4" />
+          </Button>
+          <SheetTitle class="text-left text-lg">
+            {{ viewMode === 'diff' ? 'Commit Changes' : task.title }}
+          </SheetTitle>
+        </div>
         <SheetDescription class="sr-only">Task details</SheetDescription>
       </SheetHeader>
 
-      <div v-if="task" class="min-h-0 flex-1 space-y-4 overflow-y-auto px-6">
+      <!-- Diff View -->
+      <div v-if="task && viewMode === 'diff' && selectedCommitSha && repoId" class="min-h-0 flex-1 overflow-hidden">
+        <GitDiffPanel :repo-id="repoId" :commit-sha="selectedCommitSha" class="h-full" />
+      </div>
+
+      <!-- Details View -->
+      <div v-else-if="task" class="min-h-0 flex-1 space-y-4 overflow-y-auto px-6">
         <!-- Status, Category, Priority row -->
         <div class="flex flex-wrap items-center gap-2">
           <Badge :variant="categoryConfig.variant">
@@ -184,6 +242,22 @@ function getTaskTitle(taskId: string): string {
             </li>
           </ul>
         </div>
+
+        <!-- Changes (commits) -->
+        <template v-if="hasCommits">
+          <Separator />
+          <div class="space-y-2">
+            <h4 class="flex items-center gap-2 text-sm font-medium">
+              <GitCommit class="size-4" />
+              Changes
+            </h4>
+            <GitCommitList
+              :commits="commits!"
+              :repo-id="repoId!"
+              @select="handleCommitSelect"
+            />
+          </div>
+        </template>
 
         <!-- Timestamps -->
         <div v-if="task.startedAt || task.completedAt" class="space-y-2">

@@ -3,7 +3,7 @@ import { FileText, LayoutGrid, AlertCircle, Loader2, RefreshCw } from 'lucide-vu
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { Button } from '~/components/ui/button'
 import type { PrdDocument } from '~/types/prd'
-import type { Task, TasksFile } from '~/types/task'
+import type { Task, TasksFile, ProgressFile } from '~/types/task'
 
 // Disable SSR for this page - requires client-side localStorage for repo context
 definePageMeta({
@@ -12,7 +12,7 @@ definePageMeta({
 
 const route = useRoute()
 const { selectRepo } = useRepos()
-const { fetchDocument, fetchTasks } = usePrd()
+const { fetchDocument, fetchTasks, fetchProgress } = usePrd()
 const { showError } = useToast()
 
 // Get route params
@@ -22,6 +22,7 @@ const prdSlug = computed(() => route.params.prd as string)
 // State
 const document = ref<PrdDocument | null>(null)
 const tasksFile = ref<TasksFile | null>(null)
+const progressFile = ref<ProgressFile | null>(null)
 const isLoading = ref(true)
 const error = ref<string | null>(null)
 
@@ -78,10 +79,11 @@ async function loadData() {
     // Ensure repo is selected
     selectRepo(repoId.value)
 
-    // Fetch document and tasks in parallel
-    const [doc, tasks] = await Promise.all([
+    // Fetch document, tasks, and progress in parallel
+    const [doc, tasks, progress] = await Promise.all([
       fetchDocument(prdSlug.value),
-      fetchTasks(prdSlug.value)
+      fetchTasks(prdSlug.value),
+      fetchProgress(prdSlug.value)
     ])
 
     if (!doc) {
@@ -91,6 +93,7 @@ async function loadData() {
 
     document.value = doc
     tasksFile.value = tasks
+    progressFile.value = progress
   } catch (err) {
     const fetchErr = err as { statusCode?: number; data?: { message?: string } }
     if (fetchErr.statusCode === 404) {
@@ -118,6 +121,13 @@ function handleTaskClick(task: Task) {
   selectedTask.value = task
   detailOpen.value = true
 }
+
+// Get commits for selected task from progress file
+const selectedTaskCommits = computed(() => {
+  if (!selectedTask.value || !progressFile.value) return []
+  const taskLog = progressFile.value.taskLogs.find(log => log.taskId === selectedTask.value?.id)
+  return taskLog?.commits || []
+})
 </script>
 
 <template>
@@ -207,6 +217,8 @@ function handleTaskClick(task: Task) {
       v-model:open="detailOpen"
       :task="selectedTask"
       :task-titles="taskTitles"
+      :commits="selectedTaskCommits"
+      :repo-id="repoId"
     />
   </div>
 </template>
