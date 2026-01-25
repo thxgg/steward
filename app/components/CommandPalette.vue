@@ -86,7 +86,7 @@ watch(open, (isOpen) => {
         <CommandItem
           v-for="prd in prds"
           :key="prd.slug"
-          :value="`prd-${prd.slug} ${prd.name}`"
+          :value="`PRD: ${prd.name}`"
           @select="navigateToPrd(prd.slug)"
         >
           <FileText class="size-4" />
