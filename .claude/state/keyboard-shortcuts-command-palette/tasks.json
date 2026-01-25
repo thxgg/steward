@@ -1,0 +1,328 @@
+{
+  "prd": {
+    "name": "Keyboard Shortcuts & Command Palette",
+    "source": "docs/prd/keyboard-shortcuts-command-palette.md",
+    "createdAt": "2026-01-25T00:00:00Z"
+  },
+  "tasks": [
+    {
+      "id": "task-001",
+      "category": "setup",
+      "title": "Install shadcn-vue Command component",
+      "description": "Install the shadcn-vue Command component which provides the foundation for the command palette UI including CommandDialog, CommandInput, CommandList, CommandGroup, CommandItem, CommandEmpty, and CommandSeparator.",
+      "steps": [
+        "Run `npx shadcn-vue@latest add command` to install the component",
+        "Verify the component files are created in `app/components/ui/command/`",
+        "Check that all subcomponents are exported correctly"
+      ],
+      "passes": [
+        "Command component files exist in app/components/ui/command/",
+        "All Command subcomponents (CommandDialog, CommandInput, CommandList, etc.) are importable",
+        "No TypeScript or build errors after installation"
+      ],
+      "dependencies": [],
+      "priority": "critical",
+      "status": "completed",
+      "startedAt": "2026-01-25T01:53:47Z",
+      "completedAt": "2026-01-25T01:56:36Z",
+      "passes": true,
+      "affectedFiles": [
+        "app/components/ui/command/Command.vue",
+        "app/components/ui/command/CommandDialog.vue",
+        "app/components/ui/command/CommandInput.vue",
+        "app/components/ui/command/CommandList.vue",
+        "app/components/ui/command/CommandGroup.vue",
+        "app/components/ui/command/CommandItem.vue",
+        "app/components/ui/command/index.ts"
+      ]
+    },
+    {
+      "id": "task-002",
+      "category": "setup",
+      "title": "Create useKeyboard composable",
+      "description": "Create a composable that uses @vueuse/core's useMagicKeys to handle global keyboard shortcuts. It should provide a way to register shortcuts and check if the user is currently typing in an input field.",
+      "steps": [
+        "Create `app/composables/useKeyboard.ts`",
+        "Import useMagicKeys from @vueuse/core",
+        "Implement a function to check if user is typing in an input/textarea",
+        "Create a reactive map of registered shortcuts",
+        "Export functions to register and unregister shortcuts",
+        "Add input field detection to prevent shortcuts firing during text entry"
+      ],
+      "passes": [
+        "useKeyboard composable exists and exports useMagicKeys-based shortcut handling",
+        "Shortcuts are suppressed when focus is on input, textarea, or contenteditable elements",
+        "Composable follows existing patterns (useRepos, usePrd)"
+      ],
+      "dependencies": ["task-001"],
+      "priority": "critical",
+      "status": "pending",
+      "affectedFiles": [
+        "app/composables/useKeyboard.ts"
+      ]
+    },
+    {
+      "id": "task-003",
+      "category": "feature",
+      "title": "Create CommandPalette component",
+      "description": "Create the main CommandPalette.vue component that wraps shadcn-vue's CommandDialog. This component manages the palette's open state and provides the structure for commands.",
+      "steps": [
+        "Create `app/components/CommandPalette.vue`",
+        "Import and use CommandDialog, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem",
+        "Add reactive `open` state managed by the component",
+        "Create placeholder command groups (Navigation, Actions)",
+        "Style consistently with existing app design",
+        "Add lucide-vue-next icons for visual clarity"
+      ],
+      "passes": [
+        "CommandPalette component renders CommandDialog with search input",
+        "Component has open/close state that can be controlled externally",
+        "Empty state shows 'No results found' message",
+        "Component follows shadcn-vue patterns and app styling"
+      ],
+      "dependencies": ["task-001"],
+      "priority": "critical",
+      "status": "pending",
+      "affectedFiles": [
+        "app/components/CommandPalette.vue"
+      ]
+    },
+    {
+      "id": "task-004",
+      "category": "integration",
+      "title": "Integrate command palette with Cmd+K shortcut",
+      "description": "Wire up the command palette to open when user presses Cmd/Ctrl+K. Add the CommandPalette component to the default layout and connect it to the useKeyboard composable.",
+      "steps": [
+        "Import CommandPalette in app/layouts/default.vue",
+        "Add CommandPalette component to the layout template",
+        "Use useKeyboard to watch for Cmd+K",
+        "Toggle palette open state when shortcut is pressed",
+        "Ensure Escape closes the palette"
+      ],
+      "passes": [
+        "Cmd/Ctrl+K opens the command palette from any page",
+        "Escape key closes the palette",
+        "Shortcut does not fire when typing in input fields",
+        "Palette opens in <50ms"
+      ],
+      "dependencies": ["task-002", "task-003"],
+      "priority": "critical",
+      "status": "pending",
+      "affectedFiles": [
+        "app/layouts/default.vue"
+      ]
+    },
+    {
+      "id": "task-005",
+      "category": "feature",
+      "title": "Add PRD navigation commands to palette",
+      "description": "Populate the command palette with navigation commands that allow users to quickly jump to any PRD. Use the existing usePrd composable to get the list of available PRDs.",
+      "steps": [
+        "Import usePrd and useRepos in CommandPalette",
+        "Create a computed list of PRD navigation commands",
+        "Add a 'Navigation' command group showing all PRDs",
+        "Implement navigation action using useRouter",
+        "Add file/document icons from lucide-vue-next",
+        "Close palette after navigation"
+      ],
+      "passes": [
+        "Command palette shows all PRDs from current repository",
+        "Selecting a PRD navigates to that PRD's page",
+        "PRDs are searchable via the palette's fuzzy search",
+        "Palette closes after selecting a PRD"
+      ],
+      "dependencies": ["task-004"],
+      "priority": "high",
+      "status": "pending",
+      "affectedFiles": [
+        "app/components/CommandPalette.vue"
+      ]
+    },
+    {
+      "id": "task-006",
+      "category": "feature",
+      "title": "Add repository switching to palette",
+      "description": "Add commands to switch between repositories directly from the command palette. Show all available repositories and allow quick switching.",
+      "steps": [
+        "Add repository commands to a 'Repositories' command group",
+        "Use useRepos to get available repositories",
+        "Implement selectRepo action on command selection",
+        "Add folder icon for repository items",
+        "Show current repository with a checkmark or highlight"
+      ],
+      "passes": [
+        "All repositories appear in the command palette",
+        "Selecting a repository switches to it",
+        "Current repository is visually indicated",
+        "Repository switching works without page reload"
+      ],
+      "dependencies": ["task-005"],
+      "priority": "high",
+      "status": "pending",
+      "affectedFiles": [
+        "app/components/CommandPalette.vue"
+      ]
+    },
+    {
+      "id": "task-007",
+      "category": "feature",
+      "title": "Add action commands to palette",
+      "description": "Add action commands for theme toggle, tab switching, and opening shortcuts help. These are non-navigation commands that perform immediate actions.",
+      "steps": [
+        "Add 'Actions' command group to the palette",
+        "Add 'Toggle theme' command with sun/moon icon",
+        "Add 'Switch to Document/Task Board' command",
+        "Add 'Show keyboard shortcuts' command",
+        "Implement theme toggle using useColorMode",
+        "Implement tab switching action"
+      ],
+      "passes": [
+        "'Toggle theme' switches between light and dark mode",
+        "'Switch to Task Board/Document' toggles the active tab",
+        "'Show keyboard shortcuts' opens the help modal (once implemented)",
+        "Actions execute immediately and close the palette"
+      ],
+      "dependencies": ["task-006"],
+      "priority": "high",
+      "status": "pending",
+      "affectedFiles": [
+        "app/components/CommandPalette.vue"
+      ]
+    },
+    {
+      "id": "task-008",
+      "category": "feature",
+      "title": "Implement direct keyboard shortcuts",
+      "description": "Add direct keyboard shortcuts that work without opening the command palette. These provide quick access to frequent actions.",
+      "steps": [
+        "Add Cmd/Ctrl+J shortcut to open palette with PRD filter",
+        "Add Cmd/Ctrl+Shift+T to toggle Document/Task Board tabs",
+        "Add Cmd/Ctrl+. to toggle theme",
+        "Add Cmd/Ctrl+, to open add repository sheet",
+        "Register all shortcuts in useKeyboard composable",
+        "Ensure shortcuts respect input field focus state"
+      ],
+      "passes": [
+        "Cmd/Ctrl+J opens palette pre-filtered to PRDs",
+        "Cmd/Ctrl+Shift+T toggles between Document and Task Board tabs",
+        "Cmd/Ctrl+. toggles light/dark theme",
+        "Cmd/Ctrl+, opens the add repository modal",
+        "All shortcuts are disabled when typing in input fields"
+      ],
+      "dependencies": ["task-004"],
+      "priority": "high",
+      "status": "pending",
+      "affectedFiles": [
+        "app/layouts/default.vue",
+        "app/composables/useKeyboard.ts"
+      ]
+    },
+    {
+      "id": "task-009",
+      "category": "feature",
+      "title": "Create ShortcutsHelp modal component",
+      "description": "Create a modal dialog that displays all available keyboard shortcuts with descriptions. This helps users discover and learn the available shortcuts.",
+      "steps": [
+        "Create `app/components/ShortcutsHelp.vue`",
+        "Use shadcn-vue Dialog component for the modal",
+        "Create a structured list of all shortcuts with descriptions",
+        "Group shortcuts by category (Navigation, Actions, etc.)",
+        "Style keyboard keys with proper kbd styling",
+        "Add open/close state management"
+      ],
+      "passes": [
+        "ShortcutsHelp modal displays all available shortcuts",
+        "Shortcuts are grouped by category",
+        "Keyboard keys are styled with proper kbd element styling",
+        "Modal can be opened and closed"
+      ],
+      "dependencies": ["task-001"],
+      "priority": "medium",
+      "status": "pending",
+      "affectedFiles": [
+        "app/components/ShortcutsHelp.vue"
+      ]
+    },
+    {
+      "id": "task-010",
+      "category": "integration",
+      "title": "Integrate ShortcutsHelp with Cmd+? shortcut",
+      "description": "Connect the shortcuts help modal to the Cmd+? (or Cmd+/) keyboard shortcut and make it accessible from the command palette.",
+      "steps": [
+        "Import ShortcutsHelp in default layout",
+        "Add Cmd+? and Cmd+/ shortcuts to open help modal",
+        "Connect 'Show keyboard shortcuts' palette action to open the modal",
+        "Ensure Escape closes the help modal"
+      ],
+      "passes": [
+        "Cmd/Ctrl+? opens the shortcuts help modal",
+        "Cmd/Ctrl+/ also opens the shortcuts help modal",
+        "Selecting 'Show keyboard shortcuts' in palette opens the modal",
+        "Help modal displays all current shortcuts accurately"
+      ],
+      "dependencies": ["task-008", "task-009"],
+      "priority": "medium",
+      "status": "pending",
+      "affectedFiles": [
+        "app/layouts/default.vue",
+        "app/components/CommandPalette.vue"
+      ]
+    },
+    {
+      "id": "task-011",
+      "category": "feature",
+      "title": "Add keyboard shortcut hints to UI",
+      "description": "Add visual hints showing keyboard shortcuts next to relevant UI elements to aid discoverability. Show shortcuts in buttons, tooltips, or command palette items.",
+      "steps": [
+        "Add shortcut hint badge to repo selector (Cmd+,)",
+        "Add shortcut hints in command palette items",
+        "Add shortcut hint to theme toggle button",
+        "Style hints with muted text and proper kbd styling",
+        "Detect platform (Mac vs Windows) and show appropriate modifier key"
+      ],
+      "passes": [
+        "Shortcut hints appear in command palette items",
+        "Hints show correct modifier key for user's platform (⌘ vs Ctrl)",
+        "Hints are styled consistently with muted text",
+        "Hints do not clutter the UI or reduce usability"
+      ],
+      "dependencies": ["task-007"],
+      "priority": "low",
+      "status": "pending",
+      "affectedFiles": [
+        "app/components/CommandPalette.vue",
+        "app/components/layout/RepoSelector.vue"
+      ]
+    },
+    {
+      "id": "task-012",
+      "category": "testing",
+      "title": "Test keyboard shortcuts across browsers",
+      "description": "Verify all keyboard shortcuts work correctly across different browsers and operating systems. Test for conflicts with browser defaults.",
+      "steps": [
+        "Test all shortcuts in Chrome, Firefox, and Safari",
+        "Test on macOS with Cmd modifier",
+        "Test on Windows/Linux with Ctrl modifier",
+        "Verify no conflicts with browser default shortcuts",
+        "Test that shortcuts are disabled in input fields",
+        "Document any browser-specific issues"
+      ],
+      "passes": [
+        "All shortcuts work in Chrome",
+        "All shortcuts work in Firefox",
+        "All shortcuts work in Safari",
+        "No conflicts with browser default shortcuts (bookmarks, dev tools, etc.)",
+        "Shortcuts correctly use Cmd on Mac and Ctrl on Windows/Linux"
+      ],
+      "dependencies": ["task-010"],
+      "priority": "medium",
+      "status": "pending",
+      "affectedFiles": []
+    }
+  ],
+  "metadata": {
+    "totalEstimatedEffort": "medium",
+    "criticalPath": ["task-001", "task-002", "task-003", "task-004", "task-005"],
+    "tags": ["keyboard", "accessibility", "command-palette", "ux"]
+  }
+}
