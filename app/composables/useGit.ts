@@ -1,5 +1,10 @@
 import type { GitCommit, FileDiff, DiffHunk } from '~/types/git'
 
+export interface FetchCommitsResult {
+  commits: GitCommit[]
+  failedShas: string[]
+}
+
 export function useGit() {
   const { showError } = useToast()
 
@@ -14,10 +19,11 @@ export function useGit() {
    * @param repoId - Repository ID
    * @param shas - Array of commit SHAs
    * @param repoPath - Optional relative path to git repo (for pseudo-monorepos)
+   * @returns Object with fetched commits and SHAs that failed to load
    */
-  async function fetchCommits(repoId: string, shas: string[], repoPath?: string): Promise<GitCommit[]> {
+  async function fetchCommits(repoId: string, shas: string[], repoPath?: string): Promise<FetchCommitsResult> {
     if (!repoId || shas.length === 0) {
-      return []
+      return { commits: [], failedShas: [] }
     }
 
     isLoadingCommits.value = true
@@ -31,11 +37,21 @@ export function useGit() {
         `/api/repos/${repoId}/git/commits`,
         { query }
       )
-      return commits
+
+      // Determine which SHAs weren't returned (partial failures on server)
+      // Use shortSha for comparison since requests may use abbreviated SHAs
+      const returnedShortShas = commits.map(c => c.shortSha)
+      const failedShas = shas.filter(sha => {
+        // Check if any returned shortSha matches the requested SHA (prefix matching)
+        return !returnedShortShas.some(shortSha => shortSha.startsWith(sha) || sha.startsWith(shortSha))
+      })
+
+      return { commits, failedShas }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error'
       showError('Failed to fetch commits', message)
-      return []
+      // All requested SHAs failed
+      return { commits: [], failedShas: shas }
     } finally {
       isLoadingCommits.value = false
     }

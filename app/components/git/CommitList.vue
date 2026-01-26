@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { GitCommit as GitCommitIcon, Plus, Minus, FileText, FolderGit2 } from 'lucide-vue-next'
+import { GitCommit as GitCommitIcon, Plus, Minus, FileText, FolderGit2, AlertCircle } from 'lucide-vue-next'
 import { Badge } from '~/components/ui/badge'
 import type { GitCommit } from '~/types/git'
 import type { CommitRef } from '~/types/task'
@@ -20,6 +20,9 @@ const { fetchCommits, isLoadingCommits } = useGit()
 // Fetched commit details (keyed by sha for lookup)
 const commitDetails = ref<Map<string, GitCommit>>(new Map())
 
+// Track commits that failed to load
+const failedCommits = ref<Set<string>>(new Set())
+
 // Check if any commits have repo info (indicates pseudo-monorepo)
 const hasMultipleRepos = computed(() => {
   const repos = new Set(props.commits.map(c => c.repo).filter(Boolean))
@@ -33,6 +36,7 @@ watch(
   async ({ commits, repoId }) => {
     if (commits.length === 0 || !repoId) {
       commitDetails.value = new Map()
+      failedCommits.value = new Set()
       return
     }
 
@@ -49,19 +53,30 @@ watch(
     // Fetch commits for each repo in parallel
     const results = await Promise.all(
       Array.from(commitsByRepo.entries()).map(async ([repoPath, shas]) => {
-        const fetched = await fetchCommits(repoId, shas, repoPath || undefined)
-        return fetched.map(c => ({ ...c, repoPath }))
+        const result = await fetchCommits(repoId, shas, repoPath || undefined)
+        return {
+          commits: result.commits.map(c => ({ ...c, repoPath })),
+          failedShas: result.failedShas,
+        }
       })
     )
 
-    // Build map of sha -> commit details
+    // Build map of sha -> commit details and collect failed SHAs
     const detailsMap = new Map<string, GitCommit>()
-    for (const repoResults of results) {
-      for (const commit of repoResults) {
-        detailsMap.set(commit.sha, commit)
+    const failed = new Set<string>()
+
+    for (const { commits: repoCommits, failedShas } of results) {
+      for (const commit of repoCommits) {
+        // Key by shortSha since props contain abbreviated SHAs
+        detailsMap.set(commit.shortSha, commit)
+      }
+      for (const sha of failedShas) {
+        failed.add(sha)
       }
     }
+
     commitDetails.value = detailsMap
+    failedCommits.value = failed
   },
   { immediate: true }
 )
@@ -93,9 +108,32 @@ function handleClick(commit: CommitRef) {
   emit('select', commit.sha, commit.repo)
 }
 
-// Get commit details by SHA
+// Get commit details by SHA (supports prefix matching for abbreviated SHAs)
 function getDetails(sha: string): GitCommit | undefined {
-  return commitDetails.value.get(sha)
+  // Direct lookup first
+  const direct = commitDetails.value.get(sha)
+  if (direct) return direct
+
+  // Try prefix matching (short SHA might be abbreviated differently)
+  for (const [key, commit] of commitDetails.value) {
+    if (key.startsWith(sha) || sha.startsWith(key)) {
+      return commit
+    }
+  }
+  return undefined
+}
+
+// Check if a commit failed to load (supports prefix matching)
+function isFailed(sha: string): boolean {
+  if (failedCommits.value.has(sha)) return true
+
+  // Try prefix matching
+  for (const failedSha of failedCommits.value) {
+    if (failedSha.startsWith(sha) || sha.startsWith(failedSha)) {
+      return true
+    }
+  }
+  return false
 }
 </script>
 
@@ -164,7 +202,14 @@ function getDetails(sha: string): GitCommit | undefined {
 
             <!-- Message -->
             <p class="mt-1 truncate text-sm">
-              {{ getDetails(commit.sha)?.message || 'Loading...' }}
+              <template v-if="getDetails(commit.sha)">
+                {{ getDetails(commit.sha)!.message }}
+              </template>
+              <span v-else-if="isFailed(commit.sha)" class="flex items-center gap-1 text-muted-foreground">
+                <AlertCircle class="size-3" />
+                Commit unavailable
+              </span>
+              <span v-else class="text-muted-foreground">Loading...</span>
             </p>
 
             <!-- Author and date -->
