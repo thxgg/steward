@@ -70,7 +70,28 @@ const taskTitles = computed(() => {
   return map
 })
 
-// Fetch data on mount and when params change
+// Inject file change event from layout for live updates
+const fileChangeEvent = inject<Ref<{ category: string; path?: string; timestamp: number } | null>>('fileChangeEvent', ref(null))
+
+// Load PRD document only
+async function loadDocument() {
+  const doc = await fetchDocument(prdSlug.value)
+  if (doc) {
+    document.value = doc
+  }
+}
+
+// Load tasks and progress only
+async function loadTasksAndProgress() {
+  const [tasks, progress] = await Promise.all([
+    fetchTasks(prdSlug.value),
+    fetchProgress(prdSlug.value)
+  ])
+  tasksFile.value = tasks
+  progressFile.value = progress
+}
+
+// Fetch all data (initial load and route changes)
 async function loadData() {
   isLoading.value = true
   error.value = null
@@ -114,6 +135,21 @@ async function loadData() {
     isLoading.value = false
   }
 }
+
+// Watch for file changes and refresh relevant data
+// Use getter function to ensure Vue properly tracks the ref value changes
+watch(
+  () => fileChangeEvent.value,
+  (event) => {
+    if (!event) return
+
+    if (event.category === 'prd') {
+      loadDocument()
+    } else if (event.category === 'tasks' || event.category === 'progress') {
+      loadTasksAndProgress()
+    }
+  }
+)
 
 // Load data on mount
 onMounted(loadData)

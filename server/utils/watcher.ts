@@ -79,20 +79,33 @@ export async function initWatcher() {
     return // No repos to watch
   }
 
-  // Build watch paths
+  // Build watch paths - watch directories and filter in handler
   watchedPaths = repos.flatMap(repo => [
-    `${repo.path}/docs/prd/*.md`,
-    `${repo.path}/.claude/state/*/tasks.json`,
-    `${repo.path}/.claude/state/*/progress.json`
+    `${repo.path}/docs/prd`,
+    `${repo.path}/.claude/state`
   ])
 
   watcher = chokidar.watch(watchedPaths, {
     ignoreInitial: true,
     persistent: true,
+    depth: 2, // Watch subdirectories (state/<prd-name>/tasks.json)
     awaitWriteFinish: {
       stabilityThreshold: 200,
       pollInterval: 100
-    }
+    },
+    // Allow .claude directory (chokidar ignores dotfiles by default)
+    ignored: (path: string) => {
+      // Never ignore paths containing .claude
+      if (path.includes('.claude')) return false
+      // Ignore other dotfiles
+      const basename = path.split('/').pop() || ''
+      return basename.startsWith('.') && basename !== '.claude'
+    },
+    followSymlinks: true
+  })
+
+  watcher.on('error', (error) => {
+    console.error('[watcher] Error:', error)
   })
 
   watcher.on('all', async (eventType, filePath) => {
@@ -118,7 +131,7 @@ export async function initWatcher() {
     emitDebounced(event)
   })
 
-  console.log('[watcher] File watcher initialized')
+  console.log('[watcher] File watcher initialized, watching', watchedPaths.length, 'directories')
 }
 
 export async function refreshWatcher() {

@@ -8,6 +8,10 @@ const { refreshPrds } = usePrd()
 const { currentRepoId } = useRepos()
 const route = useRoute()
 
+// File change event for live updates (provided to child components)
+const fileChangeEvent = ref<{ category: string; path?: string; timestamp: number } | null>(null)
+provide('fileChangeEvent', fileChangeEvent)
+
 // Command palette state
 const commandPaletteOpen = ref(false)
 const commandPaletteFilter = ref('')
@@ -92,12 +96,18 @@ useFileWatch((event) => {
     refreshPrds()
   }
 
-  // For task/progress changes on current PRD page, trigger a page refresh
-  if (event.category === 'tasks' || event.category === 'progress') {
-    const prdSlug = route.params.prd as string | undefined
-    if (prdSlug && event.path?.includes(`/${prdSlug}/`)) {
-      // Refresh the page data by navigating to the same route
-      navigateTo(route.fullPath, { replace: true })
+  // For task/progress/prd changes on current PRD page, emit event for granular refresh
+  const prdSlug = route.params.prd as string | undefined
+  if (prdSlug) {
+    const isPrdChange = event.category === 'prd' && event.path?.includes(`/${prdSlug}.`)
+    const isTaskChange = (event.category === 'tasks' || event.category === 'progress') && event.path?.includes(`/${prdSlug}/`)
+
+    if (isPrdChange || isTaskChange) {
+      fileChangeEvent.value = {
+        category: event.category,
+        path: event.path,
+        timestamp: Date.now()
+      }
     }
   }
 })
