@@ -14,6 +14,8 @@ export interface PrdListItem {
   taskCount?: number
   /** Number of completed tasks if state exists */
   completedCount?: number
+  /** File modification timestamp (ms since epoch) */
+  modifiedAt: number
 }
 
 /**

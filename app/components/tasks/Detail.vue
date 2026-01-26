@@ -10,7 +10,7 @@ import {
   CheckSquare,
   Link2,
   Check,
-  GitCommit,
+  Diff,
   ArrowLeft
 } from 'lucide-vue-next'
 import {
@@ -253,7 +253,7 @@ watch(open, (isOpen) => {
           <Separator />
           <div class="space-y-2">
             <h4 class="flex items-center gap-2 text-sm font-medium">
-              <GitCommit class="size-4" />
+              <Diff class="size-4" />
               Changes
             </h4>
             <GitCommitList

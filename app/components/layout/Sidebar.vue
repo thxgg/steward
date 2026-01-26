@@ -21,14 +21,11 @@ function isActive(slug: string): boolean {
 
 <template>
   <aside class="flex h-full w-64 flex-col border-r border-border bg-background">
-    <!-- Header -->
-    <div class="flex h-12 items-center border-b border-border px-4">
-      <h2 class="text-sm font-medium text-muted-foreground">Documents</h2>
-    </div>
-
     <!-- PRD List -->
     <ScrollArea class="flex-1">
       <div class="p-2">
+        <!-- Documents Header -->
+        <h2 class="flex h-10 items-center px-2 text-sm font-medium text-muted-foreground">Documents</h2>
         <!-- Loading state -->
         <div v-if="prdsStatus === 'pending'" class="flex items-center justify-center py-8">
           <Loader2 class="size-5 animate-spin text-muted-foreground" />

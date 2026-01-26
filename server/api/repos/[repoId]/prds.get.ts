@@ -41,10 +41,15 @@ export default defineEventHandler(async (event) => {
       const filePath = join(prdDir, filename)
       const stateSlugDir = join(stateDir, slug)
 
-      // Read file to extract title from first H1
+      // Get file modification time and extract title from first H1
       let name = slug
+      let modifiedAt = 0
       try {
-        const content = await fs.readFile(filePath, 'utf-8')
+        const [content, stat] = await Promise.all([
+          fs.readFile(filePath, 'utf-8'),
+          fs.stat(filePath)
+        ])
+        modifiedAt = stat.mtime.getTime()
         const h1Match = content.match(/^#\s+(.+)$/m)
         if (h1Match && h1Match[1]) {
           name = h1Match[1].trim()
@@ -85,11 +90,15 @@ export default defineEventHandler(async (event) => {
         name,
         source: `docs/prd/${filename}`,
         hasState,
+        modifiedAt,
         ...(taskCount !== undefined && { taskCount }),
         ...(completedCount !== undefined && { completedCount })
       }
     })
   )
+
+  // Sort by modification time descending (most recent first)
+  prds.sort((a, b) => b.modifiedAt - a.modifiedAt)
 
   return prds
 })
