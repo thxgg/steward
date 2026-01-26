@@ -1,11 +1,11 @@
 {
   "prdName": "Multi-Git Repository Support for Pseudo-Monorepos",
   "totalTasks": 14,
-  "completed": 13,
+  "completed": 14,
   "inProgress": 0,
   "blocked": 0,
   "startedAt": "2026-01-25T14:25:35Z",
-  "lastUpdated": "2026-01-25T15:10:00Z",
+  "lastUpdated": "2026-01-25T14:58:25Z",
   "patterns": [],
   "taskLogs": [
     {
@@ -144,6 +144,16 @@
       "filesChanged": [],
       "learnings": "The commit resolution searches repos in parallel which is efficient. Error messages include available repos which helps debugging.",
       "commits": []
+    },
+    {
+      "taskId": "task-014",
+      "status": "completed",
+      "startedAt": "2026-01-25T14:56:25Z",
+      "completedAt": "2026-01-25T14:58:25Z",
+      "implemented": "Tested backwards compatibility with standard repos. Verified: (1) prd-viewer repo has no gitRepos field in repos.json, (2) file-diff API works without repo parameter and returns correct hunks, (3) file-content API works without repo parameter, (4) commits info API returns repoPath: '' for standard repos, (5) task commits API resolves string commits to CommitRef format with empty repo field, (6) CommitList component correctly hides repo badge when commit.repo is empty or only one repo exists.",
+      "filesChanged": [],
+      "learnings": "For backwards compatibility, all git APIs accept requests without repo parameter and default to the registered repo path. CommitRef.repo being empty string is falsy in JavaScript, so v-if guards work correctly.",
+      "commits": []
     }
   ],
   "taskProgress": {
@@ -160,6 +170,6 @@
     "task-011": { "status": "completed", "startedAt": "2026-01-25T15:07:00Z", "completedAt": "2026-01-25T15:10:00Z" },
     "task-012": { "status": "completed", "startedAt": "2026-01-25T14:50:22Z", "completedAt": "2026-01-25T14:51:55Z" },
     "task-013": { "status": "completed", "startedAt": "2026-01-25T14:53:19Z", "completedAt": "2026-01-25T14:54:43Z" },
-    "task-014": { "status": "pending", "startedAt": null, "completedAt": null }
+    "task-014": { "status": "completed", "startedAt": "2026-01-25T14:56:25Z", "completedAt": "2026-01-25T14:58:25Z" }
   }
 }
