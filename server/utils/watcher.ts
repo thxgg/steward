@@ -1,6 +1,7 @@
 import chokidar from 'chokidar'
 import type { FSWatcher } from 'chokidar'
 import { getRepos } from './repos'
+import { migrateLegacyStateForRepo } from './prd-state'
 
 export type FileChangeEvent = {
   type: 'change' | 'add' | 'unlink'
@@ -34,6 +35,7 @@ function getCategoryFromPath(filePath: string): FileChangeEvent['category'] | nu
   if (filePath.includes('/docs/prd/') && filePath.endsWith('.md')) {
     return 'prd'
   }
+  // Legacy state files are still watched so they can be migrated into SQLite.
   if (filePath.includes('/.claude/state/') && filePath.endsWith('tasks.json')) {
     return 'tasks'
   }
@@ -79,7 +81,7 @@ export async function initWatcher() {
     return // No repos to watch
   }
 
-  // Build watch paths - watch directories and filter in handler
+  // Build watch paths - docs + legacy state path for migration triggers.
   watchedPaths = repos.flatMap(repo => [
     `${repo.path}/docs/prd`,
     `${repo.path}/.claude/state`
@@ -93,7 +95,7 @@ export async function initWatcher() {
       stabilityThreshold: 200,
       pollInterval: 100
     },
-    // Allow .claude directory (chokidar ignores dotfiles by default)
+    // Allow legacy .claude directory (chokidar ignores dotfiles by default)
     ignored: (path: string) => {
       // Never ignore paths containing .claude
       if (path.includes('.claude')) return false
@@ -119,6 +121,20 @@ export async function initWatcher() {
 
     if (!repoId || !category) {
       return
+    }
+
+    if (category === 'tasks' || category === 'progress') {
+      const repo = repos.find(r => r.id === repoId)
+      if (repo) {
+        try {
+          await migrateLegacyStateForRepo(repo, {
+            cleanupLegacyFiles: false,
+            minFileAgeMs: 0
+          })
+        } catch (error) {
+          console.warn('[watcher] Failed to sync legacy state:', error)
+        }
+      }
     }
 
     const event: FileChangeEvent = {

@@ -1,6 +1,5 @@
-import { promises as fs } from 'node:fs'
-import { join } from 'node:path'
 import { getRepos, saveRepos, discoverGitRepos } from '~~/server/utils/repos'
+import { getPrdState, migrateLegacyStateForRepo } from '~~/server/utils/prd-state'
 import { resolveCommitRepo } from '~~/server/utils/git'
 import type { ProgressFile, CommitRef } from '~/types/task'
 import type { RepoConfig } from '~/types/repo'
@@ -35,84 +34,85 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const progressPath = join(repo.path, '.claude', 'state', prdSlug, 'progress.json')
+  await migrateLegacyStateForRepo(repo)
 
+  let progress: ProgressFile | null = null
   try {
-    const content = await fs.readFile(progressPath, 'utf-8')
-    const progress: ProgressFile = JSON.parse(content)
+    const state = await getPrdState(repo.id, prdSlug)
+    progress = state?.progress ?? null
+  } catch (error) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: `Failed to read progress state: ${(error as Error).message}`
+    })
+  }
 
-    // Find task log entry matching taskId
-    const taskLog = progress.taskLogs.find(log => log.taskId === taskId)
+  if (!progress) {
+    return []
+  }
 
-    if (!taskLog) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: `Task "${taskId}" not found in progress.json`
+  // Find task log entry matching taskId
+  const taskLog = progress.taskLogs.find(log => log.taskId === taskId)
+
+  if (!taskLog) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: `Task "${taskId}" not found in progress state`
+    })
+  }
+
+  // No commits recorded
+  if (!taskLog.commits || taskLog.commits.length === 0) {
+    return []
+  }
+
+  // Resolve all commits to normalized format with repo context
+  const resolvedCommits: ResolvedCommitResponse[] = []
+  const failedEntries: (string | CommitRef)[] = []
+
+  // First pass: try to resolve commits with current repo config
+  for (const commitEntry of taskLog.commits) {
+    try {
+      const resolved = await resolveCommitRepo(repo, commitEntry)
+      resolvedCommits.push({
+        sha: resolved.sha,
+        repo: resolved.repoPath,
       })
+    } catch {
+      failedEntries.push(commitEntry)
     }
+  }
 
-    // No commits recorded
-    if (!taskLog.commits || taskLog.commits.length === 0) {
-      return []
-    }
+  // If some commits failed and this is a pseudo-monorepo, try re-discovering git repos
+  if (failedEntries.length > 0) {
+    const newGitRepos = await discoverGitRepos(repo.path)
 
-    // Resolve all commits to normalized format with repo context
-    const resolvedCommits: ResolvedCommitResponse[] = []
-    const failedEntries: (string | CommitRef)[] = []
+    // Check if we discovered any new repos
+    const existingPaths = new Set((repo.gitRepos || []).map(gr => gr.relativePath))
+    const hasNewRepos = newGitRepos.some(gr => !existingPaths.has(gr.relativePath))
 
-    // First pass: try to resolve commits with current repo config
-    for (const commitEntry of taskLog.commits) {
-      try {
-        const resolved = await resolveCommitRepo(repo, commitEntry)
-        resolvedCommits.push({
-          sha: resolved.sha,
-          repo: resolved.repoPath,
-        })
-      } catch {
-        failedEntries.push(commitEntry)
-      }
-    }
+    if (hasNewRepos) {
+      // Update repo config with newly discovered repos
+      const repos = await getRepos()
+      const repoIndex = repos.findIndex(r => r.id === repoId)
+      if (repoIndex !== -1) {
+        const updatedRepo: RepoConfig = {
+          ...repos[repoIndex]!,
+          gitRepos: newGitRepos.length > 0 ? newGitRepos : undefined,
+        }
+        repos[repoIndex] = updatedRepo
+        await saveRepos(repos)
 
-    // If some commits failed and this is a pseudo-monorepo, try re-discovering git repos
-    if (failedEntries.length > 0) {
-      const newGitRepos = await discoverGitRepos(repo.path)
-
-      // Check if we discovered any new repos
-      const existingPaths = new Set((repo.gitRepos || []).map(gr => gr.relativePath))
-      const hasNewRepos = newGitRepos.some(gr => !existingPaths.has(gr.relativePath))
-
-      if (hasNewRepos) {
-        // Update repo config with newly discovered repos
-        const repos = await getRepos()
-        const repoIndex = repos.findIndex(r => r.id === repoId)
-        if (repoIndex !== -1) {
-          const updatedRepo: RepoConfig = {
-            ...repos[repoIndex]!,
-            gitRepos: newGitRepos.length > 0 ? newGitRepos : undefined,
-          }
-          repos[repoIndex] = updatedRepo
-          await saveRepos(repos)
-
-          // Retry failed commits with updated config
-          for (const commitEntry of failedEntries) {
-            try {
-              const resolved = await resolveCommitRepo(updatedRepo, commitEntry)
-              resolvedCommits.push({
-                sha: resolved.sha,
-                repo: resolved.repoPath,
-              })
-            } catch {
-              // Still failed after re-discovery, add with empty repo
-              const sha = typeof commitEntry === 'string' ? commitEntry : commitEntry.sha
-              resolvedCommits.push({
-                sha,
-                repo: '',
-              })
-            }
-          }
-        } else {
-          // Repo not found in list, add failed entries with empty repo
-          for (const commitEntry of failedEntries) {
+        // Retry failed commits with updated config
+        for (const commitEntry of failedEntries) {
+          try {
+            const resolved = await resolveCommitRepo(updatedRepo, commitEntry)
+            resolvedCommits.push({
+              sha: resolved.sha,
+              repo: resolved.repoPath,
+            })
+          } catch {
+            // Still failed after re-discovery, add with empty repo
             const sha = typeof commitEntry === 'string' ? commitEntry : commitEntry.sha
             resolvedCommits.push({
               sha,
@@ -121,7 +121,7 @@ export default defineEventHandler(async (event) => {
           }
         }
       } else {
-        // No new repos discovered, add failed entries with empty repo
+        // Repo not found in list, add failed entries with empty repo
         for (const commitEntry of failedEntries) {
           const sha = typeof commitEntry === 'string' ? commitEntry : commitEntry.sha
           resolvedCommits.push({
@@ -130,28 +130,17 @@ export default defineEventHandler(async (event) => {
           })
         }
       }
+    } else {
+      // No new repos discovered, add failed entries with empty repo
+      for (const commitEntry of failedEntries) {
+        const sha = typeof commitEntry === 'string' ? commitEntry : commitEntry.sha
+        resolvedCommits.push({
+          sha,
+          repo: '',
+        })
+      }
     }
-
-    return resolvedCommits
-  } catch (error) {
-    // Handle file not found - return empty array
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return []
-    }
-
-    // Re-throw HTTP errors
-    if ((error as { statusCode?: number }).statusCode) {
-      throw error
-    }
-
-    // Invalid JSON
-    if (error instanceof SyntaxError) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: `Invalid JSON in progress.json: ${error.message}`
-      })
-    }
-
-    throw error
   }
+
+  return resolvedCommits
 })

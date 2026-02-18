@@ -8,7 +8,7 @@ export interface PrdListItem {
   name: string
   /** Relative path to the .md file */
   source: string
-  /** Whether .claude/state/<slug> directory exists */
+  /** Whether tracked task/progress state exists for this PRD */
   hasState: boolean
   /** Total number of tasks if state exists */
   taskCount?: number

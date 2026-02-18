@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs'
 import { join, basename } from 'node:path'
 import { getRepos } from '~~/server/utils/repos'
+import { getPrdStateSummaries, migrateLegacyStateForRepo } from '~~/server/utils/prd-state'
 import type { PrdListItem } from '~~/app/types/prd'
 
 export default defineEventHandler(async (event) => {
@@ -23,8 +24,9 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  await migrateLegacyStateForRepo(repo)
+
   const prdDir = join(repo.path, 'docs', 'prd')
-  const stateDir = join(repo.path, '.claude', 'state')
 
   let prdFiles: string[] = []
   try {
@@ -35,11 +37,12 @@ export default defineEventHandler(async (event) => {
     return []
   }
 
+  const stateSummaries = await getPrdStateSummaries(repo.id)
+
   const prds: PrdListItem[] = await Promise.all(
     prdFiles.map(async (filename) => {
       const slug = basename(filename, '.md')
       const filePath = join(prdDir, filename)
-      const stateSlugDir = join(stateDir, slug)
 
       // Get file modification time and extract title from first H1
       let name = slug
@@ -58,32 +61,10 @@ export default defineEventHandler(async (event) => {
         // Couldn't read file, use slug as name
       }
 
-      // Check if state directory exists
-      let hasState = false
-      let taskCount: number | undefined
-      let completedCount: number | undefined
-
-      try {
-        await fs.stat(stateSlugDir)
-        hasState = true
-
-        // Try to read tasks.json to get counts
-        const tasksPath = join(stateSlugDir, 'tasks.json')
-        try {
-          const tasksContent = await fs.readFile(tasksPath, 'utf-8')
-          const tasksData = JSON.parse(tasksContent)
-          if (tasksData.tasks && Array.isArray(tasksData.tasks)) {
-            taskCount = tasksData.tasks.length
-            completedCount = tasksData.tasks.filter(
-              (t: { status?: string }) => t.status === 'completed'
-            ).length
-          }
-        } catch {
-          // tasks.json doesn't exist or is invalid
-        }
-      } catch {
-        // State directory doesn't exist
-      }
+      const stateSummary = stateSummaries.get(slug)
+      const hasState = !!stateSummary?.hasState
+      const taskCount = stateSummary?.taskCount
+      const completedCount = stateSummary?.completedCount
 
       return {
         slug,

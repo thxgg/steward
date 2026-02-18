@@ -244,7 +244,7 @@ const selectedTaskCommits = ref<CommitRef[]>([])
               No tasks found for this PRD
             </p>
             <p class="mt-1 text-sm text-muted-foreground/70">
-              Tasks are loaded from .claude/state/{{ prdSlug }}/tasks.json
+              Task state has not been generated for this PRD yet.
             </p>
           </div>
         </TabsContent>

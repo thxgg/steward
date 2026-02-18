@@ -1,6 +1,5 @@
-import { promises as fs } from 'node:fs'
-import { join } from 'node:path'
 import { getRepos } from '~~/server/utils/repos'
+import { getPrdState, migrateLegacyStateForRepo } from '~~/server/utils/prd-state'
 
 export default defineEventHandler(async (event) => {
   const repoId = getRouterParam(event, 'repoId')
@@ -23,26 +22,15 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const tasksPath = join(repo.path, '.claude', 'state', prdSlug, 'tasks.json')
+  await migrateLegacyStateForRepo(repo)
 
   try {
-    const content = await fs.readFile(tasksPath, 'utf-8')
-    const data = JSON.parse(content)
-    return data
+    const state = await getPrdState(repo.id, prdSlug)
+    return state?.tasks ?? null
   } catch (error) {
-    // Check if file doesn't exist
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return null
-    }
-
-    // Invalid JSON
-    if (error instanceof SyntaxError) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: `Invalid JSON in tasks.json: ${error.message}`
-      })
-    }
-
-    throw error
+    throw createError({
+      statusCode: 500,
+      statusMessage: `Failed to read task state: ${(error as Error).message}`
+    })
   }
 })

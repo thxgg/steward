@@ -44,12 +44,13 @@ server/
 └── api/
 ```
 
-## State Files
+## State Storage
 
-PRD and task state is tracked in `.claude/state/prd-viewer/`:
-- `tasks.json` - Task definitions and status
-- `progress.json` - Progress tracking
-- `notes.md` - Implementation decisions
+PRD task state is centralized in a local SQLite database:
+- Default path: `${XDG_DATA_HOME:-~/.local/share}/prd/state.db`
+- Optional override: `PRD_STATE_DB_PATH`
+
+Legacy `.claude/state/*` files are treated as migration input only.
 
 ## Commands
 

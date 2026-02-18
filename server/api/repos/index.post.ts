@@ -1,4 +1,5 @@
 import { addRepo, validateRepoPath } from '~~/server/utils/repos'
+import { migrateLegacyStateForRepo } from '~~/server/utils/prd-state'
 import { refreshWatcher } from '~~/server/utils/watcher'
 import type { AddRepoRequest } from '~~/app/types/repo'
 
@@ -22,6 +23,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     const repo = await addRepo(body.path, body.name)
+    await migrateLegacyStateForRepo(repo)
     // Refresh file watcher to include new repo
     await refreshWatcher()
     return repo
