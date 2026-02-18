@@ -26,9 +26,37 @@ const LINE_LIMIT = 10000
 const showAll = ref(false)
 
 // Synchronized scrolling state
-// Note: The side-by-side layout uses a single row container, so scrolling
-// is naturally synchronized. This toggle is for UX clarity and future flexibility.
 const syncScrollEnabled = ref(true)
+
+// Refs for scroll sync
+const leftScrollRef = ref<HTMLElement | null>(null)
+const rightScrollRef = ref<HTMLElement | null>(null)
+const isScrolling = ref(false)
+
+// Scroll sync handlers
+function onLeftScroll(event: Event) {
+  if (!syncScrollEnabled.value || isScrolling.value) return
+  const target = event.target as HTMLElement
+  if (rightScrollRef.value) {
+    isScrolling.value = true
+    rightScrollRef.value.scrollLeft = target.scrollLeft
+    requestAnimationFrame(() => {
+      isScrolling.value = false
+    })
+  }
+}
+
+function onRightScroll(event: Event) {
+  if (!syncScrollEnabled.value || isScrolling.value) return
+  const target = event.target as HTMLElement
+  if (leftScrollRef.value) {
+    isScrolling.value = true
+    leftScrollRef.value.scrollLeft = target.scrollLeft
+    requestAnimationFrame(() => {
+      isScrolling.value = false
+    })
+  }
+}
 
 // Calculate total line count for large file detection
 const totalLines = computed(() => {
@@ -503,65 +531,81 @@ function getFullFileLineType(lineNum: number): 'add' | 'remove' | 'context' {
           {{ syncScrollEnabled ? 'Sync scroll' : 'Scroll unlocked' }}
         </Button>
       </div>
-      <!-- Side-by-side view -->
-      <div class="diff-table">
-        <template v-for="item in displayItems" :key="item.type === 'line' ? item.pair?.id : `sep-${item.hunkIndex}`">
-          <!-- Hunk separator -->
-          <div v-if="item.type === 'separator'" class="diff-separator">
-            <div class="separator-line" />
-            <span class="separator-text">···</span>
-            <div class="separator-line" />
-          </div>
+      <!-- Side-by-side view with independent scrollable columns -->
+      <div class="diff-split">
+        <!-- Left column (old) -->
+        <div ref="leftScrollRef" class="diff-column diff-column-left" @scroll="onLeftScroll">
+          <div class="diff-column-content">
+            <template v-for="item in displayItems" :key="item.type === 'line' ? `left-${item.pair?.id}` : `left-sep-${item.hunkIndex}`">
+              <!-- Hunk separator -->
+              <div v-if="item.type === 'separator'" class="diff-separator-half">
+                <div class="separator-line" />
+                <span class="separator-text">···</span>
+              </div>
 
-          <!-- Line pair -->
-          <div v-else-if="item.pair" class="diff-row">
-            <!-- Left side (old) -->
-            <div
-              class="diff-side diff-left"
-              :class="{
-                'diff-remove': item.pair.left.type === 'remove',
-                'diff-empty': item.pair.left.type === 'empty',
-                'diff-context': item.pair.left.type === 'context',
-              }"
-            >
-              <div class="diff-gutter">
-                <span v-if="item.pair.left.lineNum" class="line-number">
-                  {{ item.pair.left.lineNum }}
-                </span>
+              <!-- Line -->
+              <div
+                v-else-if="item.pair"
+                class="diff-line"
+                :class="{
+                  'diff-remove': item.pair.left.type === 'remove',
+                  'diff-empty': item.pair.left.type === 'empty',
+                  'diff-context': item.pair.left.type === 'context',
+                }"
+              >
+                <div class="diff-gutter">
+                  <span v-if="item.pair.left.lineNum" class="line-number">
+                    {{ item.pair.left.lineNum }}
+                  </span>
+                </div>
+                <div class="diff-content">
+                  <span
+                    v-if="item.pair.left.type !== 'empty'"
+                    class="diff-code"
+                    v-html="getHighlightedContent(item.pair.id, 'old') || escapeHtml(item.pair.left.content)"
+                  />
+                </div>
               </div>
-              <div class="diff-content">
-                <span
-                  v-if="item.pair.left.type !== 'empty'"
-                  class="diff-code"
-                  v-html="getHighlightedContent(item.pair.id, 'old') || escapeHtml(item.pair.left.content)"
-                />
-              </div>
-            </div>
-
-            <!-- Right side (new) -->
-            <div
-              class="diff-side diff-right"
-              :class="{
-                'diff-add': item.pair.right.type === 'add',
-                'diff-empty': item.pair.right.type === 'empty',
-                'diff-context': item.pair.right.type === 'context',
-              }"
-            >
-              <div class="diff-gutter">
-                <span v-if="item.pair.right.lineNum" class="line-number">
-                  {{ item.pair.right.lineNum }}
-                </span>
-              </div>
-              <div class="diff-content">
-                <span
-                  v-if="item.pair.right.type !== 'empty'"
-                  class="diff-code"
-                  v-html="getHighlightedContent(item.pair.id, 'new') || escapeHtml(item.pair.right.content)"
-                />
-              </div>
-            </div>
+            </template>
           </div>
-        </template>
+        </div>
+
+        <!-- Right column (new) -->
+        <div ref="rightScrollRef" class="diff-column diff-column-right" @scroll="onRightScroll">
+          <div class="diff-column-content">
+            <template v-for="item in displayItems" :key="item.type === 'line' ? `right-${item.pair?.id}` : `right-sep-${item.hunkIndex}`">
+              <!-- Hunk separator -->
+              <div v-if="item.type === 'separator'" class="diff-separator-half">
+                <span class="separator-text">···</span>
+                <div class="separator-line" />
+              </div>
+
+              <!-- Line -->
+              <div
+                v-else-if="item.pair"
+                class="diff-line"
+                :class="{
+                  'diff-add': item.pair.right.type === 'add',
+                  'diff-empty': item.pair.right.type === 'empty',
+                  'diff-context': item.pair.right.type === 'context',
+                }"
+              >
+                <div class="diff-gutter">
+                  <span v-if="item.pair.right.lineNum" class="line-number">
+                    {{ item.pair.right.lineNum }}
+                  </span>
+                </div>
+                <div class="diff-content">
+                  <span
+                    v-if="item.pair.right.type !== 'empty'"
+                    class="diff-code"
+                    v-html="getHighlightedContent(item.pair.id, 'new') || escapeHtml(item.pair.right.content)"
+                  />
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -587,22 +631,27 @@ function getFullFileLineType(lineNum: number): 'add' | 'remove' | 'context' {
   background: hsl(var(--muted) / 0.3);
 }
 
-.diff-table {
+.diff-split {
+  display: flex;
   min-width: 100%;
 }
 
-.diff-row {
-  display: flex;
-}
-
-.diff-side {
-  display: flex;
+.diff-column {
   flex: 1;
   min-width: 0;
+  overflow-x: auto;
 }
 
-.diff-left {
+.diff-column-left {
   border-right: 1px solid hsl(var(--border));
+}
+
+.diff-column-content {
+  min-width: fit-content;
+}
+
+.diff-line {
+  display: flex;
 }
 
 .diff-gutter {
@@ -626,15 +675,7 @@ function getFullFileLineType(lineNum: number): 'add' | 'remove' | 'context' {
   min-width: 0;
   padding: 0 0.5rem;
   white-space: pre;
-  overflow-x: auto;
   color: hsl(var(--foreground));
-  /* Hide scrollbar while keeping scroll functionality */
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE/Edge */
-}
-
-.diff-content::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, Opera */
 }
 
 .diff-code {
@@ -702,6 +743,13 @@ function getFullFileLineType(lineNum: number): 'add' | 'remove' | 'context' {
 
 /* Hunk separator */
 .diff-separator {
+  display: flex;
+  align-items: center;
+  padding: 0.25rem 0;
+  background: hsl(var(--muted) / 0.4);
+}
+
+.diff-separator-half {
   display: flex;
   align-items: center;
   padding: 0.25rem 0;
