@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { FileText, Moon, Sun, LayoutGrid, Folder, Check, Keyboard } from 'lucide-vue-next'
+import { FileText, Moon, Sun, LayoutGrid, Folder, Check, Keyboard, RefreshCw } from 'lucide-vue-next'
 import {
   CommandDialog,
   CommandEmpty,
@@ -20,7 +20,8 @@ const emit = defineEmits<{
 const router = useRouter()
 const colorMode = useColorMode()
 const { prds } = usePrd()
-const { repos, currentRepoId, selectRepo } = useRepos()
+const { repos, currentRepoId, selectRepo, refreshGitRepos } = useRepos()
+const { showSuccess, showError } = useToast()
 
 // Get current tab from localStorage
 const currentTab = ref<'document' | 'board'>('document')
@@ -66,6 +67,24 @@ function toggleTab() {
 function openShortcutsHelp() {
   open.value = false
   emit('openShortcutsHelp')
+}
+
+const isRefreshingGitRepos = ref(false)
+
+async function handleRefreshGitRepos() {
+  if (!currentRepoId.value || isRefreshingGitRepos.value) return
+
+  isRefreshingGitRepos.value = true
+  open.value = false
+
+  try {
+    const result = await refreshGitRepos(currentRepoId.value)
+    showSuccess(`Discovered ${result.discovered} git repositories`)
+  } catch {
+    showError('Failed to refresh git repos')
+  } finally {
+    isRefreshingGitRepos.value = false
+  }
 }
 
 // Clear the filter when dialog closes
@@ -146,6 +165,15 @@ const modKey = computed(() => isMac.value ? '⌘' : 'Ctrl')
             <kbd class="inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">{{ modKey }}</kbd>
             <kbd class="inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">/</kbd>
           </div>
+        </CommandItem>
+        <CommandItem
+          v-if="currentRepoId"
+          value="refresh git repos rescan discover"
+          :disabled="isRefreshingGitRepos"
+          @select="handleRefreshGitRepos"
+        >
+          <RefreshCw class="size-4" :class="{ 'animate-spin': isRefreshingGitRepos }" />
+          <span class="flex-1">Refresh git repos</span>
         </CommandItem>
       </CommandGroup>
     </CommandList>

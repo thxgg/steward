@@ -77,6 +77,15 @@ export function useRepos() {
     }
   }
 
+  // Refresh git repos discovery for a repository
+  async function refreshGitRepos(id: string): Promise<{ discovered: number }> {
+    const result = await $fetch<{ discovered: number }>(`/api/repos/${id}/refresh-git-repos`, {
+      method: 'POST'
+    })
+    await refreshRepos()
+    return result
+  }
+
   // Initialize: restore from localStorage on client
   if (import.meta.client) {
     const storedId = localStorage.getItem(STORAGE_KEY)
@@ -93,6 +102,7 @@ export function useRepos() {
     selectRepo,
     addRepo,
     removeRepo,
-    refreshRepos
+    refreshRepos,
+    refreshGitRepos
   }
 }
