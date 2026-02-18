@@ -9,17 +9,36 @@ const emit = defineEmits<{
   taskClick: [task: Task]
 }>()
 
-// Group tasks by status
+// Extract task number from ID (e.g., "task-001" -> 1)
+function getTaskNumber(task: Task): number {
+  const match = task.id.match(/(\d+)$/)
+  return match ? parseInt(match[1], 10) : 0
+}
+
+// Group tasks by status and sort them
+// Pending/In Progress: lowest number first (ascending)
+// Completed: highest number first (descending)
 const pendingTasks = computed(() =>
-  props.tasks.filter(t => t.status === 'pending')
+  props.tasks
+    .filter(t => t.status === 'pending')
+    .sort((a, b) => getTaskNumber(a) - getTaskNumber(b))
 )
 
 const inProgressTasks = computed(() =>
-  props.tasks.filter(t => t.status === 'in_progress')
+  props.tasks
+    .filter(t => t.status === 'in_progress')
+    .sort((a, b) => getTaskNumber(a) - getTaskNumber(b))
 )
 
 const completedTasks = computed(() =>
-  props.tasks.filter(t => t.status === 'completed')
+  props.tasks
+    .filter(t => t.status === 'completed')
+    .sort((a, b) => {
+      // Sort by completedAt descending (most recently completed first)
+      const aTime = a.completedAt ? new Date(a.completedAt).getTime() : 0
+      const bTime = b.completedAt ? new Date(b.completedAt).getTime() : 0
+      return bTime - aTime
+    })
 )
 
 // Build a map of task ID -> array of incomplete blocking task IDs

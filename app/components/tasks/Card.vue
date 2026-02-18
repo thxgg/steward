@@ -53,6 +53,12 @@ const isBlocked = computed(() => {
   return props.blockedBy && props.blockedBy.length > 0
 })
 
+// Extract task number from ID (e.g., "task-001" -> 1)
+const taskNumber = computed(() => {
+  const match = props.task.id.match(/(\d+)$/)
+  return match ? parseInt(match[1], 10) : 0
+})
+
 const blockedCount = computed(() => {
   return props.blockedBy?.length ?? 0
 })
@@ -84,6 +90,7 @@ function handleClick() {
 
       <!-- Title -->
       <h4 class="text-sm font-medium leading-snug">
+        <span class="text-muted-foreground">#{{ taskNumber }}</span>
         {{ task.title }}
       </h4>
 
