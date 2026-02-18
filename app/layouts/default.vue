@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import { Monitor, Moon, Sun } from 'lucide-vue-next'
 import { Button } from '~/components/ui/button'
 import CommandPalette from '~/components/CommandPalette.vue'
 import ShortcutsHelp from '~/components/ShortcutsHelp.vue'
 
-const colorMode = useColorMode()
+const { themeMode, cycleThemeMode } = useThemeMode()
 const { refreshPrds } = usePrd()
 const { currentRepoId } = useRepos()
 const route = useRoute()
@@ -57,9 +58,9 @@ function toggleTab() {
 onShortcut('Meta+\\', toggleTab)
 onShortcut('Ctrl+\\', toggleTab)
 
-// Cmd/Ctrl+. to toggle theme
+// Cmd/Ctrl+. to cycle theme mode (light/dark/system)
 function toggleColorMode() {
-  colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark'
+  cycleThemeMode()
 }
 onShortcut('Meta+.', toggleColorMode)
 onShortcut('Ctrl+.', toggleColorMode)
@@ -146,41 +147,10 @@ useFileWatch((event) => {
               class="size-9"
               @click="toggleColorMode"
             >
-              <svg
-                v-if="colorMode.value === 'dark'"
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="size-4"
-              >
-                <circle cx="12" cy="12" r="4" />
-                <path d="M12 2v2" />
-                <path d="M12 20v2" />
-                <path d="m4.93 4.93 1.41 1.41" />
-                <path d="m17.66 17.66 1.41 1.41" />
-                <path d="M2 12h2" />
-                <path d="M20 12h2" />
-                <path d="m6.34 17.66-1.41 1.41" />
-                <path d="m19.07 4.93-1.41 1.41" />
-              </svg>
-              <svg
-                v-else
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="size-4"
-              >
-                <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
-              </svg>
-              <span class="sr-only">Toggle theme</span>
+              <Monitor v-if="themeMode === 'system'" class="size-4" />
+              <Sun v-else-if="themeMode === 'light'" class="size-4" />
+              <Moon v-else class="size-4" />
+              <span class="sr-only">Cycle theme mode</span>
             </Button>
           </div>
           <template #fallback>

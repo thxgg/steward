@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { FileText, Moon, Sun, LayoutGrid, Folder, Check, Keyboard, RefreshCw } from 'lucide-vue-next'
+import { FileText, Monitor, Moon, Sun, LayoutGrid, Folder, Check, Keyboard, RefreshCw } from 'lucide-vue-next'
 import {
   CommandDialog,
   CommandEmpty,
@@ -18,7 +18,7 @@ const emit = defineEmits<{
 }>()
 
 const router = useRouter()
-const colorMode = useColorMode()
+const { themeMode, cycleThemeMode } = useThemeMode()
 const { prds } = usePrd()
 const { repos, currentRepoId, selectRepo, refreshGitRepos } = useRepos()
 const { showSuccess, showError } = useToast()
@@ -46,7 +46,7 @@ function switchRepo(repoId: string) {
 }
 
 function toggleTheme() {
-  colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark'
+  cycleThemeMode()
   open.value = false
 }
 
@@ -138,10 +138,11 @@ const modKey = computed(() => isMac.value ? '⌘' : 'Ctrl')
       <CommandSeparator v-if="repos?.length" />
 
       <CommandGroup heading="Actions">
-        <CommandItem value="toggle-theme light dark" @select="toggleTheme">
-          <Sun class="size-4 dark:hidden" />
-          <Moon class="hidden size-4 dark:block" />
-          <span class="flex-1">Toggle theme</span>
+        <CommandItem value="cycle-theme light dark system" @select="toggleTheme">
+          <Monitor v-if="themeMode === 'system'" class="size-4" />
+          <Sun v-else-if="themeMode === 'light'" class="size-4" />
+          <Moon v-else class="size-4" />
+          <span class="flex-1">Cycle theme mode ({{ themeMode }})</span>
           <div class="ml-auto flex items-center gap-1">
             <kbd class="inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">{{ modKey }}</kbd>
             <kbd class="inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">.</kbd>
