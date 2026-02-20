@@ -12,7 +12,8 @@ const emit = defineEmits<{
 // Extract task number from ID (e.g., "task-001" -> 1)
 function getTaskNumber(task: Task): number {
   const match = task.id.match(/(\d+)$/)
-  return match ? parseInt(match[1], 10) : 0
+  const value = match?.[1]
+  return value ? parseInt(value, 10) : 0
 }
 
 // Group tasks by status and sort them
@@ -83,4 +84,3 @@ function handleTaskClick(task: Task) {
     />
   </div>
 </template>
-

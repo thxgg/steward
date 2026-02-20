@@ -19,15 +19,6 @@ This project uses **bun**.
 
 ## Development Guidelines
 
-### Frontend Design
-
-When implementing UI components or pages, use the `/frontend-design` skill to ensure:
-- Distinctive, non-generic visual design
-- Production-grade Vue/Nuxt patterns
-- Proper use of shadcn-vue components
-- Vue transitions and micro-interactions
-- Intentional design direction (not default AI aesthetics)
-
 ### Project Structure
 
 ```
@@ -54,5 +45,4 @@ Legacy `.claude/state/*` files are treated as migration input only.
 
 ## Commands
 
-- `/frontend-design` - Use for any UI/component work
 - `/complete-next-task prd-viewer` - Complete the next task from the PRD

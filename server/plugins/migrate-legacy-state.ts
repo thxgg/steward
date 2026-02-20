@@ -3,7 +3,7 @@ import { migrateLegacyStateForRepo } from '~~/server/utils/prd-state'
 
 export default defineNitroPlugin((nitroApp) => {
   // Run on startup
-  nitroApp.hooks.hook('ready', async () => {
+  nitroApp.hooks.hook('ready' as any, async () => {
     try {
       const repos = await getRepos()
       for (const repo of repos) {

@@ -1,0 +1,132 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PRD Task Schema",
+  "description": "Schema for converting PRDs to executable task lists",
+  "type": "object",
+  "required": ["prd", "tasks"],
+  "properties": {
+    "prd": {
+      "type": "object",
+      "description": "Metadata about the source PRD",
+      "required": ["name", "source", "createdAt"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human-readable name of the feature/project"
+        },
+        "source": {
+          "type": "string",
+          "description": "Path to the source PRD markdown file"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of task file creation"
+        },
+        "version": {
+          "type": "string",
+          "description": "Version of the PRD if applicable"
+        }
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "description": "List of tasks derived from the PRD",
+      "items": {
+        "$ref": "#/definitions/task"
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional metadata about the task set",
+      "properties": {
+        "totalEstimatedEffort": {
+          "type": "string",
+          "description": "Overall effort estimate (e.g., 'small', 'medium', 'large')"
+        },
+        "criticalPath": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Ordered list of task IDs on the critical path"
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tags for categorizing this task set"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "task": {
+      "type": "object",
+      "required": ["id", "category", "title", "description", "steps", "passes", "priority", "status"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^task-[0-9]{3}$",
+          "description": "Unique task identifier (e.g., task-001)"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["setup", "feature", "integration", "testing", "documentation"],
+          "description": "Task category for grouping and ordering"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "Short, descriptive task title"
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed description of what needs to be done"
+        },
+        "steps": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Ordered list of implementation steps"
+        },
+        "passes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Verification criteria - task is done when all pass"
+        },
+        "dependencies": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "IDs of tasks that must be completed before this one"
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low"],
+          "description": "Task priority for scheduling"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "in_progress", "blocked", "completed", "skipped"],
+          "description": "Current task status"
+        },
+        "affectedFiles": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Files that will be created or modified"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Additional notes or context for implementation"
+        },
+        "blockedBy": {
+          "type": "string",
+          "description": "Reason for blocked status, if applicable"
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when task was completed"
+        }
+      }
+    }
+  }
+}

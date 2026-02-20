@@ -87,25 +87,31 @@ useFileWatch((event) => {
     return
   }
 
+  if (!event.category) {
+    return
+  }
+
+  const category = event.category
+
   // Only refresh if the change is for the current repo
   if (event.repoId !== currentRepoId.value) {
     return
   }
 
   // Refresh PRD list for any changes
-  if (event.category === 'prd' || event.category === 'tasks') {
+  if (category === 'prd' || category === 'tasks') {
     refreshPrds()
   }
 
   // For task/progress/prd changes on current PRD page, emit event for granular refresh
   const prdSlug = route.params.prd as string | undefined
   if (prdSlug) {
-    const isPrdChange = event.category === 'prd' && event.path?.includes(`/${prdSlug}.`)
-    const isTaskChange = (event.category === 'tasks' || event.category === 'progress') && event.path?.includes(`/${prdSlug}/`)
+    const isPrdChange = category === 'prd' && event.path?.includes(`/${prdSlug}.`)
+    const isTaskChange = (category === 'tasks' || category === 'progress') && event.path?.includes(`/${prdSlug}/`)
 
     if (isPrdChange || isTaskChange) {
       fileChangeEvent.value = {
-        category: event.category,
+        category,
         path: event.path,
         timestamp: Date.now()
       }

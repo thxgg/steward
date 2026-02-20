@@ -56,7 +56,8 @@ const isBlocked = computed(() => {
 // Extract task number from ID (e.g., "task-001" -> 1)
 const taskNumber = computed(() => {
   const match = props.task.id.match(/(\d+)$/)
-  return match ? parseInt(match[1], 10) : 0
+  const value = match?.[1]
+  return value ? parseInt(value, 10) : 0
 })
 
 const blockedCount = computed(() => {

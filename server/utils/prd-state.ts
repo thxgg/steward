@@ -60,6 +60,29 @@ function getTaskCounts(tasksFile: TasksFile): { taskCount: number; completedCoun
   return { taskCount, completedCount }
 }
 
+function normalizeLegacyTasksFile(tasksFile: TasksFile | null): TasksFile | null {
+  if (!tasksFile || !Array.isArray(tasksFile.tasks)) {
+    return tasksFile
+  }
+
+  const tasks = tasksFile.tasks.map((task) => {
+    const passes = (task as { passes?: unknown }).passes
+    if (Array.isArray(passes)) {
+      return task
+    }
+
+    return {
+      ...task,
+      passes: []
+    }
+  })
+
+  return {
+    ...tasksFile,
+    tasks
+  }
+}
+
 export async function getPrdState(repoId: string, slug: string): Promise<StoredPrdState | null> {
   const row = await dbGet<PrdStateRow>(
     `
@@ -74,9 +97,11 @@ export async function getPrdState(repoId: string, slug: string): Promise<StoredP
     return null
   }
 
+  const tasks = normalizeLegacyTasksFile(parseStoredJson<TasksFile>(row.tasks_json, 'prd_states.tasks_json'))
+
   return {
     slug: row.slug,
-    tasks: parseStoredJson<TasksFile>(row.tasks_json, 'prd_states.tasks_json'),
+    tasks,
     progress: parseStoredJson<ProgressFile>(row.progress_json, 'prd_states.progress_json'),
     notes: row.notes_md,
     updatedAt: row.updated_at
