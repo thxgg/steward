@@ -34,12 +34,62 @@ bun run dev
 
 Open `http://localhost:3000`, then add a local repository path that contains a `docs/prd/` directory.
 
+You can also run the app through the project CLI:
+
+```bash
+bun run ui
+```
+
 ## Scripts
 
 - `bun run dev` - Start local dev server
 - `bun run typecheck` - Run Nuxt type checking
 - `bun run build` - Build production bundle
 - `bun run preview` - Preview the production build locally
+- `bun run ui` - Launch `prd ui` (dev mode)
+- `bun run mcp` - Start MCP server over stdio
+
+## CLI
+
+This package ships a `prd` command.
+
+- `prd ui` - Launch the web app in dev mode (default)
+- `prd ui --preview` - Launch the production preview server
+- `prd ui --port 3100 --host 127.0.0.1` - Pass Nuxt host/port options
+- `prd mcp` - Run the codemode MCP server over stdio
+
+For local shell usage while developing this repo:
+
+```bash
+bun link
+prd ui
+```
+
+## MCP Usage
+
+The MCP server exposes one codemode tool: `execute`.
+
+The codemode runtime has these APIs in scope:
+
+- `repos` - list/add/remove/refresh repository registrations
+- `prds` - list/get PRD documents and state-backed task/progress data
+- `git` - commit metadata, diffs, and file content lookups
+- `state` - direct PRD state reads/writes in SQLite
+
+Example MCP client configuration:
+
+```json
+{
+  "mcpServers": {
+    "prd": {
+      "command": "prd",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+For codemode API details and examples, see `docs/MCP.md`.
 
 ## Global PRD State Storage
 
@@ -90,4 +140,4 @@ GitHub Actions runs:
 ## Roadmap
 
 - Continue hardening local-only workflows
-- Evolve PRD Viewer into a local MCP-friendly toolchain
+- Expand codemode APIs and automation patterns

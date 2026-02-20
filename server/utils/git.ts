@@ -1,9 +1,9 @@
 import { spawn } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import { join, resolve, relative, isAbsolute } from 'node:path'
-import type { GitCommit, FileDiff, DiffHunk, DiffLine, FileStatus, DiffLineType } from '~/types/git'
-import type { RepoConfig, GitRepoInfo } from '~/types/repo'
-import type { CommitRef } from '~/types/task'
+import type { GitCommit, FileDiff, DiffHunk, DiffLine, FileStatus, DiffLineType } from '../../app/types/git'
+import type { RepoConfig, GitRepoInfo } from '../../app/types/repo'
+import type { CommitRef } from '../../app/types/task'
 
 /**
  * Execute a git command and return stdout

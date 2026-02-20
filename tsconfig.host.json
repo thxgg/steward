@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "types": ["node"],
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true
+  },
+  "include": [
+    "host/**/*.ts",
+    "server/utils/db.ts",
+    "server/utils/repos.ts",
+    "server/utils/prd-state.ts",
+    "server/utils/git.ts",
+    "app/types/**/*.ts"
+  ]
+}
