@@ -6,6 +6,10 @@ Nuxt UI + codemode MCP + SQLite state store.
 - npm package: `@thxgg/steward`
 - CLI command: `prd`
 
+## Acknowledgments
+
+Steward is heavily inspired by work from [dmmulroy](https://github.com/dmmulroy), including the similar project [Overseer](https://github.com/dmmulroy/overseer).
+
 ## Install
 
 ### Via npm
