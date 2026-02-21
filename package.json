@@ -1,18 +1,18 @@
 {
   "name": "@thxgg/steward",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Local-first PRD workflow steward with codemode MCP and web UI.",
   "type": "module",
   "author": "thxgg",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/thxgg/prd-viewer.git"
+    "url": "git+https://github.com/thxgg/steward.git"
   },
   "bugs": {
-    "url": "https://github.com/thxgg/prd-viewer/issues"
+    "url": "https://github.com/thxgg/steward/issues"
   },
-  "homepage": "https://github.com/thxgg/prd-viewer#readme",
+  "homepage": "https://github.com/thxgg/steward#readme",
   "keywords": [
     "prd",
     "mcp",

@@ -1,175 +1,146 @@
 # Steward
 
-Steward is a local-first Nuxt app for browsing Product Requirements Documents and tracking implementation state in a global SQLite database.
+Local-first PRD workflow steward for AI agents and developers.
+Nuxt UI + codemode MCP + SQLite state store.
 
-It is published as `@thxgg/steward` and provides the `prd` CLI command.
+- npm package: `@thxgg/steward`
+- CLI command: `prd`
 
-This project is intended to be downloaded and run locally on your machine. It is not designed for public internet deployment.
+## Install
 
-## What It Does
-
-- Scans repositories for `docs/prd/*.md` files and displays them in a focused UI.
-- Reads task state (`tasks.json` and `progress.json`) from a global SQLite database.
-- Supports legacy `.claude/state/*` migration into the global database.
-- Resolves commit references for tasks, including pseudo-monorepo sub-repo contexts.
-
-## Local-First Security Model
-
-Steward exposes local filesystem and git metadata for convenience. Because of that:
-
-- Run it only on trusted local machines.
-- Do not expose it directly to the public internet.
-- Treat it as a developer workstation tool, not a hosted multi-user service.
-
-## Requirements
-
-- Node.js 22+
-- npm (or pnpm)
-- Git
-- Linux/macOS (or compatible environment)
-
-## Quick Start
-
-```bash
-npm install
-npm run dev
-```
-
-With pnpm:
-
-```bash
-pnpm install
-pnpm run dev
-```
-
-Open `http://localhost:3000`, then add a local repository path that contains a `docs/prd/` directory.
-
-## Install CLI
+### Via npm
 
 ```bash
 npm install -g @thxgg/steward
-prd ui
 ```
 
-With pnpm:
-
-```bash
-pnpm add -g @thxgg/steward
-prd ui
-```
-
-Without global install:
+### Without global install
 
 ```bash
 npx -y @thxgg/steward ui
 ```
 
-You can also run the app through the project CLI:
+## Usage
 
-```bash
-npm run ui
-```
+### MCP Server
 
-## Scripts
-
-- `npm run dev` - Start local dev server
-- `npm run typecheck` - Run Nuxt type checking
-- `npm run build` - Build production bundle
-- `npm run preview` - Preview the production build locally
-- `npm run ui` - Launch `prd ui` (dev mode)
-- `npm run mcp` - Start MCP server over stdio
-
-## CLI
-
-This package ships a `prd` command.
-
-- npm package: `@thxgg/steward`
-
-- `prd ui` - Launch the web app in dev mode (default)
-- `prd ui --preview` - Launch the production preview server
-- `prd ui --port 3100 --host 127.0.0.1` - Pass Nuxt host/port options
-- `prd mcp` - Run the codemode MCP server over stdio
-
-For local shell usage while developing this repo:
-
-```bash
-npm link
-prd ui
-```
-
-## MCP Usage
-
-The MCP server exposes one codemode tool: `execute`.
-
-The codemode runtime has these APIs in scope:
-
-- `repos` - list/add/remove/refresh repository registrations
-- `prds` - list/get PRD documents and state-backed task/progress data
-- `git` - commit metadata, diffs, and file content lookups
-- `state` - direct PRD state reads/writes in SQLite
-
-Example MCP client configuration:
+Add to your MCP client config:
 
 ```json
 {
   "mcpServers": {
     "prd": {
-      "command": "prd",
-      "args": ["mcp"]
+      "command": "npx",
+      "args": ["-y", "@thxgg/steward", "mcp"]
     }
   }
 }
 ```
 
-For codemode API details and examples, see `docs/MCP.md`.
+### CLI
 
-## Global PRD State Storage
+```bash
+prd ui
+prd ui --preview
+prd ui --port 3100 --host 127.0.0.1
+prd mcp
+```
 
-PRD state is system-global and stored in SQLite:
+## Architecture
 
-- Default: `${XDG_DATA_HOME:-~/.local/share}/prd/state.db`
-- Override full path: `PRD_STATE_DB_PATH`
-- Override base dir: `PRD_STATE_HOME` (resolved to `<PRD_STATE_HOME>/state.db`)
+```
+┌─────────────────────────────────────────┐
+│            Steward CLI (Node)           │
+│  - `prd ui` launches Nuxt app           │
+│  - `prd mcp` starts MCP over stdio      │
+└─────────────────────────────────────────┘
+                    │
+                    ▼
+┌─────────────────────────────────────────┐
+│         Codemode MCP (`execute`)        │
+│  - VM sandbox                           │
+│  - APIs: repos, prds, git, state        │
+└─────────────────────────────────────────┘
+                    │
+                    ▼
+┌─────────────────────────────────────────┐
+│         Local SQLite PRD State          │
+│  - Global store shared across repos     │
+└─────────────────────────────────────────┘
+```
 
-This allows multiple local repos to share one PRD state store.
+## Codemode Pattern
+
+Steward exposes one MCP tool: `execute`.
+
+```js
+const reposList = await repos.list()
+const repo = reposList[0]
+if (!repo) return { error: 'No repos configured' }
+
+const prdList = await prds.list(repo.id)
+if (prdList.length === 0) return { repo: repo.name, prds: 0 }
+
+const slug = prdList[0].slug
+return {
+  doc: await prds.getDocument(repo.id, slug),
+  tasks: await prds.getTasks(repo.id, slug),
+  progress: await prds.getProgress(repo.id, slug)
+}
+```
+
+## APIs
+
+Inside `execute`, these APIs are available:
+
+- `repos` - register/list/remove repos and refresh discovered git repos
+- `prds` - list/read PRD docs, tasks, progress, and task commit refs
+- `git` - commit metadata, diffs, file diffs, and file contents
+- `state` - direct PRD state get/upsert by repo id or path
+
+Detailed API docs and examples: `docs/MCP.md`
+
+## Local-First Security Model
+
+Steward reads local filesystem and git metadata by design.
+
+- Run only on trusted local machines
+- Do not expose directly to the public internet
+- Treat as a workstation tool, not a hosted multi-user service
+
+## Storage
+
+PRD state is stored in SQLite at:
+
+1. `PRD_STATE_DB_PATH` (if set)
+2. `PRD_STATE_HOME/state.db` (if set)
+3. `${XDG_DATA_HOME:-~/.local/share}/prd/state.db`
+
+## Development
+
+```bash
+npm install
+npm run dev
+npm run typecheck
+npm run build
+```
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` if you want to override defaults.
+| Variable | Description |
+| --- | --- |
+| `PRD_STATE_DB_PATH` | Absolute path to SQLite DB file |
+| `PRD_STATE_HOME` | Base directory for DB (`state.db` inside) |
+| `XDG_DATA_HOME` | Fallback base path for default DB location |
 
-| Variable | Required | Description |
-| --- | --- | --- |
-| `PRD_STATE_DB_PATH` | No | Absolute path to SQLite database file |
-| `PRD_STATE_HOME` | No | Directory used for database home (`state.db` inside it) |
-| `XDG_DATA_HOME` | No | Used for default global state location |
+## OpenCode Bundle
 
-## OpenCode Bundle Included
-
-This repository includes a curated OpenCode bundle under `opencode/`:
+This repo includes curated OpenCode assets under `opencode/`:
 
 - Commands: `prd`, `prd-task`, `complete-next-task`, `commit`
 - Skills: `prd`, `prd-task`, `complete-next-task`, `commit`
 - Script: `prd-db.mjs`
 
-`frontend-design` is intentionally not included.
+## License
 
-To install into a local OpenCode config:
-
-```bash
-mkdir -p ~/.config/opencode
-cp -R opencode/commands ~/.config/opencode/
-cp -R opencode/skills ~/.config/opencode/
-cp -R opencode/scripts ~/.config/opencode/
-```
-
-## CI
-
-GitHub Actions runs:
-
-- Typecheck + build validation
-- Secret scanning with gitleaks
-
-## Roadmap
-
-- Continue hardening local-only workflows
-- Expand codemode APIs and automation patterns
+MIT
