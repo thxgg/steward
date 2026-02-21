@@ -1,5 +1,7 @@
+import { existsSync } from 'node:fs'
 import { spawn } from 'node:child_process'
-import { dirname, resolve } from 'node:path'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export interface UiOptions {
@@ -8,15 +10,37 @@ export interface UiOptions {
   host?: string
 }
 
-const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
+const require = createRequire(import.meta.url)
+
+function findPackageRoot(startDir: string): string {
+  let currentDir = startDir
+
+  while (true) {
+    if (existsSync(join(currentDir, 'package.json'))) {
+      return currentDir
+    }
+
+    const parentDir = dirname(currentDir)
+    if (parentDir === currentDir) {
+      throw new Error('Unable to locate package root from current runtime path')
+    }
+
+    currentDir = parentDir
+  }
+}
+
+const packageRoot = findPackageRoot(dirname(fileURLToPath(import.meta.url)))
+
+function resolveNuxtEntrypoint(): string {
+  const packageJsonPath = require.resolve('nuxt/package.json', { paths: [packageRoot] })
+  return join(dirname(packageJsonPath), 'bin', 'nuxt.mjs')
+}
 
 export async function runUi(options: UiOptions): Promise<number> {
   const script = options.preview ? 'preview' : 'dev'
-  const args = ['run', script]
+  const args = [resolveNuxtEntrypoint(), script]
 
   if (options.port !== undefined || options.host) {
-    args.push('--')
-
     if (options.port !== undefined) {
       args.push('--port', String(options.port))
     }
@@ -26,8 +50,8 @@ export async function runUi(options: UiOptions): Promise<number> {
     }
   }
 
-  const child = spawn('bun', args, {
-    cwd: projectRoot,
+  const child = spawn(process.execPath, args, {
+    cwd: packageRoot,
     stdio: 'inherit',
     env: process.env
   })

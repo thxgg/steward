@@ -1,6 +1,8 @@
-# PRD Viewer
+# Steward
 
-PRD Viewer is a local-first Nuxt app for browsing Product Requirements Documents and tracking implementation state in a global SQLite database.
+Steward is a local-first Nuxt app for browsing Product Requirements Documents and tracking implementation state in a global SQLite database.
+
+It is published as `@thxgg/steward` and provides the `prd` CLI command.
 
 This project is intended to be downloaded and run locally on your machine. It is not designed for public internet deployment.
 
@@ -13,7 +15,7 @@ This project is intended to be downloaded and run locally on your machine. It is
 
 ## Local-First Security Model
 
-PRD Viewer exposes local filesystem and git metadata for convenience. Because of that:
+Steward exposes local filesystem and git metadata for convenience. Because of that:
 
 - Run it only on trusted local machines.
 - Do not expose it directly to the public internet.
@@ -21,37 +23,67 @@ PRD Viewer exposes local filesystem and git metadata for convenience. Because of
 
 ## Requirements
 
-- Bun (project package manager/runtime)
+- Node.js 22+
+- npm (or pnpm)
 - Git
 - Linux/macOS (or compatible environment)
 
 ## Quick Start
 
 ```bash
-bun install
-bun run dev
+npm install
+npm run dev
+```
+
+With pnpm:
+
+```bash
+pnpm install
+pnpm run dev
 ```
 
 Open `http://localhost:3000`, then add a local repository path that contains a `docs/prd/` directory.
 
+## Install CLI
+
+```bash
+npm install -g @thxgg/steward
+prd ui
+```
+
+With pnpm:
+
+```bash
+pnpm add -g @thxgg/steward
+prd ui
+```
+
+Without global install:
+
+```bash
+npx -y @thxgg/steward ui
+```
+
 You can also run the app through the project CLI:
 
 ```bash
-bun run ui
+npm run ui
 ```
 
 ## Scripts
 
-- `bun run dev` - Start local dev server
-- `bun run typecheck` - Run Nuxt type checking
-- `bun run build` - Build production bundle
-- `bun run preview` - Preview the production build locally
-- `bun run ui` - Launch `prd ui` (dev mode)
-- `bun run mcp` - Start MCP server over stdio
+- `npm run dev` - Start local dev server
+- `npm run typecheck` - Run Nuxt type checking
+- `npm run build` - Build production bundle
+- `npm run preview` - Preview the production build locally
+- `npm run ui` - Launch `prd ui` (dev mode)
+- `npm run mcp` - Start MCP server over stdio
 
 ## CLI
 
 This package ships a `prd` command.
+
+- npm package: `@thxgg/steward`
 
 - `prd ui` - Launch the web app in dev mode (default)
 - `prd ui --preview` - Launch the production preview server
@@ -61,7 +93,7 @@ This package ships a `prd` command.
 For local shell usage while developing this repo:
 
 ```bash
-bun link
+npm link
 prd ui
 ```
 
@@ -117,7 +149,7 @@ This repository includes a curated OpenCode bundle under `opencode/`:
 
 - Commands: `prd`, `prd-task`, `complete-next-task`, `commit`
 - Skills: `prd`, `prd-task`, `complete-next-task`, `commit`
-- Script: `prd-db.ts`
+- Script: `prd-db.mjs`
 
 `frontend-design` is intentionally not included.
 

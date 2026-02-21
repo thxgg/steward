@@ -1,5 +1,5 @@
-import type { DiffHunk, FileDiff, GitCommit } from '../../../app/types/git'
-import type { RepoConfig } from '../../../app/types/repo'
+import type { DiffHunk, FileDiff, GitCommit } from '../../../app/types/git.js'
+import type { RepoConfig } from '../../../app/types/repo.js'
 import {
   getCommitDiff,
   getCommitInfo,
@@ -7,8 +7,8 @@ import {
   getFileDiff,
   isGitRepo,
   validatePathInRepo
-} from '../../../server/utils/git'
-import { getRepoById } from '../../../server/utils/repos'
+} from '../../../server/utils/git.js'
+import { getRepoById } from '../../../server/utils/repos.js'
 
 async function requireRepo(repoId: string): Promise<RepoConfig> {
   const repo = await getRepoById(repoId)

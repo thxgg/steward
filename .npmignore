@@ -1,0 +1,14 @@
+.git/
+.github/
+.nuxt/
+.output/
+.cache/
+node_modules/
+opencode/
+server/data/
+bun.lock
+AGENTS.md
+tsconfig.host.json
+tsconfig.host.build.json
+*.log
+*.tgz

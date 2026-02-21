@@ -1,5 +1,5 @@
 import vm from 'node:vm'
-import { git, prds, repos, state } from './api'
+import { git, prds, repos, state } from './api/index.js'
 
 const MAX_OUTPUT_SIZE = 50_000
 const EXECUTION_TIMEOUT_MS = 30_000

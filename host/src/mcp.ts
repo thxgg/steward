@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
-import { execute, ExecutionError } from './executor'
+import { execute, ExecutionError } from './executor.js'
 
 function formatError(error: unknown): string {
   if (error instanceof ExecutionError) {
@@ -33,7 +33,7 @@ function serializeResult(result: unknown): string {
 
 export async function runMcpServer(): Promise<void> {
   const server = new McpServer({
-    name: 'prd',
+    name: 'steward',
     version: '0.1.0'
   })
 

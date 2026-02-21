@@ -21,7 +21,7 @@ State is stored in a global SQLite database, not in the local repository. Before
 
 ```bash
 mkdir -p /tmp/prd-state/<prd-name>
-bun run ~/.config/opencode/scripts/prd-db.ts get-state "$(pwd)" "<prd-name>" "/tmp/prd-state/<prd-name>"
+node ~/.config/opencode/scripts/prd-db.mjs get-state "$(pwd)" "<prd-name>" "/tmp/prd-state/<prd-name>"
 ```
 
 This will create:
@@ -99,7 +99,7 @@ date -u +"%Y-%m-%dT%H:%M:%SZ"
 
 **Sync to Database:**
 ```bash
-bun run ~/.config/opencode/scripts/prd-db.ts save-state "$(pwd)" "<prd-name>" "/tmp/prd-state/<prd-name>/tasks.json" "/tmp/prd-state/<prd-name>/progress.json"
+node ~/.config/opencode/scripts/prd-db.mjs save-state "$(pwd)" "<prd-name>" "/tmp/prd-state/<prd-name>/tasks.json" "/tmp/prd-state/<prd-name>/progress.json"
 ```
 
 ### 4. Branch Setup
@@ -227,7 +227,7 @@ If multiple commits were made for the task, capture each SHA with appropriate re
 Once `/tmp/prd-state/<prd-name>/tasks.json` and `/tmp/prd-state/<prd-name>/progress.json` have been fully updated with the completion logic, you **MUST** save the state to the global database:
 
 ```bash
-bun run ~/.config/opencode/scripts/prd-db.ts save-state "$(pwd)" "<prd-name>" "/tmp/prd-state/<prd-name>/tasks.json" "/tmp/prd-state/<prd-name>/progress.json"
+node ~/.config/opencode/scripts/prd-db.mjs save-state "$(pwd)" "<prd-name>" "/tmp/prd-state/<prd-name>/tasks.json" "/tmp/prd-state/<prd-name>/progress.json"
 ```
 
 ## Completion

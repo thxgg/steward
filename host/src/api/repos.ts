@@ -1,4 +1,4 @@
-import type { GitRepoInfo, RepoConfig } from '../../../app/types/repo'
+import type { GitRepoInfo, RepoConfig } from '../../../app/types/repo.js'
 import {
   addRepo,
   discoverGitRepos,
@@ -7,8 +7,8 @@ import {
   removeRepo,
   saveRepos,
   validateRepoPath
-} from '../../../server/utils/repos'
-import { migrateLegacyStateForRepo } from '../../../server/utils/prd-state'
+} from '../../../server/utils/repos.js'
+import { migrateLegacyStateForRepo } from '../../../server/utils/prd-state.js'
 
 export const repos = {
   async list(): Promise<RepoConfig[]> {

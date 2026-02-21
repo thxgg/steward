@@ -1,8 +1,8 @@
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
-import type { RepoConfig } from '../../app/types/repo'
-import type { TasksFile, ProgressFile } from '../../app/types/task'
-import { dbAll, dbGet, dbRun } from './db'
+import type { RepoConfig } from '../../app/types/repo.js'
+import type { TasksFile, ProgressFile } from '../../app/types/task.js'
+import { dbAll, dbGet, dbRun } from './db.js'
 
 type PrdStateRow = {
   repo_id: string

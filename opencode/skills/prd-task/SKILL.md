@@ -27,7 +27,7 @@ To convert and save a new PRD:
 2. Write the generated `tasks.json` and `progress.json` into this temporary directory.
 3. Save the state to the global database using the provided CLI tool:
    ```bash
-   bun run ~/.config/opencode/scripts/prd-db.ts save-state "$(pwd)" "<prd-name>" "/tmp/prd-state/<prd-name>/tasks.json" "/tmp/prd-state/<prd-name>/progress.json"
+   node ~/.config/opencode/scripts/prd-db.mjs save-state "$(pwd)" "<prd-name>" "/tmp/prd-state/<prd-name>/tasks.json" "/tmp/prd-state/<prd-name>/progress.json"
    ```
 
 ## Task Schema

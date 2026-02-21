@@ -185,7 +185,7 @@ Save the PRD to an appropriate location:
 
 After generating the file, you **MUST** register the repository so it appears in the prd-viewer global database by running:
 ```bash
-bun run ~/.config/opencode/scripts/prd-db.ts register "$(pwd)" "$(basename $(pwd))"
+node ~/.config/opencode/scripts/prd-db.mjs register "$(pwd)" "$(basename $(pwd))"
 ```
 
 After registering:

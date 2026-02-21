@@ -1,20 +1,62 @@
 {
-  "name": "prd-viewer",
-  "private": true,
+  "name": "@thxgg/steward",
+  "version": "0.1.0",
+  "description": "Local-first PRD workflow steward with codemode MCP and web UI.",
   "type": "module",
+  "author": "thxgg",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thxgg/prd-viewer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/thxgg/prd-viewer/issues"
+  },
+  "homepage": "https://github.com/thxgg/prd-viewer#readme",
+  "keywords": [
+    "prd",
+    "mcp",
+    "workflow",
+    "nuxt",
+    "sqlite",
+    "developer-tools"
+  ],
+  "engines": {
+    "node": ">=22.6.0",
+    "npm": ">=10"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "bin": {
     "prd": "./bin/prd"
   },
+  "files": [
+    "bin/",
+    "dist/",
+    "app/",
+    "server/",
+    "public/",
+    "docs/MCP.md",
+    "nuxt.config.ts",
+    "components.json",
+    ".env.example",
+    "README.md",
+    "LICENSE",
+    "tsconfig.json"
+  ],
   "scripts": {
-    "build": "nuxt build",
+    "build": "npm run build:host && nuxt build",
+    "build:host": "tsc -p tsconfig.host.build.json",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "mcp": "bun run ./bin/prd mcp",
-    "ui": "bun run ./bin/prd ui",
-    "typecheck": "nuxt typecheck && bun run typecheck:host",
+    "mcp": "npm run build:host && node ./bin/prd mcp",
+    "ui": "npm run build:host && node ./bin/prd ui",
+    "typecheck": "nuxt typecheck && npm run typecheck:host",
     "typecheck:host": "tsc -p tsconfig.host.json",
-    "postinstall": "nuxt prepare"
+    "prepack": "npm run build:host"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
@@ -30,7 +72,7 @@
     "shiki": "^3.21.0",
     "tailwind-merge": "^3.4.0",
     "vue": "latest",
-    "vue-sonner": "^2.0.9",
+    "vue-sonner": "^1.3.2",
     "zod": "^3.25.76"
   },
   "devDependencies": {

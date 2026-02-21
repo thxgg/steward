@@ -1,12 +1,12 @@
 # OpenCode Bundle
 
-This directory contains the OpenCode commands, skills, and scripts used by PRD Viewer workflows.
+This directory contains the OpenCode commands, skills, and scripts used by Steward workflows.
 
 Included:
 
 - Commands: `prd`, `prd-task`, `complete-next-task`, `commit`
 - Skills: `prd`, `prd-task`, `complete-next-task`, `commit`
-- Script: `scripts/prd-db.ts`
+- Script: `scripts/prd-db.mjs`
 
 Excluded on purpose:
 

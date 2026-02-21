@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.host.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": ".",
+    "declaration": false,
+    "sourceMap": false
+  },
+  "include": [
+    "host/**/*.ts",
+    "server/utils/db.ts",
+    "server/utils/repos.ts",
+    "server/utils/prd-state.ts",
+    "server/utils/git.ts",
+    "app/types/repo.ts",
+    "app/types/prd.ts",
+    "app/types/task.ts",
+    "app/types/git.ts"
+  ]
+}

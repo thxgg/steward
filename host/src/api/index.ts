@@ -1,4 +1,4 @@
-export { repos } from './repos'
-export { prds } from './prds'
-export { git } from './git'
-export { state } from './state'
+export { repos } from './repos.js'
+export { prds } from './prds.js'
+export { git } from './git.js'
+export { state } from './state.js'

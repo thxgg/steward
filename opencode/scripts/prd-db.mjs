@@ -1,5 +1,4 @@
-// @ts-nocheck
-import { Database } from 'bun:sqlite'
+import { DatabaseSync } from 'node:sqlite'
 import { join, resolve, basename, dirname } from 'node:path'
 import { homedir } from 'node:os'
 import { randomUUID } from 'node:crypto'
@@ -14,8 +13,7 @@ const DB_PATH = customPath && customPath.trim().length > 0
   ? customPath
   : (customHome && customHome.trim().length > 0 ? join(customHome, 'state.db') : DEFAULT_DB_PATH)
 
-// Find the repo root by walking up until we find docs/prd
-function findRepoRoot(startPath: string): string | null {
+function findRepoRoot(startPath) {
   let current = resolve(startPath)
   while (current !== '/') {
     if (existsSync(join(current, 'docs', 'prd'))) {
@@ -26,15 +24,14 @@ function findRepoRoot(startPath: string): string | null {
   return null
 }
 
-function getDb(): Database {
+function getDb() {
   mkdirSync(dirname(DB_PATH), { recursive: true })
-  const db = new Database(DB_PATH, { create: true })
+  const db = new DatabaseSync(DB_PATH)
 
   db.exec('PRAGMA journal_mode = WAL;')
   db.exec('PRAGMA foreign_keys = ON;')
   db.exec('PRAGMA busy_timeout = 5000;')
 
-  // Create tables if they don't exist
   db.exec(`
     CREATE TABLE IF NOT EXISTS repos (
       id TEXT PRIMARY KEY,
@@ -61,11 +58,11 @@ function getDb(): Database {
   return db
 }
 
-function registerRepo(path: string, name?: string): { id: string, name: string, path: string } {
+function registerRepo(path, name) {
   const db = getDb()
   const resolvedPath = resolve(path)
 
-  const existing = db.query('SELECT id, name, path FROM repos WHERE path = ?').get(resolvedPath) as any
+  const existing = db.prepare('SELECT id, name, path FROM repos WHERE path = ?').get(resolvedPath)
   if (existing) {
     console.log(`Repo already registered: ${existing.id}`)
     return existing
@@ -75,24 +72,24 @@ function registerRepo(path: string, name?: string): { id: string, name: string, 
   const id = randomUUID()
   const addedAt = new Date().toISOString()
 
-  db.query('INSERT INTO repos (id, name, path, added_at) VALUES (?, ?, ?, ?)').run(id, repoName, resolvedPath, addedAt)
+  db.prepare('INSERT INTO repos (id, name, path, added_at) VALUES (?, ?, ?, ?)').run(id, repoName, resolvedPath, addedAt)
   console.log(`Registered new repo: ${id} (${repoName})`)
 
   return { id, name: repoName, path: resolvedPath }
 }
 
-function getState(repoPath: string, slug: string, outDir: string) {
+function getState(repoPath, slug, outDir) {
   const db = getDb()
   const rootPath = findRepoRoot(repoPath) || resolve(repoPath)
 
-  const repo = db.query('SELECT id FROM repos WHERE path = ?').get(rootPath) as any
+  const repo = db.prepare('SELECT id FROM repos WHERE path = ?').get(rootPath)
   if (!repo) {
     console.error(`Repository not found in DB for path: ${rootPath}`)
     console.error('Run register command first.')
     process.exit(1)
   }
 
-  const state = db.query('SELECT tasks_json, progress_json, notes_md FROM prd_states WHERE repo_id = ? AND slug = ?').get(repo.id, slug) as any
+  const state = db.prepare('SELECT tasks_json, progress_json, notes_md FROM prd_states WHERE repo_id = ? AND slug = ?').get(repo.id, slug)
 
   mkdirSync(outDir, { recursive: true })
 
@@ -118,13 +115,12 @@ function getState(repoPath: string, slug: string, outDir: string) {
   }
 }
 
-function saveState(repoPath: string, slug: string, tasksFile: string, progressFile: string, notesFile?: string) {
+function saveState(repoPath, slug, tasksFile, progressFile, notesFile) {
   const db = getDb()
   const rootPath = findRepoRoot(repoPath) || resolve(repoPath)
 
-  let repo = db.query('SELECT id FROM repos WHERE path = ?').get(rootPath) as any
+  let repo = db.prepare('SELECT id FROM repos WHERE path = ?').get(rootPath)
   if (!repo) {
-    // Auto-register if missing
     repo = registerRepo(rootPath)
   }
 
@@ -136,18 +132,18 @@ function saveState(repoPath: string, slug: string, tasksFile: string, progressFi
   if (existsSync(progressFile)) progressJson = readFileSync(progressFile, 'utf8')
   if (notesFile && existsSync(notesFile)) notesMd = readFileSync(notesFile, 'utf8')
 
-  const existing = db.query('SELECT 1 FROM prd_states WHERE repo_id = ? AND slug = ?').get(repo.id, slug)
+  const existing = db.prepare('SELECT 1 FROM prd_states WHERE repo_id = ? AND slug = ?').get(repo.id, slug)
   const updatedAt = new Date().toISOString()
 
   if (existing) {
-    db.query(`
+    db.prepare(`
       UPDATE prd_states
       SET tasks_json = ?, progress_json = ?, notes_md = ?, updated_at = ?
       WHERE repo_id = ? AND slug = ?
     `).run(tasksJson, progressJson, notesMd, updatedAt, repo.id, slug)
     console.log(`Updated state for ${slug}`)
   } else {
-    db.query(`
+    db.prepare(`
       INSERT INTO prd_states (repo_id, slug, tasks_json, progress_json, notes_md, updated_at)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(repo.id, slug, tasksJson, progressJson, notesMd, updatedAt)
@@ -161,7 +157,7 @@ if (command === 'register') {
   const path = process.argv[3]
   const name = process.argv[4]
   if (!path) {
-    console.error('Usage: prd-db.ts register <path> [name]')
+    console.error('Usage: prd-db.mjs register <path> [name]')
     process.exit(1)
   }
   registerRepo(path, name)
@@ -170,7 +166,7 @@ if (command === 'register') {
   const slug = process.argv[4]
   const outDir = process.argv[5]
   if (!path || !slug || !outDir) {
-    console.error('Usage: prd-db.ts get-state <repo-path> <slug> <out-dir>')
+    console.error('Usage: prd-db.mjs get-state <repo-path> <slug> <out-dir>')
     process.exit(1)
   }
   getState(path, slug, outDir)
@@ -181,7 +177,7 @@ if (command === 'register') {
   const progressFile = process.argv[6]
   const notesFile = process.argv[7]
   if (!path || !slug || !tasksFile || !progressFile) {
-    console.error('Usage: prd-db.ts save-state <repo-path> <slug> <tasks-file> <progress-file> [notes-file]')
+    console.error('Usage: prd-db.mjs save-state <repo-path> <slug> <tasks-file> <progress-file> [notes-file]')
     process.exit(1)
   }
   saveState(path, slug, tasksFile, progressFile, notesFile)

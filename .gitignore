@@ -9,9 +9,16 @@ dist
 # Node dependencies
 node_modules
 
+# Package manager caches
+.pnpm-store/
+.npm/
+
 # Logs
 logs
 *.log
+
+# npm pack artifacts
+*.tgz
 
 # Misc
 .DS_Store

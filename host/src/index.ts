@@ -1,5 +1,5 @@
-import { runMcpServer } from './mcp'
-import { runUi } from './ui'
+import { runMcpServer } from './mcp.js'
+import { runUi } from './ui.js'
 
 type UiCliOptions = {
   preview: boolean
@@ -8,7 +8,7 @@ type UiCliOptions = {
 }
 
 function printUsage(): void {
-  console.log(`prd - PRD viewer CLI
+  console.log(`prd - Steward CLI
 
 Usage:
   prd ui [--preview] [--port <port>] [--host <host>]

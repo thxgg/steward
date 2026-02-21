@@ -1,21 +1,21 @@
-# PRD Viewer
+# Steward
 
-A Nuxt 4 web application for viewing PRD documents and tracking task progress.
+A Nuxt web application for viewing PRD documents and tracking task progress.
 
 ## Tech Stack
 
-- Nuxt 4
+- Nuxt 3 (compatibility v4)
 - shadcn-vue
 - Tailwind CSS v4
 - TypeScript
 
 ## Package Manager
 
-This project uses **bun**.
+This project uses **npm** (with pnpm-compatible scripts).
 
-- `bun install` - Install dependencies
-- `bun run dev` - Start dev server
-- `bun run build` - Build for production
+- `npm install` - Install dependencies
+- `npm run dev` - Start dev server
+- `npm run build` - Build for production
 
 ## Development Guidelines
 

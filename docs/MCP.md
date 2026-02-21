@@ -1,6 +1,6 @@
-# PRD MCP Codemode
+# Steward MCP Codemode
 
-PRD Viewer now ships a codemode MCP server.
+Steward ships a codemode MCP server.
 
 - Command: `prd mcp`
 - Transport: stdio
@@ -21,10 +21,16 @@ Start MCP server directly:
 prd mcp
 ```
 
+Without global install:
+
+```bash
+npx -y @thxgg/steward mcp
+```
+
 Or from this repo without linking:
 
 ```bash
-bun run ./bin/prd mcp
+npm run mcp
 ```
 
 Example MCP client config:

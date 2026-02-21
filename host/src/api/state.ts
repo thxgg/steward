@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
-import type { RepoConfig } from '../../../app/types/repo'
-import type { ProgressFile, TasksFile } from '../../../app/types/task'
+import type { RepoConfig } from '../../../app/types/repo.js'
+import type { ProgressFile, TasksFile } from '../../../app/types/task.js'
 import {
   getPrdState,
   getPrdStateSummaries,
@@ -8,8 +8,8 @@ import {
   type PrdStateSummary,
   type PrdStateUpdate,
   upsertPrdState
-} from '../../../server/utils/prd-state'
-import { getRepoById, getRepos } from '../../../server/utils/repos'
+} from '../../../server/utils/prd-state.js'
+import { getRepoById, getRepos } from '../../../server/utils/repos.js'
 
 export interface StatePayload {
   tasks?: TasksFile | null

@@ -1,5 +1,18 @@
-#!/usr/bin/env bun
-import { main } from '../host/src/index.ts'
+#!/usr/bin/env node
+import { existsSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+
+const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const entryPath = resolve(packageRoot, 'dist', 'host', 'src', 'index.js')
+
+if (!existsSync(entryPath)) {
+  console.error('Steward host runtime is not built.')
+  console.error('Run `npm run build:host` in this package before invoking `prd`.')
+  process.exit(1)
+}
+
+const { main } = await import(pathToFileURL(entryPath).href)
 
 await main(process.argv.slice(2)).catch((error) => {
   const message = error instanceof Error ? error.message : String(error)

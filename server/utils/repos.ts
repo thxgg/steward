@@ -1,8 +1,8 @@
 import { promises as fs } from 'node:fs'
 import { join, basename, resolve, relative } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import type { RepoConfig, GitRepoInfo } from '../../app/types/repo'
-import { dbAll, dbGet, dbRun } from './db'
+import type { RepoConfig, GitRepoInfo } from '../../app/types/repo.js'
+import { dbAll, dbGet, dbRun } from './db.js'
 
 const LEGACY_REPOS_FILE = join(process.cwd(), 'server', 'data', 'repos.json')
 

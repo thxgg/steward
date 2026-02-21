@@ -1,11 +1,11 @@
 import { promises as fs } from 'node:fs'
 import { basename, join } from 'node:path'
-import type { PrdDocument, PrdListItem, PrdMetadata } from '../../../app/types/prd'
-import type { CommitRef, ProgressFile, TasksFile } from '../../../app/types/task'
-import type { RepoConfig } from '../../../app/types/repo'
-import { resolveCommitRepo } from '../../../server/utils/git'
-import { discoverGitRepos, getRepoById, getRepos, saveRepos } from '../../../server/utils/repos'
-import { getPrdState, getPrdStateSummaries, migrateLegacyStateForRepo } from '../../../server/utils/prd-state'
+import type { PrdDocument, PrdListItem, PrdMetadata } from '../../../app/types/prd.js'
+import type { CommitRef, ProgressFile, TasksFile } from '../../../app/types/task.js'
+import type { RepoConfig } from '../../../app/types/repo.js'
+import { resolveCommitRepo } from '../../../server/utils/git.js'
+import { discoverGitRepos, getRepoById, getRepos, saveRepos } from '../../../server/utils/repos.js'
+import { getPrdState, getPrdStateSummaries, migrateLegacyStateForRepo } from '../../../server/utils/prd-state.js'
 
 export interface ResolvedTaskCommit {
   sha: string
