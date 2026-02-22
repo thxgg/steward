@@ -8,6 +8,22 @@ export interface FetchCommitsResult {
 export function useGit() {
   const { showError } = useToast()
 
+  function getErrorMessage(error: unknown): string {
+    if (error && typeof error === 'object') {
+      const fetchError = error as {
+        data?: { message?: string; statusMessage?: string }
+        message?: string
+      }
+
+      return fetchError.data?.message
+        || fetchError.data?.statusMessage
+        || fetchError.message
+        || 'Unknown error'
+    }
+
+    return 'Unknown error'
+  }
+
   // Loading states
   const isLoadingCommits = ref(false)
   const isLoadingDiff = ref(false)
@@ -48,8 +64,7 @@ export function useGit() {
 
       return { commits, failedShas }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error'
-      showError('Failed to fetch commits', message)
+      showError('Failed to fetch commits', getErrorMessage(error))
       // All requested SHAs failed
       return { commits: [], failedShas: shas }
     } finally {
@@ -81,8 +96,7 @@ export function useGit() {
       )
       return files
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error'
-      showError('Failed to fetch diff', message)
+      showError('Failed to fetch diff', getErrorMessage(error))
       return []
     } finally {
       isLoadingDiff.value = false
@@ -119,8 +133,7 @@ export function useGit() {
       )
       return hunks
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error'
-      showError('Failed to fetch file diff', message)
+      showError('Failed to fetch file diff', getErrorMessage(error))
       return []
     } finally {
       isLoadingFileDiff.value = false
@@ -157,8 +170,7 @@ export function useGit() {
       )
       return result.content
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error'
-      showError('Failed to fetch file content', message)
+      showError('Failed to fetch file content', getErrorMessage(error))
       return null
     } finally {
       isLoadingFileContent.value = false

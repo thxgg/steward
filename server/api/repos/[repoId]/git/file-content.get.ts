@@ -1,5 +1,10 @@
 import { getRepos } from '~~/server/utils/repos'
-import { isGitRepo, getFileContent } from '~~/server/utils/git'
+import { findRepoForCommit, getFileContent, isGitRepo, validatePathInRepo } from '~~/server/utils/git'
+import {
+  buildRepoLookup,
+  normalizeErrorMessage,
+  resolveRequestedGitRepoPath,
+} from '~~/server/utils/git-api'
 
 export default defineEventHandler(async (event) => {
   const repoId = getRouterParam(event, 'repoId')
@@ -27,40 +32,70 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: 'Repository not found' })
   }
 
-  // Resolve the git repo path
+  const repoLookup = await buildRepoLookup(repo)
+
   let gitRepoPath = repo.path
-
   if (repoPath) {
-    // Validate that repoPath is within discovered gitRepos
-    if (!repo.gitRepos || repo.gitRepos.length === 0) {
+    try {
+      const resolved = await resolveRequestedGitRepoPath(repoLookup, repoPath)
+      gitRepoPath = resolved.gitRepoPath
+    } catch (error) {
       throw createError({
         statusCode: 400,
-        message: 'repo parameter provided but no git repos discovered in this repository',
+        statusMessage: 'Invalid repo path',
+        message: normalizeErrorMessage((error as Error).message),
       })
     }
-
-    const matchedRepo = repo.gitRepos.find(gr => gr.relativePath === repoPath)
-    if (!matchedRepo) {
-      throw createError({
-        statusCode: 400,
-        message: `repo "${repoPath}" is not a discovered git repo. Available: ${repo.gitRepos.map(gr => gr.relativePath).join(', ')}`,
-      })
-    }
-
-    gitRepoPath = matchedRepo.absolutePath
   }
 
   if (!await isGitRepo(gitRepoPath)) {
-    throw createError({ statusCode: 400, message: 'Not a git repository' })
+    const fallback = await findRepoForCommit(repoLookup, commit).catch(() => null)
+    if (!fallback) {
+      throw createError({ statusCode: 400, statusMessage: 'Not a git repository' })
+    }
+    gitRepoPath = fallback.absolutePath
+  }
+
+  if (!validatePathInRepo(gitRepoPath, file)) {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid file path', message: 'Path traversal not allowed' })
   }
 
   try {
     const content = await getFileContent(gitRepoPath, commit, file)
     return { content }
   } catch (error) {
+    const message = normalizeErrorMessage(error instanceof Error ? error.message : String(error))
+
+    const fallback = await findRepoForCommit(repoLookup, commit).catch(() => null)
+    if (fallback && fallback.absolutePath !== gitRepoPath && validatePathInRepo(fallback.absolutePath, file)) {
+      try {
+        const content = await getFileContent(fallback.absolutePath, commit, file)
+        return { content }
+      } catch {
+        // Keep original error below for clearer context.
+      }
+    }
+
+    if (message.includes('Invalid commit SHA')) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Invalid commit SHA',
+        message,
+      })
+    }
+
+    if (message.includes('outside repository')) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Invalid file path',
+        message,
+      })
+    }
+
     throw createError({
       statusCode: 404,
-      message: error instanceof Error ? error.message : 'Failed to get file content'
+      statusMessage: 'Failed to get file content',
+      message,
     })
   }
 })

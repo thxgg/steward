@@ -63,27 +63,74 @@ export async function runUi(options: UiOptions): Promise<number> {
   })
 
   return await new Promise<number>((resolveExit, reject) => {
+    const signalGracePeriodMs = 2000
+    let forceKillTimer: NodeJS.Timeout | null = null
+    let signalCount = 0
+    let childExited = false
+
+    const clearForceKillTimer = () => {
+      if (forceKillTimer) {
+        clearTimeout(forceKillTimer)
+        forceKillTimer = null
+      }
+    }
+
+    const cleanup = () => {
+      process.off('SIGINT', forwardSignal)
+      process.off('SIGTERM', forwardSignal)
+      clearForceKillTimer()
+    }
+
+    const forceKill = () => {
+      if (!childExited && child.exitCode === null && child.signalCode === null) {
+        child.kill('SIGKILL')
+      }
+    }
+
     const forwardSignal = (signal: NodeJS.Signals) => {
-      if (!child.killed) {
+      if (childExited) {
+        return
+      }
+
+      signalCount += 1
+
+      if (signalCount > 1) {
+        forceKill()
+        return
+      }
+
+      if (child.exitCode === null && child.signalCode === null) {
         child.kill(signal)
       }
+
+      clearForceKillTimer()
+      forceKillTimer = setTimeout(forceKill, signalGracePeriodMs)
     }
 
     process.on('SIGINT', forwardSignal)
     process.on('SIGTERM', forwardSignal)
 
     child.on('error', (error) => {
-      process.off('SIGINT', forwardSignal)
-      process.off('SIGTERM', forwardSignal)
+      cleanup()
       reject(error)
     })
 
     child.on('exit', (code, signal) => {
-      process.off('SIGINT', forwardSignal)
-      process.off('SIGTERM', forwardSignal)
+      childExited = true
+      cleanup()
 
       if (signal) {
-        process.kill(process.pid, signal)
+        if (signal === 'SIGINT') {
+          resolveExit(130)
+          return
+        }
+
+        if (signal === 'SIGTERM') {
+          resolveExit(143)
+          return
+        }
+
+        resolveExit(1)
         return
       }
 

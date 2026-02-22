@@ -1,5 +1,11 @@
 import { getRepos } from '~~/server/utils/repos'
-import { isGitRepo, getCommitInfo } from '~~/server/utils/git'
+import { findRepoForCommit, getCommitInfo, isGitRepo } from '~~/server/utils/git'
+import {
+  buildRepoLookup,
+  getRepoRelativePath,
+  normalizeErrorMessage,
+  resolveRequestedGitRepoPath,
+} from '~~/server/utils/git-api'
 import type { GitCommit } from '~/types/git'
 
 export default defineEventHandler(async (event) => {
@@ -43,35 +49,26 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  // Resolve the git repo path
-  let gitRepoPath = repo.path
+  const repoLookup = await buildRepoLookup(repo)
+
+  let fixedGitRepoPath: string | null = null
+  let fixedRepoPath = ''
 
   if (repoPath) {
-    // Validate that repoPath is within discovered gitRepos
-    if (!repo.gitRepos || repo.gitRepos.length === 0) {
+    try {
+      const resolved = await resolveRequestedGitRepoPath(repoLookup, repoPath)
+      fixedGitRepoPath = resolved.gitRepoPath
+      fixedRepoPath = resolved.normalizedRepoPath
+    } catch (error) {
       throw createError({
         statusCode: 400,
-        statusMessage: 'repo parameter provided but no git repos discovered in this repository',
+        statusMessage: 'Invalid repo path',
+        message: normalizeErrorMessage((error as Error).message),
       })
     }
-
-    const matchedRepo = repo.gitRepos.find(gr => gr.relativePath === repoPath)
-    if (!matchedRepo) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: `repo "${repoPath}" is not a discovered git repo. Available: ${repo.gitRepos.map(gr => gr.relativePath).join(', ')}`,
-      })
-    }
-
-    gitRepoPath = matchedRepo.absolutePath
-  }
-
-  // Check if resolved path is a git repository
-  if (!await isGitRepo(gitRepoPath)) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'Resolved path is not a git repository',
-    })
+  } else if (await isGitRepo(repo.path)) {
+    fixedGitRepoPath = repo.path
+    fixedRepoPath = ''
   }
 
   // Fetch commit info for each SHA
@@ -80,14 +77,40 @@ export default defineEventHandler(async (event) => {
 
   for (const sha of shas) {
     try {
-      const commit = await getCommitInfo(gitRepoPath, sha)
-      // Add repoPath to the response
+      let gitRepoPathForCommit = fixedGitRepoPath
+      let resolvedRepoPath = fixedRepoPath
+
+      if (!gitRepoPathForCommit) {
+        const resolved = await findRepoForCommit(repoLookup, sha)
+        gitRepoPathForCommit = resolved.absolutePath
+        resolvedRepoPath = resolved.repoPath
+      }
+
+      let commit: GitCommit
+
+      try {
+        commit = await getCommitInfo(gitRepoPathForCommit, sha)
+      } catch (error) {
+        if (!fixedGitRepoPath) {
+          throw error
+        }
+
+        const fallback = await findRepoForCommit(repoLookup, sha).catch(() => null)
+        if (!fallback || fallback.absolutePath === gitRepoPathForCommit) {
+          throw error
+        }
+
+        commit = await getCommitInfo(fallback.absolutePath, sha)
+        resolvedRepoPath = fallback.repoPath
+        gitRepoPathForCommit = fallback.absolutePath
+      }
+
       commits.push({
         ...commit,
-        repoPath: repoPath || '',
+        repoPath: resolvedRepoPath || getRepoRelativePath(repo.path, gitRepoPathForCommit),
       })
     } catch (error) {
-      errors.push(`${sha}: ${(error as Error).message}`)
+      errors.push(`${sha}: ${normalizeErrorMessage((error as Error).message)}`)
     }
   }
 
@@ -95,7 +118,8 @@ export default defineEventHandler(async (event) => {
   if (commits.length === 0 && errors.length > 0) {
     throw createError({
       statusCode: 404,
-      statusMessage: `No valid commits found: ${errors.join('; ')}`,
+      statusMessage: 'No valid commits found',
+      message: `No valid commits found: ${errors.join('; ')}`,
     })
   }
 

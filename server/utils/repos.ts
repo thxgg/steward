@@ -226,7 +226,7 @@ async function isGitRepo(dirPath: string): Promise<boolean> {
   try {
     const gitPath = join(dirPath, '.git')
     const stats = await fs.stat(gitPath)
-    return stats.isDirectory()
+    return stats.isDirectory() || stats.isFile()
   } catch {
     return false
   }
@@ -242,7 +242,7 @@ async function isGitRepo(dirPath: string): Promise<boolean> {
  */
 export async function discoverGitRepos(
   basePath: string,
-  maxDepth: number = 2
+  maxDepth: number = 4
 ): Promise<GitRepoInfo[]> {
   const resolvedBase = resolve(basePath)
 

@@ -1,6 +1,10 @@
-import { join } from 'node:path'
 import { getRepos } from '~~/server/utils/repos'
-import { isGitRepo, getCommitDiff } from '~~/server/utils/git'
+import { findRepoForCommit, getCommitDiff, isGitRepo } from '~~/server/utils/git'
+import {
+  buildRepoLookup,
+  normalizeErrorMessage,
+  resolveRequestedGitRepoPath,
+} from '~~/server/utils/git-api'
 
 export default defineEventHandler(async (event) => {
   const repoId = getRouterParam(event, 'repoId')
@@ -34,44 +38,54 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  // Resolve the git repo path
+  const repoLookup = await buildRepoLookup(repo)
+
   let gitRepoPath = repo.path
-
   if (repoPath) {
-    // Validate that repoPath is within discovered gitRepos
-    if (!repo.gitRepos || repo.gitRepos.length === 0) {
+    try {
+      const resolved = await resolveRequestedGitRepoPath(repoLookup, repoPath)
+      gitRepoPath = resolved.gitRepoPath
+    } catch (error) {
       throw createError({
         statusCode: 400,
-        statusMessage: 'repo parameter provided but no git repos discovered in this repository',
+        statusMessage: 'Invalid repo path',
+        message: normalizeErrorMessage((error as Error).message),
       })
     }
-
-    const matchedRepo = repo.gitRepos.find(gr => gr.relativePath === repoPath)
-    if (!matchedRepo) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: `repo "${repoPath}" is not a discovered git repo. Available: ${repo.gitRepos.map(gr => gr.relativePath).join(', ')}`,
-      })
-    }
-
-    gitRepoPath = matchedRepo.absolutePath
   }
 
-  // Check if resolved path is a git repository
   if (!await isGitRepo(gitRepoPath)) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'Resolved path is not a git repository',
-    })
+    const fallback = await findRepoForCommit(repoLookup, commit).catch(() => null)
+    if (!fallback) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Resolved path is not a git repository',
+      })
+    }
+    gitRepoPath = fallback.absolutePath
   }
 
   try {
     const files = await getCommitDiff(gitRepoPath, commit)
     return files
   } catch (error) {
+    const message = normalizeErrorMessage((error as Error).message)
+
+    const fallback = await findRepoForCommit(repoLookup, commit).catch(() => null)
+    if (fallback && fallback.absolutePath !== gitRepoPath) {
+      try {
+        return await getCommitDiff(fallback.absolutePath, commit)
+      } catch {
+        // Keep original error below for clearer context.
+      }
+    }
+
+    const isInvalidCommit = message.startsWith('Invalid commit SHA')
+
     throw createError({
-      statusCode: 404,
-      statusMessage: `Commit not found or invalid: ${(error as Error).message}`,
+      statusCode: isInvalidCommit ? 400 : 404,
+      statusMessage: isInvalidCommit ? 'Invalid commit SHA' : 'Commit not found or invalid',
+      message,
     })
   }
 })

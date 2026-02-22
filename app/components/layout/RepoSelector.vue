@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onClickOutside } from '@vueuse/core'
-import { ChevronDown, Plus, FolderOpen, Check, Trash2, Folder } from 'lucide-vue-next'
+import { ChevronDown, Plus, FolderOpen, Check, Trash2, Folder, ArrowUp } from 'lucide-vue-next'
 import {
   Sheet,
   SheetContent,
@@ -15,7 +15,7 @@ import { Input } from '~/components/ui/input'
 const router = useRouter()
 const route = useRoute()
 const { repos, currentRepo, currentRepoId, selectRepo, addRepo, removeRepo } = useRepos()
-const { showSuccess, showError } = useToast()
+const { showSuccess } = useToast()
 
 // Dropdown state
 const open = ref(false)
@@ -63,16 +63,22 @@ function handleAddClick() {
 // Directory browser state
 const showBrowser = ref(false)
 const browserPath = ref('')
+const browserParent = ref('')
 const browserDirs = ref<{ name: string; path: string }[]>([])
 const browserLoading = ref(false)
+
+const canNavigateUp = computed(() => {
+  return !!browserParent.value && browserParent.value !== browserPath.value
+})
 
 async function browseDirectory(path?: string) {
   browserLoading.value = true
   try {
-    const data = await $fetch('/api/browse', {
+    const data = await $fetch<{ current: string; parent: string; directories: { name: string; path: string }[] }>('/api/browse', {
       query: { path: path || browserPath.value || undefined }
     })
     browserPath.value = data.current
+    browserParent.value = data.parent
     browserDirs.value = data.directories
   } catch {
     // Silently fail - directory browser will show empty state
@@ -93,8 +99,11 @@ function selectDirectory(path: string) {
 }
 
 function navigateUp() {
-  const parent = browserPath.value.split('/').slice(0, -1).join('/') || '/'
-  browseDirectory(parent)
+  if (!canNavigateUp.value) {
+    return
+  }
+
+  browseDirectory(browserParent.value)
 }
 
 // Add repo dialog state
@@ -297,11 +306,12 @@ defineExpose({
             <div class="flex items-center gap-2 text-sm">
               <button
                 type="button"
-                class="hover:text-foreground text-muted-foreground"
-                :disabled="browserPath === '/'"
+                class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                :disabled="!canNavigateUp"
                 @click="navigateUp"
               >
-                ..
+                <ArrowUp class="size-3" />
+                Up
               </button>
               <span class="flex-1 truncate font-mono text-xs text-muted-foreground">
                 {{ browserPath }}

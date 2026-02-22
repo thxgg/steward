@@ -43,7 +43,8 @@ export default defineEventHandler(async (event) => {
   } catch (error) {
     throw createError({
       statusCode: 500,
-      statusMessage: `Failed to read progress state: ${(error as Error).message}`
+      statusMessage: 'Failed to read progress state',
+      message: (error as Error).message.replace(/\s+/g, ' ').trim()
     })
   }
 
