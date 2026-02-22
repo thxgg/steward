@@ -51,14 +51,14 @@ export default defineEventHandler(async (event) => {
     return []
   }
 
+  // Handle legacy progress files that may not have taskLogs
+  const taskLogs = Array.isArray(progress.taskLogs) ? progress.taskLogs : []
+
   // Find task log entry matching taskId
-  const taskLog = progress.taskLogs.find(log => log.taskId === taskId)
+  const taskLog = taskLogs.find(log => log.taskId === taskId)
 
   if (!taskLog) {
-    throw createError({
-      statusCode: 404,
-      statusMessage: `Task "${taskId}" not found in progress state`
-    })
+    return []
   }
 
   // No commits recorded

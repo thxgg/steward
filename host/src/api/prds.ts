@@ -164,9 +164,10 @@ export const prds = {
       return []
     }
 
-    const taskLog = progress.taskLogs.find((log) => log.taskId === taskId)
+    const taskLogs = Array.isArray(progress.taskLogs) ? progress.taskLogs : []
+    const taskLog = taskLogs.find((log) => log.taskId === taskId)
     if (!taskLog) {
-      throw new Error(`Task "${taskId}" not found in progress state`)
+      return []
     }
 
     if (!taskLog.commits || taskLog.commits.length === 0) {
