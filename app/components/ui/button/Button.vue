@@ -6,7 +6,7 @@ import { Primitive } from "reka-ui"
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "."
 
-interface Props extends PrimitiveProps {
+type Props = PrimitiveProps & {
   variant?: ButtonVariants["variant"]
   size?: ButtonVariants["size"]
   class?: HTMLAttributes["class"]
