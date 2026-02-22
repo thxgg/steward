@@ -45,7 +45,6 @@ Add to your MCP client config:
 
 ```bash
 prd ui
-prd ui --preview
 prd ui --port 3100 --host 127.0.0.1
 prd mcp
 ```
@@ -55,7 +54,7 @@ prd mcp
 ```
 ┌─────────────────────────────────────────┐
 │            Steward CLI (Node)           │
-│  - `prd ui` launches Nuxt app           │
+│  - `prd ui` runs prebuilt UI server     │
 │  - `prd mcp` starts MCP over stdio      │
 └─────────────────────────────────────────┘
                     │

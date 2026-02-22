@@ -15,11 +15,11 @@ Usage:
   prd mcp
 
 Commands:
-  ui         Launch the PRD web UI (dev mode by default)
+  ui         Launch the prebuilt PRD web UI server
   mcp        Start MCP server over stdio (codemode)
 
 Options:
-  --preview      Run Nuxt preview server instead of dev server
+  --preview      Deprecated; ignored (kept for compatibility)
   --port <port>  Port for ui mode
   --host <host>  Host for ui mode
   -h, --help     Show this help message

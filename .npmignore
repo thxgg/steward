@@ -1,7 +1,6 @@
 .git/
 .github/
 .nuxt/
-.output/
 .cache/
 node_modules/
 opencode/

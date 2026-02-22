@@ -1,6 +1,5 @@
 import { existsSync } from 'node:fs'
 import { spawn } from 'node:child_process'
-import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -9,8 +8,6 @@ export interface UiOptions {
   port?: number
   host?: string
 }
-
-const require = createRequire(import.meta.url)
 
 function findPackageRoot(startDir: string): string {
   let currentDir = startDir
@@ -31,29 +28,38 @@ function findPackageRoot(startDir: string): string {
 
 const packageRoot = findPackageRoot(dirname(fileURLToPath(import.meta.url)))
 
-function resolveNuxtEntrypoint(): string {
-  const packageJsonPath = require.resolve('nuxt/package.json', { paths: [packageRoot] })
-  return join(dirname(packageJsonPath), 'bin', 'nuxt.mjs')
-}
-
 export async function runUi(options: UiOptions): Promise<number> {
-  const script = options.preview ? 'preview' : 'dev'
-  const args = [resolveNuxtEntrypoint(), script]
+  const serverEntrypoint = join(packageRoot, '.output', 'server', 'index.mjs')
+  if (!existsSync(serverEntrypoint)) {
+    throw new Error(
+      'Steward UI build artifacts were not found. In a source checkout, run `npm run build` (or `npm run dev` for development).'
+    )
+  }
 
-  if (options.port !== undefined || options.host) {
-    if (options.port !== undefined) {
-      args.push('--port', String(options.port))
-    }
+  if (options.preview) {
+    console.warn('[steward] `--preview` is deprecated and ignored. Running prebuilt UI server.')
+  }
 
-    if (options.host) {
-      args.push('--host', options.host)
-    }
+  const args = [serverEntrypoint]
+  const env = { ...process.env }
+
+  env.NODE_ENV = env.NODE_ENV || 'production'
+
+  if (options.port !== undefined) {
+    const port = String(options.port)
+    env.PORT = port
+    env.NITRO_PORT = port
+  }
+
+  if (options.host) {
+    env.HOST = options.host
+    env.NITRO_HOST = options.host
   }
 
   const child = spawn(process.execPath, args, {
     cwd: packageRoot,
     stdio: 'inherit',
-    env: process.env
+    env
   })
 
   return await new Promise<number>((resolveExit, reject) => {
