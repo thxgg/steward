@@ -66,7 +66,7 @@ async function renderMarkdown(content: string): Promise<string> {
   marked.setOptions({
     renderer,
     gfm: true,
-    breaks: false
+    breaks: true
   })
 
   let html = await marked.parse(contentWithPlaceholders)
