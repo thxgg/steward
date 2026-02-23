@@ -16,6 +16,7 @@
     "server/utils/repos.ts",
     "server/utils/prd-state.ts",
     "server/utils/git.ts",
+    "server/utils/task-graph.ts",
     "app/types/**/*.ts"
   ]
 }
