@@ -4,8 +4,9 @@ import type { PrdDocument, PrdListItem, PrdMetadata } from '../../../app/types/p
 import type { CommitRef, ProgressFile, TasksFile } from '../../../app/types/task.js'
 import type { RepoConfig } from '../../../app/types/repo.js'
 import { resolveCommitRepo } from '../../../server/utils/git.js'
-import { discoverGitRepos, getRepoById, getRepos, saveRepos } from '../../../server/utils/repos.js'
+import { discoverGitRepos, getRepos, saveRepos } from '../../../server/utils/repos.js'
 import { getPrdState, getPrdStateSummaries, migrateLegacyStateForRepo } from '../../../server/utils/prd-state.js'
+import { requireRepo } from './repo-context.js'
 
 export interface ResolvedTaskCommit {
   sha: string
@@ -42,15 +43,6 @@ function parseMetadata(content: string): PrdMetadata {
   }
 
   return metadata
-}
-
-async function requireRepo(repoId: string): Promise<RepoConfig> {
-  const repo = await getRepoById(repoId)
-  if (!repo) {
-    throw new Error('Repository not found')
-  }
-
-  return repo
 }
 
 async function readPrdFile(repo: RepoConfig, prdSlug: string): Promise<string> {

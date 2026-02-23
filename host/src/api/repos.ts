@@ -9,6 +9,7 @@ import {
   validateRepoPath
 } from '../../../server/utils/repos.js'
 import { migrateLegacyStateForRepo } from '../../../server/utils/prd-state.js'
+import { requireCurrentRepo, requireRepo } from './repo-context.js'
 
 export const repos = {
   async list(): Promise<RepoConfig[]> {
@@ -17,6 +18,10 @@ export const repos = {
 
   async get(repoId: string): Promise<RepoConfig | null> {
     return await getRepoById(repoId) ?? null
+  },
+
+  async current(): Promise<RepoConfig> {
+    return await requireCurrentRepo()
   },
 
   async add(path: string, name?: string): Promise<RepoConfig> {
@@ -31,6 +36,8 @@ export const repos = {
   },
 
   async remove(repoId: string): Promise<{ removed: true }> {
+    await requireRepo(repoId)
+
     const removed = await removeRepo(repoId)
     if (!removed) {
       throw new Error('Repository not found')
@@ -40,6 +47,8 @@ export const repos = {
   },
 
   async refreshGitRepos(repoId: string): Promise<{ discovered: number; gitRepos: GitRepoInfo[] }> {
+    await requireRepo(repoId)
+
     const allRepos = await getRepos()
     const repoIndex = allRepos.findIndex((repo) => repo.id === repoId)
     if (repoIndex === -1) {

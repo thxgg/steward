@@ -8,16 +8,7 @@ import {
   isGitRepo,
   validatePathInRepo
 } from '../../../server/utils/git.js'
-import { getRepoById } from '../../../server/utils/repos.js'
-
-async function requireRepo(repoId: string): Promise<RepoConfig> {
-  const repo = await getRepoById(repoId)
-  if (!repo) {
-    throw new Error('Repository not found')
-  }
-
-  return repo
-}
+import { requireRepo } from './repo-context.js'
 
 function resolveGitRepoPath(repo: RepoConfig, repoPath?: string): string {
   if (!repoPath) {

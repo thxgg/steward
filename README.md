@@ -77,9 +77,7 @@ prd mcp
 Steward exposes one MCP tool: `execute`.
 
 ```js
-const reposList = await repos.list()
-const repo = reposList[0]
-if (!repo) return { error: 'No repos configured' }
+const repo = await repos.current()
 
 const prdList = await prds.list(repo.id)
 if (prdList.length === 0) return { repo: repo.name, prds: 0 }
@@ -92,6 +90,26 @@ return {
 }
 ```
 
+Every call returns a structured envelope:
+
+```json
+{
+  "ok": true,
+  "result": {},
+  "logs": [],
+  "error": null,
+  "meta": {
+    "timeoutMs": 30000,
+    "durationMs": 10,
+    "truncatedResult": false,
+    "truncatedLogs": false,
+    "resultWasUndefined": false
+  }
+}
+```
+
+Use `steward.help()` inside `execute` for runtime API signatures and examples.
+
 ## APIs
 
 Inside `execute`, these APIs are available:
@@ -99,7 +117,7 @@ Inside `execute`, these APIs are available:
 - `repos` - register/list/remove repos and refresh discovered git repos
 - `prds` - list/read PRD docs, tasks, progress, and task commit refs
 - `git` - commit metadata, diffs, file diffs, and file contents
-- `state` - direct PRD state get/upsert by repo id or path
+- `state` - direct PRD state get/upsert by repo id, path, or current repo
 
 Detailed API docs and examples: `docs/MCP.md`
 

@@ -1,5 +1,3 @@
-import { resolve } from 'node:path'
-import type { RepoConfig } from '../../../app/types/repo.js'
 import type { ProgressFile, TasksFile } from '../../../app/types/task.js'
 import {
   getPrdState,
@@ -9,33 +7,12 @@ import {
   type PrdStateUpdate,
   upsertPrdState
 } from '../../../server/utils/prd-state.js'
-import { getRepoById, getRepos } from '../../../server/utils/repos.js'
+import { requireCurrentRepo, requireRepo, requireRepoByPath } from './repo-context.js'
 
 export interface StatePayload {
   tasks?: TasksFile | null
   progress?: ProgressFile | null
   notes?: string | null
-}
-
-async function requireRepo(repoId: string): Promise<RepoConfig> {
-  const repo = await getRepoById(repoId)
-  if (!repo) {
-    throw new Error('Repository not found')
-  }
-
-  return repo
-}
-
-async function findRepoByPath(repoPath: string): Promise<RepoConfig> {
-  const absolutePath = resolve(repoPath)
-  const repos = await getRepos()
-  const repo = repos.find((candidate) => resolve(candidate.path) === absolutePath)
-
-  if (!repo) {
-    throw new Error(`No registered repository found for path: ${absolutePath}`)
-  }
-
-  return repo
 }
 
 function mapStateUpdate(payload: StatePayload): PrdStateUpdate {
@@ -58,7 +35,13 @@ export const state = {
   },
 
   async getByPath(repoPath: string, slug: string) {
-    const repo = await findRepoByPath(repoPath)
+    const repo = await requireRepoByPath(repoPath)
+    await migrateLegacyStateForRepo(repo)
+    return await getPrdState(repo.id, slug)
+  },
+
+  async getCurrent(slug: string) {
+    const repo = await requireCurrentRepo()
     await migrateLegacyStateForRepo(repo)
     return await getPrdState(repo.id, slug)
   },
@@ -71,7 +54,14 @@ export const state = {
   },
 
   async summariesByPath(repoPath: string): Promise<Record<string, PrdStateSummary>> {
-    const repo = await findRepoByPath(repoPath)
+    const repo = await requireRepoByPath(repoPath)
+    await migrateLegacyStateForRepo(repo)
+    const summaries = await getPrdStateSummaries(repo.id)
+    return mapSummaryMap(summaries)
+  },
+
+  async summariesCurrent(): Promise<Record<string, PrdStateSummary>> {
+    const repo = await requireCurrentRepo()
     await migrateLegacyStateForRepo(repo)
     const summaries = await getPrdStateSummaries(repo.id)
     return mapSummaryMap(summaries)
@@ -85,7 +75,14 @@ export const state = {
   },
 
   async upsertByPath(repoPath: string, slug: string, payload: StatePayload): Promise<{ saved: true }> {
-    const repo = await findRepoByPath(repoPath)
+    const repo = await requireRepoByPath(repoPath)
+    await upsertPrdState(repo.id, slug, mapStateUpdate(payload))
+
+    return { saved: true }
+  },
+
+  async upsertCurrent(slug: string, payload: StatePayload): Promise<{ saved: true }> {
+    const repo = await requireCurrentRepo()
     await upsertPrdState(repo.id, slug, mapStateUpdate(payload))
 
     return { saved: true }

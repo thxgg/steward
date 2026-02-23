@@ -58,7 +58,31 @@ Example MCP client config:
 
 Your code is wrapped in an async function, so you can use `await` directly.
 
-Return values are JSON-stringified in the MCP response.
+Each call returns a JSON envelope:
+
+```json
+{
+  "ok": true,
+  "result": {},
+  "logs": [],
+  "error": null,
+  "meta": {
+    "timeoutMs": 30000,
+    "durationMs": 12,
+    "truncatedResult": false,
+    "truncatedLogs": false,
+    "resultWasUndefined": false
+  }
+}
+```
+
+- `result` is `null` when your code does not explicitly return a value.
+- `logs` contains captured `console.log/info/warn/error` output from sandbox code.
+- `error` is populated with `{ code, message, stack?, details? }` on failure.
+
+In-sandbox discovery helper:
+
+- `steward.help()`
 
 ## Available APIs
 
@@ -66,6 +90,7 @@ Return values are JSON-stringified in the MCP response.
 
 - `repos.list()`
 - `repos.get(repoId)`
+- `repos.current()`
 - `repos.add(path, name?)`
 - `repos.remove(repoId)`
 - `repos.refreshGitRepos(repoId)`
@@ -89,10 +114,13 @@ Return values are JSON-stringified in the MCP response.
 
 - `state.get(repoId, slug)`
 - `state.getByPath(repoPath, slug)`
+- `state.getCurrent(slug)`
 - `state.summaries(repoId)`
 - `state.summariesByPath(repoPath)`
+- `state.summariesCurrent()`
 - `state.upsert(repoId, slug, payload)`
 - `state.upsertByPath(repoPath, slug, payload)`
+- `state.upsertCurrent(slug, payload)`
 
 `payload` supports any combination of:
 
@@ -116,7 +144,7 @@ return await Promise.all(reposList.map(async (repo) => ({
 Load one PRD with state:
 
 ```js
-const repo = (await repos.list())[0]
+const repo = await repos.current()
 const slug = 'prd-viewer'
 
 return {
@@ -137,6 +165,24 @@ return await Promise.all(commits.map(async (entry) => ({
   meta: await git.getCommits(repo.id, [entry.sha], entry.repo),
   diff: await git.getDiff(repo.id, entry.sha, entry.repo)
 })))
+```
+
+Inspect signatures at runtime:
+
+```js
+return steward.help()
+```
+
+Update state in the current repo (no repoId required):
+
+```js
+const slug = 'prd-viewer'
+
+await state.upsertCurrent(slug, {
+  notes: '# Updated from codemode'
+})
+
+return { saved: true }
 ```
 
 Update state directly by path (replacement for shell helpers):
@@ -170,7 +216,8 @@ return { saved: true }
 ## Limits
 
 - Execution timeout: 30 seconds
-- Output preview limit: 50,000 characters
+- Result preview limit: 50,000 characters
+- Captured log limit: 20,000 characters (max 200 log entries)
 - Timer limit: 100 active timers in sandbox
 
 ## Safety Notes
