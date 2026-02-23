@@ -114,19 +114,28 @@ function getTaskTitle(taskId: string): string {
 const hasCommits = computed(() => props.commits && props.commits.length > 0 && props.repoId)
 
 const showOpenPrdLink = computed(() => {
-  if (!props.repoId || !props.taskPrdSlug || !props.currentPrdSlug) {
+  if (!props.repoId || !props.taskPrdSlug) {
     return false
+  }
+
+  if (!props.currentPrdSlug) {
+    return true
   }
 
   return props.taskPrdSlug !== props.currentPrdSlug
 })
 
 const openPrdHref = computed(() => {
-  if (!showOpenPrdLink.value || !props.repoId || !props.taskPrdSlug) {
+  if (!showOpenPrdLink.value || !props.repoId || !props.taskPrdSlug || !props.task) {
     return ''
   }
 
-  return `/${props.repoId}/${props.taskPrdSlug}`
+  const params = new URLSearchParams({
+    task: props.task.id,
+    taskPrd: props.taskPrdSlug
+  })
+
+  return `/${props.repoId}/${props.taskPrdSlug}?${params.toString()}`
 })
 
 // View state: 'details' or 'diff'
@@ -166,7 +175,10 @@ watch(open, (isOpen) => {
 
 <template>
   <Sheet v-model:open="open">
-    <SheetContent class="flex h-full w-full flex-col overflow-hidden sm:max-w-lg" :class="{ 'sm:!max-w-none !max-w-none': viewMode === 'diff' }">
+    <SheetContent
+      class="flex h-full w-full flex-col overflow-hidden sm:max-w-lg"
+      :class="viewMode === 'diff' ? 'sm:!max-w-[94vw] xl:!max-w-[88vw]' : ''"
+    >
       <!-- Header with back button when viewing diff -->
       <SheetHeader v-if="task" class="px-6 pr-12">
         <div class="flex items-center gap-2">

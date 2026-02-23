@@ -74,21 +74,41 @@ function getNodeDimensions(node: GraphNode, scope: 'prd' | 'repo'): { width: num
   }
 
   if (scope === 'repo') {
-    return { width: 272, height: 112 }
+    return { width: 272, height: 116 }
   }
 
   return { width: 272, height: 96 }
 }
 
+function getLayoutConfig(scope: 'prd' | 'repo') {
+  if (scope === 'repo') {
+    return {
+      ranksep: 136,
+      nodesep: 88,
+      edgesep: 34,
+      marginx: 36,
+      marginy: 28
+    }
+  }
+
+  return {
+    ranksep: 102,
+    nodesep: 56,
+    edgesep: 20,
+    marginx: 24,
+    marginy: 22
+  }
+}
+
 function layoutGraph(nodes: FlowNode<FlowNodeData>[], edges: FlowEdge[]): FlowNode<FlowNodeData>[] {
   const graph = new dagre.graphlib.Graph()
+  const config = getLayoutConfig(props.scope)
+
   graph.setDefaultEdgeLabel(() => ({}))
   graph.setGraph({
     rankdir: 'TB',
-    ranksep: 90,
-    nodesep: 40,
-    marginx: 20,
-    marginy: 20
+    ranker: 'network-simplex',
+    ...config
   })
 
   for (const node of nodes) {
@@ -131,7 +151,7 @@ const flowEdges = computed<FlowEdge[]>(() => {
     id: edge.id,
     source: edge.source,
     target: edge.target,
-    type: 'smoothstep',
+    type: 'step',
     animated: edge.unresolved && !prefersReducedMotion.value,
     markerEnd: {
       type: MarkerType.ArrowClosed,
@@ -139,8 +159,9 @@ const flowEdges = computed<FlowEdge[]>(() => {
       height: 16
     },
     style: {
-      strokeWidth: edge.unresolved ? 1.5 : 1.8,
+      strokeWidth: edge.unresolved ? 1.4 : 1.7,
       stroke: edge.unresolved ? 'var(--muted-foreground)' : 'var(--border)',
+      strokeOpacity: edge.unresolved ? 0.62 : 0.95,
       strokeDasharray: edge.unresolved ? '5 4' : undefined
     }
   }))

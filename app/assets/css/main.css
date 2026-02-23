@@ -125,6 +125,46 @@
   }
 }
 
+.vue-flow__controls {
+  @apply overflow-hidden rounded-md border border-border bg-card/95 shadow-sm supports-[backdrop-filter]:bg-card/80;
+}
+
+.vue-flow__controls .vue-flow__controls-button {
+  @apply h-8 w-8 border-0 border-b border-border bg-transparent p-0 text-foreground/75 transition-colors;
+}
+
+.vue-flow__controls .vue-flow__controls-button:last-child {
+  @apply border-b-0;
+}
+
+.vue-flow__controls .vue-flow__controls-button:hover,
+.vue-flow__controls .vue-flow__controls-button:focus-visible {
+  @apply bg-accent text-accent-foreground;
+}
+
+.vue-flow__controls .vue-flow__controls-zoomout,
+.vue-flow__controls .vue-flow__controls-zoomin {
+  @apply text-muted-foreground;
+}
+
+.vue-flow__controls .vue-flow__controls-fitview {
+  @apply bg-primary/10 text-primary;
+}
+
+.vue-flow__controls .vue-flow__controls-fitview:hover,
+.vue-flow__controls .vue-flow__controls-fitview:focus-visible {
+  @apply bg-primary/15 text-primary;
+}
+
+.vue-flow__controls .vue-flow__controls-button:disabled {
+  @apply cursor-not-allowed opacity-50;
+}
+
+.vue-flow__controls .vue-flow__controls-button svg {
+  @apply size-3.5;
+  fill: currentColor;
+}
+
 /* Hide scrollbar utility */
 .scrollbar-hide {
   -ms-overflow-style: none;

@@ -115,6 +115,7 @@ function detectLanguage(path: string): string {
     java: 'java',
     kt: 'kotlin',
     swift: 'swift',
+    dart: 'dart',
     c: 'c',
     cpp: 'cpp',
     h: 'c',

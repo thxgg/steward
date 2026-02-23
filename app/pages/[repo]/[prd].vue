@@ -3,21 +3,34 @@ import { FileText, LayoutGrid, AlertCircle, Loader2, RefreshCw, GitBranch } from
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { Button } from '~/components/ui/button'
 import type { PrdDocument } from '~/types/prd'
-import type { GraphPrdPayload, GraphRepoPayload } from '~/types/graph'
+import type { GraphPrdPayload } from '~/types/graph'
 import type { Task, TasksFile, ProgressFile, CommitRef } from '~/types/task'
 
 type PrdViewTab = 'document' | 'board' | 'graph'
-type GraphScope = 'prd' | 'repo'
 
 const TAB_STORAGE_KEY = 'prd-viewer-tab'
-const GRAPH_SCOPE_STORAGE_KEY = 'prd-viewer-graph-scope'
+const TASK_QUERY_KEY = 'task'
+const TASK_PRD_QUERY_KEY = 'taskPrd'
 
 function isPrdViewTab(value: string): value is PrdViewTab {
   return value === 'document' || value === 'board' || value === 'graph'
 }
 
-function isGraphScope(value: string): value is GraphScope {
-  return value === 'prd' || value === 'repo'
+function getSingleQueryParam(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed.length > 0 ? trimmed : null
+  }
+
+  if (Array.isArray(value) && value.length > 0) {
+    const first = value[0]
+    if (typeof first === 'string') {
+      const trimmed = first.trim()
+      return trimmed.length > 0 ? trimmed : null
+    }
+  }
+
+  return null
 }
 
 // Disable SSR for this page - requires client-side localStorage for repo context
@@ -26,14 +39,14 @@ definePageMeta({
 })
 
 const route = useRoute()
+const router = useRouter()
 const { selectRepo } = useRepos()
 const {
   fetchDocument,
   fetchTasks,
   fetchProgress,
   fetchTaskCommits,
-  fetchPrdGraph,
-  fetchRepoGraph
+  fetchPrdGraph
 } = usePrd()
 const { showError } = useToast()
 
@@ -48,13 +61,11 @@ const progressFile = ref<ProgressFile | null>(null)
 const isLoading = ref(true)
 const error = ref<string | null>(null)
 
-// Active tab and graph scope (persisted in localStorage)
+// Active tab (persisted in localStorage)
 const activeTab = ref<PrdViewTab>('document')
-const graphScope = ref<GraphScope>('prd')
 
 // Graph data state (lazy-loaded)
 const prdGraph = ref<GraphPrdPayload | null>(null)
-const repoGraph = ref<GraphRepoPayload | null>(null)
 const graphLoading = ref(false)
 const graphError = ref<string | null>(null)
 
@@ -69,8 +80,18 @@ const detailOpen = ref(false)
 // Resolved commits for selected task (fetched from API with repo context)
 const selectedTaskCommits = ref<CommitRef[]>([])
 
-const activeGraph = computed(() => {
-  return graphScope.value === 'prd' ? prdGraph.value : repoGraph.value
+const taskQueryId = computed(() => getSingleQueryParam(route.query[TASK_QUERY_KEY]))
+const taskQueryPrd = computed(() => getSingleQueryParam(route.query[TASK_PRD_QUERY_KEY]))
+
+const routeTaskSelection = computed(() => {
+  if (!taskQueryId.value) {
+    return null
+  }
+
+  return {
+    taskId: taskQueryId.value,
+    prdSlug: taskQueryPrd.value || prdSlug.value
+  }
 })
 
 function cacheTasksForPrd(slug: string, tasks: TasksFile | null) {
@@ -92,6 +113,96 @@ async function getTasksForPrd(slug: string): Promise<TasksFile | null> {
   const tasks = await fetchTasks(slug)
   cacheTasksForPrd(slug, tasks)
   return tasks
+}
+
+function buildBaseQuery(): Record<string, string | string[]> {
+  const query: Record<string, string | string[]> = {}
+
+  for (const [key, value] of Object.entries(route.query)) {
+    if (key === TASK_QUERY_KEY || key === TASK_PRD_QUERY_KEY) {
+      continue
+    }
+
+    if (typeof value === 'string') {
+      query[key] = value
+      continue
+    }
+
+    if (Array.isArray(value)) {
+      const values = value.filter((entry): entry is string => typeof entry === 'string')
+      if (values.length > 0) {
+        query[key] = values
+      }
+    }
+  }
+
+  return query
+}
+
+async function syncTaskQuery(taskId: string | null, sourcePrdSlug: string | null = null) {
+  const nextQuery = buildBaseQuery()
+
+  if (taskId) {
+    nextQuery[TASK_QUERY_KEY] = taskId
+
+    if (sourcePrdSlug && sourcePrdSlug !== prdSlug.value) {
+      nextQuery[TASK_PRD_QUERY_KEY] = sourcePrdSlug
+    }
+  }
+
+  const nextTaskId = typeof nextQuery[TASK_QUERY_KEY] === 'string' ? nextQuery[TASK_QUERY_KEY] : null
+  const nextTaskPrd = typeof nextQuery[TASK_PRD_QUERY_KEY] === 'string' ? nextQuery[TASK_PRD_QUERY_KEY] : null
+
+  if (taskQueryId.value === nextTaskId && taskQueryPrd.value === nextTaskPrd) {
+    return
+  }
+
+  await router.replace({ query: nextQuery })
+}
+
+async function openTaskDetail(task: Task, sourcePrdSlug: string) {
+  selectedTask.value = task
+  selectedTaskPrdSlug.value = sourcePrdSlug
+  detailOpen.value = true
+  selectedTaskCommits.value = []
+
+  await syncTaskQuery(task.id, sourcePrdSlug)
+  selectedTaskCommits.value = await fetchTaskCommits(sourcePrdSlug, task.id)
+}
+
+async function syncTaskDetailFromRoute() {
+  const selection = routeTaskSelection.value
+
+  if (!selection) {
+    selectedTask.value = null
+    selectedTaskPrdSlug.value = null
+    selectedTaskCommits.value = []
+    detailOpen.value = false
+    return
+  }
+
+  const sourceTasks = await getTasksForPrd(selection.prdSlug)
+  const task = sourceTasks?.tasks.find((entry) => entry.id === selection.taskId)
+
+  if (!task) {
+    selectedTask.value = null
+    selectedTaskPrdSlug.value = null
+    selectedTaskCommits.value = []
+    detailOpen.value = false
+    showError('Task unavailable', `Could not find ${selection.taskId} in ${selection.prdSlug}.`)
+    await syncTaskQuery(null)
+    return
+  }
+
+  const isSameTask = selectedTask.value?.id === task.id && selectedTaskPrdSlug.value === selection.prdSlug
+
+  selectedTask.value = task
+  selectedTaskPrdSlug.value = selection.prdSlug
+  detailOpen.value = true
+
+  if (!isSameTask) {
+    selectedTaskCommits.value = await fetchTaskCommits(selection.prdSlug, task.id)
+  }
 }
 
 // Build task title map for dependency display based on selected task source PRD
@@ -117,10 +228,6 @@ function handleStorageEvent(event: StorageEvent) {
   if (event.key === TAB_STORAGE_KEY && event.newValue && isPrdViewTab(event.newValue)) {
     activeTab.value = event.newValue
   }
-
-  if (event.key === GRAPH_SCOPE_STORAGE_KEY && event.newValue && isGraphScope(event.newValue)) {
-    graphScope.value = event.newValue
-  }
 }
 
 // Load persisted preferences
@@ -132,11 +239,6 @@ onMounted(() => {
   const savedTab = localStorage.getItem(TAB_STORAGE_KEY)
   if (savedTab && isPrdViewTab(savedTab)) {
     activeTab.value = savedTab
-  }
-
-  const savedGraphScope = localStorage.getItem(GRAPH_SCOPE_STORAGE_KEY)
-  if (savedGraphScope && isGraphScope(savedGraphScope)) {
-    graphScope.value = savedGraphScope
   }
 
   window.addEventListener('storage', handleStorageEvent)
@@ -152,12 +254,6 @@ onUnmounted(() => {
 watch(activeTab, (tab) => {
   if (import.meta.client) {
     localStorage.setItem(TAB_STORAGE_KEY, tab)
-  }
-})
-
-watch(graphScope, (scope) => {
-  if (import.meta.client) {
-    localStorage.setItem(GRAPH_SCOPE_STORAGE_KEY, scope)
   }
 })
 
@@ -184,37 +280,21 @@ async function loadTasksAndProgress() {
   cacheTasksForPrd(prdSlug.value, tasks)
 }
 
-async function loadGraph(scope: GraphScope, force: boolean = false) {
+async function loadGraph(force: boolean = false) {
   graphLoading.value = true
 
   try {
-    if (scope === 'prd') {
-      if (!force && prdGraph.value?.prdSlug === prdSlug.value) {
-        return
-      }
-
-      const graph = await fetchPrdGraph(prdSlug.value)
-      if (!graph) {
-        graphError.value = 'Failed to load PRD graph.'
-        return
-      }
-
-      prdGraph.value = graph
-      graphError.value = null
+    if (!force && prdGraph.value?.prdSlug === prdSlug.value) {
       return
     }
 
-    if (!force && repoGraph.value) {
-      return
-    }
-
-    const graph = await fetchRepoGraph()
+    const graph = await fetchPrdGraph(prdSlug.value)
     if (!graph) {
-      graphError.value = 'Failed to load repository graph.'
+      graphError.value = 'Failed to load PRD graph.'
       return
     }
 
-    repoGraph.value = graph
+    prdGraph.value = graph
     graphError.value = null
   } finally {
     graphLoading.value = false
@@ -226,7 +306,7 @@ async function ensureGraphLoaded(force: boolean = false) {
     return
   }
 
-  await loadGraph(graphScope.value, force)
+  await loadGraph(force)
 }
 
 // Fetch all data (initial load and route changes)
@@ -236,7 +316,6 @@ async function loadData() {
   graphError.value = null
 
   prdGraph.value = null
-  repoGraph.value = null
   tasksByPrd.value = {}
 
   try {
@@ -266,6 +345,7 @@ async function loadData() {
     }
 
     await ensureGraphLoaded()
+    await syncTaskDetailFromRoute()
   } catch (err) {
     const fetchErr = err as { statusCode?: number; data?: { message?: string } }
     if (fetchErr.statusCode === 404) {
@@ -288,9 +368,20 @@ watch(activeTab, async (tab) => {
   }
 })
 
-watch(graphScope, async () => {
-  if (activeTab.value === 'graph') {
-    await loadGraph(graphScope.value)
+watch(
+  () => [route.query[TASK_QUERY_KEY], route.query[TASK_PRD_QUERY_KEY], prdSlug.value] as const,
+  async () => {
+    if (isLoading.value) {
+      return
+    }
+
+    await syncTaskDetailFromRoute()
+  }
+)
+
+watch(detailOpen, async (isOpen) => {
+  if (!isOpen && routeTaskSelection.value) {
+    await syncTaskQuery(null)
   }
 })
 
@@ -305,7 +396,7 @@ watch(
     if (event.category === 'prd') {
       await loadDocument()
       if (activeTab.value === 'graph') {
-        await loadGraph(graphScope.value, true)
+        await loadGraph(true)
       }
       return
     }
@@ -322,8 +413,8 @@ watch(
     }
 
     if (activeTab.value === 'graph') {
-      if (graphScope.value === 'repo' || isCurrentPrdChange) {
-        await loadGraph(graphScope.value, true)
+      if (isCurrentPrdChange) {
+        await loadGraph(true)
       }
     }
   }
@@ -337,10 +428,7 @@ watch([repoId, prdSlug], loadData)
 
 // Handle board task click
 async function handleTaskClick(task: Task) {
-  selectedTask.value = task
-  selectedTaskPrdSlug.value = prdSlug.value
-  detailOpen.value = true
-  selectedTaskCommits.value = await fetchTaskCommits(prdSlug.value, task.id)
+  await openTaskDetail(task, prdSlug.value)
 }
 
 // Handle graph node task click
@@ -353,10 +441,7 @@ async function handleGraphTaskClick(payload: { prdSlug: string; taskId: string }
     return
   }
 
-  selectedTask.value = task
-  selectedTaskPrdSlug.value = payload.prdSlug
-  detailOpen.value = true
-  selectedTaskCommits.value = await fetchTaskCommits(payload.prdSlug, task.id)
+  await openTaskDetail(task, payload.prdSlug)
 }
 </script>
 
@@ -445,36 +530,11 @@ async function handleGraphTaskClick(payload: { prdSlug: string; taskId: string }
         </TabsContent>
 
         <!-- Graph Tab -->
-        <TabsContent value="graph" class="mt-4 space-y-3">
-          <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2">
-            <div class="inline-flex rounded-md border border-border bg-muted/40 p-1">
-              <Button
-                size="sm"
-                :variant="graphScope === 'prd' ? 'default' : 'ghost'"
-                class="h-7 px-3 text-xs"
-                @click="graphScope = 'prd'"
-              >
-                PRD
-              </Button>
-              <Button
-                size="sm"
-                :variant="graphScope === 'repo' ? 'default' : 'ghost'"
-                class="h-7 px-3 text-xs"
-                @click="graphScope = 'repo'"
-              >
-                Repo
-              </Button>
-            </div>
-
-            <p class="text-xs text-muted-foreground">
-              {{ graphScope === 'repo' ? 'Showing dependencies across PRDs with state in this repository.' : 'Showing dependencies for the current PRD only.' }}
-            </p>
-          </div>
-
+        <TabsContent value="graph" class="mt-4">
           <div class="h-[calc(100vh-300px)] min-h-[440px] motion-safe:transition-[opacity,transform] motion-safe:duration-200 motion-safe:ease-[var(--ease-out-cubic)] motion-reduce:transition-none">
             <GraphExplorer
-              :payload="activeGraph"
-              :scope="graphScope"
+              :payload="prdGraph"
+              scope="prd"
               :loading="graphLoading"
               :error="graphError"
               @task-click="handleGraphTaskClick"

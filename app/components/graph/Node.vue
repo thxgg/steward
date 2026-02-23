@@ -89,6 +89,14 @@ const nodeClass = computed(() => {
     'border-solid'
   ]
 })
+
+const repoPrdLabel = computed(() => {
+  if (data.value.kind !== 'task' || !data.value.showPrdLabel) {
+    return null
+  }
+
+  return data.value.prdName?.trim() || data.value.prdSlug
+})
 </script>
 
 <template>
@@ -107,12 +115,13 @@ const nodeClass = computed(() => {
 
     <div v-if="taskData" class="space-y-2">
       <div class="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-        <span class="font-mono">{{ taskData.taskId }}</span>
+        <span class="shrink-0 font-mono">{{ taskData.taskId }}</span>
         <span
-          v-if="taskData.showPrdLabel"
-          class="rounded border border-border bg-background/60 px-1.5 py-0.5 font-mono text-[10px]"
+          v-if="repoPrdLabel"
+          :title="`${taskData.prdName} (${taskData.prdSlug})`"
+          class="max-w-[11rem] truncate rounded border border-border bg-background/60 px-1.5 py-0.5 text-[10px]"
         >
-          {{ taskData.prdSlug }}
+          {{ repoPrdLabel }}
         </span>
       </div>
 

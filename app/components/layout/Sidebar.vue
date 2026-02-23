@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { FileText, Loader2, AlertCircle, RefreshCw } from 'lucide-vue-next'
+import { FileText, Loader2, AlertCircle, RefreshCw, GitBranch } from 'lucide-vue-next'
 import { ScrollArea } from '~/components/ui/scroll-area'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
@@ -17,6 +17,22 @@ const currentPrdSlug = computed(() => {
 function isActive(slug: string): boolean {
   return currentPrdSlug.value === slug
 }
+
+const repoGraphHref = computed(() => {
+  if (!currentRepoId.value) {
+    return '/'
+  }
+
+  return `/${currentRepoId.value}/repo-graph`
+})
+
+const isRepoGraphActive = computed(() => {
+  if (!currentRepoId.value) {
+    return false
+  }
+
+  return route.path === `/${currentRepoId.value}/repo-graph`
+})
 </script>
 
 <template>
@@ -24,6 +40,20 @@ function isActive(slug: string): boolean {
     <!-- PRD List -->
     <ScrollArea class="flex-1">
       <div class="p-2">
+        <NuxtLink
+          v-if="currentRepoId"
+          :to="repoGraphHref"
+          class="group mb-2 flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors"
+          :class="[
+            isRepoGraphActive
+              ? 'bg-accent text-accent-foreground'
+              : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+          ]"
+        >
+          <GitBranch class="size-4 shrink-0" />
+          <span class="flex-1 truncate">Repo Graph</span>
+        </NuxtLink>
+
         <!-- Documents Header -->
         <h2 class="flex h-10 items-center px-2 text-sm font-medium text-muted-foreground">Documents</h2>
         <!-- Loading state -->
