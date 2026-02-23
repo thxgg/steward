@@ -163,15 +163,26 @@ If you discover a **reusable pattern**, also add to the `patterns` array.
 
 Follow the commit logic from the `/commit` skill:
 
+**Required behavior:**
+
+- If task work changed repository files (code, docs, or tests), you **MUST** create at least one commit for those task-related changes.
+- Do **not** leave task-related file changes uncommitted at the end of the task.
+- If there are truly no task-related repository file changes, do not create an empty commit.
+
 1. Run `git status` to see staged and unstaged changes
 2. Run `git diff --cached` to see what will be committed (if files are staged)
 3. Run `git diff` to see unstaged changes (if nothing is staged yet)
-4. Stage relevant files (avoid `git add -A` to prevent staging unrelated changes)
+4. Stage relevant task files (code/docs/tests) (avoid `git add -A` to prevent staging unrelated changes)
 5. Analyze changes to determine if they should be split into separate commits:
    - If changes are logically distinct (e.g., a bug fix AND a new feature), split them
    - Each commit should represent a single logical change
 6. Create a concise one-line commit message following conventional commits format (feat, fix, chore, docs, refactor, test)
 7. Commit with: `git commit -m "message"` (no co-authored-by footer)
+
+When running through Steward MCP codemode, equivalent flow is:
+
+- `git.getStatus(repoId, repoPath?)` to inspect staged/unstaged/untracked files
+- `git.commitIfChanged(repoId, message, { paths, repoPath? })` to stage specific paths and commit only when staged changes exist
 
 ### 10. Capture Commit SHAs with Repo Context
 
@@ -220,7 +231,7 @@ RELATIVE_REPO=$(python3 -c "import os; print(os.path.relpath('$CURRENT_GIT_ROOT'
 
 If multiple commits were made for the task, capture each SHA with appropriate repo context. Then update the `commits` array in the taskLog entry in `/tmp/prd-state/<prd-name>/progress.json`.
 
-**Important:** Only add the feat/fix/refactor commits for the task implementation, not the chore commit for updating task status (that comes after).
+**Important:** Only add commits that represent task implementation work (feat/fix/refactor/docs/test as appropriate), not unrelated repository maintenance commits.
 
 ### 11. Final Sync to Database
 

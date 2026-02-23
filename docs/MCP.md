@@ -119,10 +119,12 @@ In-sandbox discovery helper:
 
 ### `git`
 
+- `git.getStatus(repoId, repoPath?)`
 - `git.getCommits(repoId, shas, repoPath?)`
 - `git.getDiff(repoId, commit, repoPath?)`
 - `git.getFileDiff(repoId, commit, file, repoPath?)`
 - `git.getFileContent(repoId, commit, file, repoPath?)`
+- `git.commitIfChanged(repoId, message, options?)`
 
 ### `state`
 
@@ -181,6 +183,24 @@ return await Promise.all(commits.map(async (entry) => ({
 })))
 ```
 
+Commit task-related changes when present:
+
+```js
+const repo = await repos.current()
+
+const commit = await git.commitIfChanged(repo.id, 'test: add task graph coverage', {
+  paths: ['app/components/graph/Explorer.spec.ts']
+})
+
+return commit
+```
+
+`git.commitIfChanged` behavior:
+
+- stages only the explicit `options.paths` list when provided
+- commits only when staged changes exist
+- returns `committed: false` with `reason: "no_changes" | "no_staged_changes"` instead of creating empty commits
+
 Inspect signatures at runtime:
 
 ```js
@@ -238,4 +258,5 @@ return { saved: true }
 
 - This server is for trusted local development.
 - APIs can read local filesystem and git history for registered repositories.
+- `git.commitIfChanged` can create local commits when staged changes exist.
 - Do not expose this server to untrusted environments.

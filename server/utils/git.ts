@@ -2,8 +2,21 @@ import { spawn } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import { join, resolve, relative, isAbsolute } from 'node:path'
 import type { GitCommit, FileDiff, DiffHunk, DiffLine, FileStatus, DiffLineType } from '../../app/types/git.js'
-import type { RepoConfig, GitRepoInfo } from '../../app/types/repo.js'
+import type { RepoConfig } from '../../app/types/repo.js'
 import type { CommitRef } from '../../app/types/task.js'
+
+export interface GitWorkingTreeStatus {
+  staged: string[]
+  unstaged: string[]
+  untracked: string[]
+}
+
+export interface GitCommitResult {
+  sha: string
+  shortSha: string
+  message: string
+  files: string[]
+}
 
 /**
  * Execute a git command and return stdout
@@ -64,6 +77,136 @@ export function validatePathInRepo(repoPath: string, filePath: string): boolean 
   // Check that the file is within the repo
   const relativePath = relative(resolvedRepo, resolvedFile)
   return !relativePath.startsWith('..') && !isAbsolute(relativePath)
+}
+
+function dedupeAndSort(values: Iterable<string>): string[] {
+  return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b))
+}
+
+function normalizeStatusPath(rawPath: string): string {
+  const trimmed = rawPath.trim()
+  if (!trimmed.includes(' -> ')) {
+    return trimmed
+  }
+
+  const segments = trimmed.split(' -> ')
+  return segments[segments.length - 1]?.trim() || trimmed
+}
+
+function normalizePathForGit(repoPath: string, path: string): string {
+  if (!validatePathInRepo(repoPath, path)) {
+    throw new Error(`Invalid file path: ${path}`)
+  }
+
+  const absolutePath = isAbsolute(path)
+    ? resolve(path)
+    : resolve(repoPath, path)
+
+  const relativePath = relative(resolve(repoPath), absolutePath)
+  if (!relativePath || relativePath === '.') {
+    throw new Error('Path must point to a file or subdirectory inside the repository')
+  }
+
+  return relativePath
+}
+
+/**
+ * Get working tree changes split by staged/unstaged/untracked buckets.
+ */
+export async function getWorkingTreeStatus(repoPath: string): Promise<GitWorkingTreeStatus> {
+  const output = await execGit(repoPath, ['status', '--porcelain'])
+  const staged = new Set<string>()
+  const unstaged = new Set<string>()
+  const untracked = new Set<string>()
+
+  const lines = output
+    .split('\n')
+    .map(line => line.trimEnd())
+    .filter(line => line.length >= 3)
+
+  for (const line of lines) {
+    const indexStatus = line.charAt(0)
+    const worktreeStatus = line.charAt(1)
+    const path = normalizeStatusPath(line.slice(3))
+
+    if (!path) {
+      continue
+    }
+
+    if (indexStatus === '?' && worktreeStatus === '?') {
+      untracked.add(path)
+      continue
+    }
+
+    if (indexStatus !== ' ' && indexStatus !== '?') {
+      staged.add(path)
+    }
+
+    if (worktreeStatus !== ' ') {
+      unstaged.add(path)
+    }
+  }
+
+  return {
+    staged: dedupeAndSort(staged),
+    unstaged: dedupeAndSort(unstaged),
+    untracked: dedupeAndSort(untracked)
+  }
+}
+
+/**
+ * Stage explicit paths in a repository.
+ */
+export async function stagePaths(repoPath: string, paths: string[]): Promise<string[]> {
+  if (!Array.isArray(paths) || paths.length === 0) {
+    return []
+  }
+
+  const normalizedPaths = dedupeAndSort(
+    paths
+      .map(path => path.trim())
+      .filter(path => path.length > 0)
+      .map(path => normalizePathForGit(repoPath, path))
+  )
+
+  if (normalizedPaths.length === 0) {
+    return []
+  }
+
+  await execGit(repoPath, ['add', '--', ...normalizedPaths])
+  return normalizedPaths
+}
+
+/**
+ * Commit currently staged changes. Returns null when nothing is staged.
+ */
+export async function commitStagedChanges(repoPath: string, message: string): Promise<GitCommitResult | null> {
+  const trimmedMessage = message.trim()
+  if (!trimmedMessage) {
+    throw new Error('Commit message is required')
+  }
+
+  const stagedOutput = await execGit(repoPath, ['diff', '--cached', '--name-only'])
+  const stagedFiles = stagedOutput
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0)
+
+  if (stagedFiles.length === 0) {
+    return null
+  }
+
+  await execGit(repoPath, ['commit', '-m', trimmedMessage])
+
+  const sha = (await execGit(repoPath, ['rev-parse', 'HEAD'])).trim()
+  const shortSha = (await execGit(repoPath, ['rev-parse', '--short', 'HEAD'])).trim()
+
+  return {
+    sha,
+    shortSha,
+    message: trimmedMessage,
+    files: stagedFiles
+  }
 }
 
 /**
@@ -398,7 +541,7 @@ export interface ResolvedCommit {
  *
  * @param repoConfig - The repository configuration with optional gitRepos
  * @param sha - The commit SHA to find
- * @returns The GitRepoInfo where the commit was found, or throws if not found
+ * @returns Resolved commit data for the matching repo, or throws if not found
  */
 export async function findRepoForCommit(
   repoConfig: RepoConfig,

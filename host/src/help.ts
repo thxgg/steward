@@ -73,6 +73,10 @@ const HELP: StewardHelp = {
       }
     ],
     git: [
+      {
+        signature: 'git.getStatus(repoId, repoPath?)',
+        description: 'Load working tree status (staged/unstaged/untracked)'
+      },
       { signature: 'git.getCommits(repoId, shas, repoPath?)', description: 'Load commit metadata' },
       { signature: 'git.getDiff(repoId, commit, repoPath?)', description: 'Load full commit diff' },
       {
@@ -82,6 +86,10 @@ const HELP: StewardHelp = {
       {
         signature: 'git.getFileContent(repoId, commit, file, repoPath?)',
         description: 'Load file content at commit'
+      },
+      {
+        signature: 'git.commitIfChanged(repoId, message, options?)',
+        description: 'Stage optional paths and commit when staged changes exist'
       }
     ],
     state: [
@@ -120,6 +128,10 @@ const HELP: StewardHelp = {
     {
       title: 'Upsert without repoId',
       code: `await state.upsertCurrent('prd-viewer', {\n  notes: '# Updated from MCP'\n})\n\nreturn { saved: true }`
+    },
+    {
+      title: 'Commit task-related changes when present',
+      code: `const repo = await repos.current()\n\nconst result = await git.commitIfChanged(repo.id, 'docs: update task notes', {\n  paths: ['docs/prd/prd-viewer.md']\n})\n\nreturn result`
     }
   ]
 }
