@@ -11,7 +11,8 @@ import {
   Link2,
   Check,
   Diff,
-  ArrowLeft
+  ArrowLeft,
+  ExternalLink
 } from 'lucide-vue-next'
 import {
   Sheet,
@@ -35,6 +36,10 @@ const props = defineProps<{
   commits?: CommitRef[]
   /** Repository ID for fetching commit details */
   repoId?: string
+  /** PRD slug that owns the currently selected task */
+  taskPrdSlug?: string | null
+  /** Current route PRD slug */
+  currentPrdSlug?: string | null
 }>()
 
 const open = defineModel<boolean>('open', { default: false })
@@ -107,6 +112,22 @@ function getTaskTitle(taskId: string): string {
 
 // Has commits to show
 const hasCommits = computed(() => props.commits && props.commits.length > 0 && props.repoId)
+
+const showOpenPrdLink = computed(() => {
+  if (!props.repoId || !props.taskPrdSlug || !props.currentPrdSlug) {
+    return false
+  }
+
+  return props.taskPrdSlug !== props.currentPrdSlug
+})
+
+const openPrdHref = computed(() => {
+  if (!showOpenPrdLink.value || !props.repoId || !props.taskPrdSlug) {
+    return ''
+  }
+
+  return `/${props.repoId}/${props.taskPrdSlug}`
+})
 
 // View state: 'details' or 'diff'
 const viewMode = ref<'details' | 'diff'>('details')
@@ -276,6 +297,19 @@ watch(open, (isOpen) => {
               <CheckCircle2 class="size-3" />
               <span>Completed: {{ formatDate(task.completedAt) }}</span>
             </div>
+          </div>
+        </div>
+
+        <div v-if="showOpenPrdLink" class="space-y-2">
+          <Separator />
+          <div class="flex items-center justify-between rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
+            <span class="text-muted-foreground">This task belongs to {{ taskPrdSlug }}.</span>
+            <NuxtLink :to="openPrdHref">
+              <Button variant="outline" size="sm" class="h-8">
+                <ExternalLink class="mr-1.5 size-3.5" />
+                Open PRD
+              </Button>
+            </NuxtLink>
           </div>
         </div>
       </div>

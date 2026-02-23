@@ -1,5 +1,6 @@
 import type { PrdListItem, PrdDocument } from '~/types/prd'
 import type { TasksFile, ProgressFile, CommitRef } from '~/types/task'
+import type { GraphPrdPayload, GraphRepoPayload } from '~/types/graph'
 
 export function usePrd() {
   const { currentRepoId } = useRepos()
@@ -74,6 +75,26 @@ export function usePrd() {
     }
   }
 
+  // Fetch graph payload for a single PRD
+  async function fetchPrdGraph(slug: string): Promise<GraphPrdPayload | null> {
+    if (!currentRepoId.value) return null
+    try {
+      return await $fetch<GraphPrdPayload>(`/api/repos/${currentRepoId.value}/prd/${slug}/graph`)
+    } catch {
+      return null
+    }
+  }
+
+  // Fetch graph payload across all PRDs in a repo
+  async function fetchRepoGraph(): Promise<GraphRepoPayload | null> {
+    if (!currentRepoId.value) return null
+    try {
+      return await $fetch<GraphRepoPayload>(`/api/repos/${currentRepoId.value}/graph`)
+    } catch {
+      return null
+    }
+  }
+
   return {
     prds,
     prdsStatus,
@@ -81,6 +102,8 @@ export function usePrd() {
     fetchDocument,
     fetchTasks,
     fetchProgress,
-    fetchTaskCommits
+    fetchTaskCommits,
+    fetchPrdGraph,
+    fetchRepoGraph
   }
 }

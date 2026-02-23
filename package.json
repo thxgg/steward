@@ -54,7 +54,11 @@
     "prepack": "npm run build"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^2.0.4",
     "@modelcontextprotocol/sdk": "^1.26.0",
+    "@vue-flow/background": "^1.3.2",
+    "@vue-flow/controls": "^1.1.3",
+    "@vue-flow/core": "^1.48.2",
     "@vueuse/core": "^14.1.0",
     "chokidar": "^5.0.0",
     "class-variance-authority": "^0.7.1",

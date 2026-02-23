@@ -44,11 +44,14 @@ onShortcut('Ctrl+j', () => {
   commandPaletteOpen.value = true
 })
 
-// Cmd/Ctrl+\ to toggle Document/Task Board tabs
+// Cmd/Ctrl+\ to cycle PRD page tabs
 function toggleTab() {
   if (!import.meta.client) return
+  const tabs = ['document', 'board', 'graph'] as const
   const currentTab = localStorage.getItem('prd-viewer-tab') || 'document'
-  const newTab = currentTab === 'document' ? 'board' : 'document'
+  const index = tabs.indexOf(currentTab as typeof tabs[number])
+  const safeIndex = index >= 0 ? index : 0
+  const newTab = tabs[(safeIndex + 1) % tabs.length] ?? 'document'
   localStorage.setItem('prd-viewer-tab', newTab)
   window.dispatchEvent(new StorageEvent('storage', {
     key: 'prd-viewer-tab',
@@ -103,13 +106,14 @@ useFileWatch((event) => {
     refreshPrds()
   }
 
-  // For task/progress/prd changes on current PRD page, emit event for granular refresh
+  // For task/progress/prd changes on PRD page, emit event for granular refresh
   const prdSlug = route.params.prd as string | undefined
   if (prdSlug) {
     const isPrdChange = category === 'prd' && event.path?.includes(`/${prdSlug}.`)
-    const isTaskChange = (category === 'tasks' || category === 'progress') && event.path?.includes(`/${prdSlug}/`)
+    const isCurrentPrdTaskChange = (category === 'tasks' || category === 'progress') && event.path?.includes(`/${prdSlug}/`)
+    const isAnyTaskProgressChange = category === 'tasks' || category === 'progress'
 
-    if (isPrdChange || isTaskChange) {
+    if (isPrdChange || isCurrentPrdTaskChange || isAnyTaskProgressChange) {
       fileChangeEvent.value = {
         category,
         path: event.path,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { FileText, Monitor, Moon, Sun, LayoutGrid, Folder, Check, Keyboard, RefreshCw } from 'lucide-vue-next'
+import { FileText, Monitor, Moon, Sun, Folder, Check, Keyboard, RefreshCw, GitBranch } from 'lucide-vue-next'
 import {
   CommandDialog,
   CommandEmpty,
@@ -23,15 +23,54 @@ const { prds } = usePrd()
 const { repos, currentRepoId, selectRepo, refreshGitRepos } = useRepos()
 const { showSuccess, showError } = useToast()
 
+type PrdViewTab = 'document' | 'board' | 'graph'
+
+const TAB_ORDER: PrdViewTab[] = ['document', 'board', 'graph']
+const TAB_LABELS: Record<PrdViewTab, string> = {
+  document: 'Document',
+  board: 'Task Board',
+  graph: 'Graph'
+}
+
 // Get current tab from localStorage
-const currentTab = ref<'document' | 'board'>('document')
+const currentTab = ref<PrdViewTab>('document')
 
 if (import.meta.client) {
   const saved = localStorage.getItem('prd-viewer-tab')
-  if (saved === 'document' || saved === 'board') {
+  if (saved === 'document' || saved === 'board' || saved === 'graph') {
     currentTab.value = saved
   }
 }
+
+function handleStorageEvent(event: StorageEvent) {
+  if (event.key !== 'prd-viewer-tab' || !event.newValue) {
+    return
+  }
+
+  if (event.newValue === 'document' || event.newValue === 'board' || event.newValue === 'graph') {
+    currentTab.value = event.newValue
+  }
+}
+
+onMounted(() => {
+  if (import.meta.client) {
+    window.addEventListener('storage', handleStorageEvent)
+  }
+})
+
+onUnmounted(() => {
+  if (import.meta.client) {
+    window.removeEventListener('storage', handleStorageEvent)
+  }
+})
+
+const nextTab = computed<PrdViewTab>(() => {
+  const index = TAB_ORDER.indexOf(currentTab.value)
+  const safeIndex = index >= 0 ? index : 0
+  return TAB_ORDER[(safeIndex + 1) % TAB_ORDER.length] as PrdViewTab
+})
+
+const nextTabLabel = computed(() => TAB_LABELS[nextTab.value])
 
 function navigateToPrd(slug: string) {
   if (!currentRepoId.value) return
@@ -51,7 +90,7 @@ function toggleTheme() {
 }
 
 function toggleTab() {
-  const newTab = currentTab.value === 'document' ? 'board' : 'document'
+  const newTab = nextTab.value
   currentTab.value = newTab
   if (import.meta.client) {
     localStorage.setItem('prd-viewer-tab', newTab)
@@ -149,11 +188,11 @@ const modKey = computed(() => isMac.value ? '⌘' : 'Ctrl')
           </div>
         </CommandItem>
         <CommandItem
-          :value="`switch-tab ${currentTab === 'document' ? 'task board' : 'document'}`"
+          :value="`switch-tab ${nextTabLabel.toLowerCase()}`"
           @select="toggleTab"
         >
-          <LayoutGrid class="size-4" />
-          <span class="flex-1">Switch to {{ currentTab === 'document' ? 'Task Board' : 'Document' }}</span>
+          <GitBranch class="size-4" />
+          <span class="flex-1">Switch to {{ nextTabLabel }}</span>
           <div class="ml-auto flex items-center gap-1">
             <kbd class="inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">{{ modKey }}</kbd>
             <kbd class="inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">\</kbd>

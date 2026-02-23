@@ -1,4 +1,4 @@
-import type { TaskCategory, TaskPriority, TaskStatus } from './task'
+import type { TaskCategory, TaskPriority, TaskStatus } from './task.js'
 
 export type GraphScope = 'prd' | 'repo'
 
