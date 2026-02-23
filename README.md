@@ -41,6 +41,15 @@ Add to your MCP client config:
 }
 ```
 
+Steward MCP requires a Node runtime with built-in sqlite support (`node:sqlite`) for `repos`, `prds`, and `state` APIs.
+If you see `ERR_UNKNOWN_BUILTIN_MODULE: node:sqlite`, run with sqlite enabled:
+
+```bash
+NODE_OPTIONS=--experimental-sqlite npx -y @thxgg/steward mcp
+```
+
+Note: `execute` runs in a VM sandbox by design, so globals like `process` are intentionally not exposed.
+
 ### CLI
 
 ```bash

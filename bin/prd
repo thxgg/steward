@@ -1,10 +1,127 @@
 #!/usr/bin/env node
+import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
+const SQLITE_ENABLE_FLAG = '--experimental-sqlite'
+const SQLITE_DISABLE_FLAG = '--no-experimental-sqlite'
+const SQLITE_REEXEC_ENV = 'STEWARD_SQLITE_REEXEC'
+
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const entryPath = resolve(packageRoot, 'dist', 'host', 'src', 'index.js')
+
+function requiresSqliteRuntime(command) {
+  return command === 'mcp' || command === 'ui'
+}
+
+function isSqliteRuntimeError(error) {
+  if (!(error instanceof Error)) {
+    return false
+  }
+
+  const code = error.code
+  return typeof code === 'string'
+    && code === 'ERR_UNKNOWN_BUILTIN_MODULE'
+    && error.message.includes('node:sqlite')
+}
+
+function sanitizeNodeOptions(rawNodeOptions = '') {
+  const options = rawNodeOptions
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((option) => option !== SQLITE_ENABLE_FLAG && option !== SQLITE_DISABLE_FLAG)
+
+  return options.join(' ')
+}
+
+function buildReexecEnv() {
+  const env = { ...process.env }
+  const sanitizedNodeOptions = sanitizeNodeOptions(env.NODE_OPTIONS)
+
+  if (sanitizedNodeOptions.length > 0) {
+    env.NODE_OPTIONS = sanitizedNodeOptions
+  } else {
+    delete env.NODE_OPTIONS
+  }
+
+  env[SQLITE_REEXEC_ENV] = '1'
+  return env
+}
+
+function canEnableSqliteWithFlag() {
+  const probe = spawnSync(
+    process.execPath,
+    [SQLITE_ENABLE_FLAG, '-e', "import('node:sqlite').then(() => process.exit(0)).catch(() => process.exit(1))"],
+    {
+      stdio: 'ignore',
+      env: buildReexecEnv()
+    }
+  )
+
+  return probe.status === 0
+}
+
+function reexecWithSqliteFlag() {
+  const result = spawnSync(
+    process.execPath,
+    [SQLITE_ENABLE_FLAG, fileURLToPath(import.meta.url), ...process.argv.slice(2)],
+    {
+      stdio: 'inherit',
+      env: buildReexecEnv()
+    }
+  )
+
+  if (result.error) {
+    throw result.error
+  }
+
+  process.exit(result.status ?? 1)
+}
+
+async function ensureSqliteRuntime(command) {
+  if (!requiresSqliteRuntime(command)) {
+    return
+  }
+
+  try {
+    await import('node:sqlite')
+    return
+  } catch (error) {
+    if (!isSqliteRuntimeError(error)) {
+      throw error
+    }
+
+    const alreadyReexecuted = process.env[SQLITE_REEXEC_ENV] === '1'
+    if (!alreadyReexecuted && canEnableSqliteWithFlag()) {
+      reexecWithSqliteFlag()
+      return
+    }
+
+    const message = error instanceof Error ? error.message : String(error)
+    const nodeOptions = process.env.NODE_OPTIONS || ''
+    const hasDisableFlag = process.execArgv.includes(SQLITE_DISABLE_FLAG)
+      || nodeOptions.includes(SQLITE_DISABLE_FLAG)
+
+    console.error('Steward requires SQLite runtime support for repos/prds/state APIs.')
+    console.error(`Runtime: ${process.version} (${process.execPath})`)
+    if (nodeOptions) {
+      console.error(`NODE_OPTIONS: ${nodeOptions}`)
+    }
+    console.error(`Cause: ${message}`)
+
+    if (hasDisableFlag) {
+      console.error(`Hint: remove ${SQLITE_DISABLE_FLAG} from NODE_OPTIONS or runtime args and retry.`)
+    } else {
+      console.error(`Hint: use a Node runtime with sqlite support or launch with ${SQLITE_ENABLE_FLAG}.`)
+    }
+
+    process.exit(1)
+  }
+}
+
+const command = process.argv[2] || ''
+await ensureSqliteRuntime(command)
 
 if (!existsSync(entryPath)) {
   console.error('Steward host runtime is not built.')

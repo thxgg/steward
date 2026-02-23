@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
+import { assertSqliteRuntimeSupport } from '../../server/utils/db.js'
 import { execute, type ExecutionEnvelope } from './executor.js'
 import { getExecuteToolDescription } from './help.js'
 
@@ -53,6 +54,8 @@ function buildUnexpectedErrorEnvelope(error: unknown): ExecutionEnvelope {
 }
 
 export async function runMcpServer(): Promise<void> {
+  await assertSqliteRuntimeSupport()
+
   const server = new McpServer({
     name: 'steward',
     version: '0.1.0'

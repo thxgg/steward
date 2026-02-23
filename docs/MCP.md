@@ -46,6 +46,20 @@ Example MCP client config:
 }
 ```
 
+## Runtime Requirements
+
+- `repos`, `prds`, and `state` APIs require sqlite runtime support.
+- Steward uses Node's built-in `node:sqlite` module.
+- `prd mcp` auto-retries with `--experimental-sqlite` when the runtime supports it.
+
+If you still see `ERR_UNKNOWN_BUILTIN_MODULE: node:sqlite`, launch explicitly with:
+
+```bash
+NODE_OPTIONS=--experimental-sqlite npx -y @thxgg/steward mcp
+```
+
+If that still fails, the MCP host is using an incompatible Node runtime.
+
 ## Execute Contract
 
 `execute` expects one input field:
