@@ -36,6 +36,32 @@ jobs:
           npm config delete //registry.npmjs.org/:_authToken || true
           npm config delete _authToken || true
 
+      - name: Validate publish version
+        env:
+          TAG_NAME: ${{ github.event.release.tag_name || '' }}
+        run: |
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+
+          echo "Preparing to publish ${PACKAGE_NAME}@${PACKAGE_VERSION}"
+
+          if [ -n "${TAG_NAME}" ]; then
+            TAG_VERSION="${TAG_NAME#v}"
+            if [ "${TAG_VERSION}" != "${PACKAGE_VERSION}" ]; then
+              echo "::error::Release tag ${TAG_NAME} does not match package.json version ${PACKAGE_VERSION}."
+              echo "::error::Bump package.json before creating the release tag."
+              exit 1
+            fi
+          fi
+
+          if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version >/dev/null 2>&1; then
+            echo "::error::${PACKAGE_NAME}@${PACKAGE_VERSION} is already published on npm."
+            echo "::error::Bump the package version before publishing."
+            exit 1
+          fi
+
+          echo "Version validation passed"
+
       - name: Install dependencies
         run: npm ci
 
