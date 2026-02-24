@@ -1,6 +1,6 @@
 {
   "name": "@thxgg/steward",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "description": "Local-first PRD workflow steward with codemode MCP and web UI.",
   "type": "module",
   "author": "thxgg",
