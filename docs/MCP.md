@@ -4,7 +4,9 @@ Steward ships a codemode MCP server.
 
 - Command: `prd mcp`
 - Transport: stdio
-- Tool surface: one tool, `execute`
+- MCP surface:
+  - Tool: `execute`
+  - Prompts: `create_prd`, `break_into_tasks`, `complete_next_task`
 
 The `execute` tool runs JavaScript in a VM sandbox with these APIs in scope:
 
@@ -97,6 +99,16 @@ Each call returns a JSON envelope:
 In-sandbox discovery helper:
 
 - `steward.help()`
+
+## MCP Prompts
+
+Steward also exposes MCP prompts so MCP clients can surface command-like workflows.
+
+- `create_prd(feature_request)`
+- `break_into_tasks(prd_slug)`
+- `complete_next_task(prd_slug)`
+
+In OpenCode, these appear in slash-command autocomplete as MCP commands (for example `/prd:create_prd:mcp`) and insert as `/prd:create_prd` when selected.
 
 ## Available APIs
 

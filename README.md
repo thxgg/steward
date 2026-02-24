@@ -69,9 +69,10 @@ prd mcp
                     │
                     ▼
 ┌─────────────────────────────────────────┐
-│         Codemode MCP (`execute`)        │
+│   Codemode MCP (`execute` + prompts)    │
 │  - VM sandbox                           │
 │  - APIs: repos, prds, git, state        │
+│  - Prompts: create/break/complete flow  │
 └─────────────────────────────────────────┘
                     │
                     ▼
@@ -84,6 +85,14 @@ prd mcp
 ## Codemode Pattern
 
 Steward exposes one MCP tool: `execute`.
+
+It also exposes workflow prompts:
+
+- `create_prd(feature_request)`
+- `break_into_tasks(prd_slug)`
+- `complete_next_task(prd_slug)`
+
+In OpenCode these are shown as MCP slash entries like `/prd:create_prd:mcp`.
 
 ```js
 const repo = await repos.current()

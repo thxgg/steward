@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { assertSqliteRuntimeSupport } from '../../server/utils/db.js'
 import { execute, type ExecutionEnvelope } from './executor.js'
 import { getExecuteToolDescription } from './help.js'
+import { registerStewardPrompts } from './prompts.js'
 
 function serializeEnvelope(envelope: ExecutionEnvelope): string {
   try {
@@ -60,6 +61,8 @@ export async function runMcpServer(): Promise<void> {
     name: 'steward',
     version: '0.1.0'
   })
+
+  registerStewardPrompts(server)
 
   server.tool(
     'execute',
