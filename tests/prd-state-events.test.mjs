@@ -80,3 +80,70 @@ test('upsertPrdState emits tasks/progress change events', async () => {
     await rm(tempRoot, { recursive: true, force: true })
   }
 })
+
+test('upsertPrdState preserves concurrent field updates', async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), 'steward-test-'))
+  const previousDbPath = process.env.PRD_STATE_DB_PATH
+  process.env.PRD_STATE_DB_PATH = join(tempRoot, 'state.db')
+
+  try {
+    const { addRepo } = await import('../dist/server/utils/repos.js')
+    const { getPrdState, upsertPrdState } = await import('../dist/server/utils/prd-state.js')
+
+    const repoPath = join(tempRoot, 'repo')
+    await mkdir(join(repoPath, 'docs', 'prd'), { recursive: true })
+
+    const repo = await addRepo(repoPath, 'Repo')
+
+    await Promise.all([
+      upsertPrdState(repo.id, 'sample-prd', {
+        tasks: {
+          prd: {
+            name: 'Sample PRD',
+            source: 'docs/prd/sample-prd.md',
+            createdAt: new Date().toISOString()
+          },
+          tasks: [
+            {
+              id: 'task-1',
+              category: 'feature',
+              title: 'Implement change',
+              description: 'Implement change',
+              steps: ['step'],
+              priority: 'high',
+              status: 'pending'
+            }
+          ]
+        }
+      }),
+      upsertPrdState(repo.id, 'sample-prd', {
+        progress: {
+          prdName: 'Sample PRD',
+          totalTasks: 1,
+          completed: 0,
+          inProgress: 0,
+          blocked: 0,
+          startedAt: null,
+          lastUpdated: new Date().toISOString(),
+          patterns: [],
+          taskLogs: []
+        }
+      })
+    ])
+
+    const state = await getPrdState(repo.id, 'sample-prd')
+    assert.ok(state)
+    assert.ok(state.tasks)
+    assert.ok(state.progress)
+    assert.equal(state.tasks?.tasks[0]?.id, 'task-1')
+    assert.equal(state.progress?.totalTasks, 1)
+  } finally {
+    if (previousDbPath === undefined) {
+      delete process.env.PRD_STATE_DB_PATH
+    } else {
+      process.env.PRD_STATE_DB_PATH = previousDbPath
+    }
+
+    await rm(tempRoot, { recursive: true, force: true })
+  }
+})

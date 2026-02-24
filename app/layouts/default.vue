@@ -106,19 +106,20 @@ useFileWatch((event) => {
     refreshPrds()
   }
 
-  // For task/progress/prd changes on PRD page, emit event for granular refresh
+  // Emit granular refresh events to page-level consumers.
+  // PRD pages receive scoped markdown updates; repo graph pages receive repo-level updates.
   const prdSlug = route.params.prd as string | undefined
-  if (prdSlug) {
-    const isPrdChange = category === 'prd' && event.path?.includes(`/${prdSlug}.`)
-    const isCurrentPrdTaskChange = (category === 'tasks' || category === 'progress') && event.path?.includes(`/${prdSlug}/`)
-    const isAnyTaskProgressChange = category === 'tasks' || category === 'progress'
+  const isTaskOrProgress = category === 'tasks' || category === 'progress'
+  const isPrdChange = category === 'prd' && (!prdSlug || event.path?.includes(`/${prdSlug}.`))
+  const isCurrentPrdTaskProgressChange = !!prdSlug
+    && isTaskOrProgress
+    && event.path?.includes(`/${prdSlug}/`)
 
-    if (isPrdChange || isCurrentPrdTaskChange || isAnyTaskProgressChange) {
-      fileChangeEvent.value = {
-        category,
-        path: event.path,
-        timestamp: Date.now()
-      }
+  if (isTaskOrProgress || isPrdChange || isCurrentPrdTaskProgressChange) {
+    fileChangeEvent.value = {
+      category,
+      path: event.path,
+      timestamp: Date.now()
     }
   }
 })

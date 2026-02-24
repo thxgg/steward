@@ -128,7 +128,14 @@ export async function listPrdDocuments(repo: RepoConfig): Promise<PrdListItem[]>
 
   try {
     const files = await fs.readdir(prdDir)
-    prdFiles = files.filter((file) => file.endsWith('.md'))
+    prdFiles = files.filter((file) => {
+      if (!file.endsWith('.md')) {
+        return false
+      }
+
+      const slug = basename(file, '.md')
+      return isValidPrdSlug(slug)
+    })
   } catch {
     return []
   }

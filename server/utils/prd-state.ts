@@ -140,66 +140,45 @@ export async function upsertPrdState(repoId: string, slug: string, update: PrdSt
     ? undefined
     : (update.progress === null ? null : parseProgressFile(update.progress))
 
-  const existing = await dbGet<PrdStateRow>(
-    `
-      SELECT repo_id, slug, tasks_json, progress_json, notes_md, updated_at
-      FROM prd_states
-      WHERE repo_id = ? AND slug = ?
-    `,
-    [repoId, slug]
-  )
+  const updateTasks = validatedTasks !== undefined
+  const updateProgress = validatedProgress !== undefined
+  const updateNotes = update.notes !== undefined
 
   const tasksJson = validatedTasks === undefined
-    ? existing?.tasks_json ?? null
+    ? null
     : (validatedTasks === null ? null : JSON.stringify(validatedTasks))
 
   const progressJson = validatedProgress === undefined
-    ? existing?.progress_json ?? null
+    ? null
     : (validatedProgress === null ? null : JSON.stringify(validatedProgress))
 
   const notesMd = update.notes === undefined
-    ? existing?.notes_md ?? null
+    ? null
     : update.notes
 
   const updatedAt = new Date().toISOString()
-
-  if (existing) {
-    await dbRun(
-      `
-        UPDATE prd_states
-        SET tasks_json = ?, progress_json = ?, notes_md = ?, updated_at = ?
-        WHERE repo_id = ? AND slug = ?
-      `,
-      [tasksJson, progressJson, notesMd, updatedAt, repoId, slug]
-    )
-
-    if (validatedTasks !== undefined) {
-      emitChange({
-        type: 'change',
-        path: `state://${repoId}/${slug}/tasks.json`,
-        repoId,
-        category: 'tasks'
-      })
-    }
-
-    if (validatedProgress !== undefined) {
-      emitChange({
-        type: 'change',
-        path: `state://${repoId}/${slug}/progress.json`,
-        repoId,
-        category: 'progress'
-      })
-    }
-
-    return
-  }
 
   await dbRun(
     `
       INSERT INTO prd_states (repo_id, slug, tasks_json, progress_json, notes_md, updated_at)
       VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(repo_id, slug) DO UPDATE SET
+        tasks_json = CASE WHEN ? THEN excluded.tasks_json ELSE prd_states.tasks_json END,
+        progress_json = CASE WHEN ? THEN excluded.progress_json ELSE prd_states.progress_json END,
+        notes_md = CASE WHEN ? THEN excluded.notes_md ELSE prd_states.notes_md END,
+        updated_at = excluded.updated_at
     `,
-    [repoId, slug, tasksJson, progressJson, notesMd, updatedAt]
+    [
+      repoId,
+      slug,
+      tasksJson,
+      progressJson,
+      notesMd,
+      updatedAt,
+      updateTasks ? 1 : 0,
+      updateProgress ? 1 : 0,
+      updateNotes ? 1 : 0
+    ]
   )
 
   if (validatedTasks !== undefined) {
