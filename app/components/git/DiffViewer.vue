@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { codeToHtml } from 'shiki/bundle/web'
+import { codeToHtml } from 'shiki/bundle/full'
 import { Link, Link2Off, FileWarning, AlertTriangle, ChevronDown } from 'lucide-vue-next'
 import { Button } from '~/components/ui/button'
 import type { DiffHunk, DiffLine } from '~/types/git'
