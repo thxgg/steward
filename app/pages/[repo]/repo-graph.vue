@@ -26,6 +26,11 @@ const selectedTaskPrdSlug = ref<string | null>(null)
 const detailOpen = ref(false)
 const selectedTaskCommits = ref<CommitRef[]>([])
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  const fetchError = error as { data?: { message?: string }; statusMessage?: string; message?: string }
+  return fetchError.data?.message || fetchError.statusMessage || fetchError.message || fallback
+}
+
 function cacheTasksForPrd(slug: string, tasks: TasksFile | null) {
   tasksByPrd.value = {
     ...tasksByPrd.value,
@@ -38,9 +43,14 @@ async function getTasksForPrd(slug: string): Promise<TasksFile | null> {
     return tasksByPrd.value[slug] ?? null
   }
 
-  const tasks = await fetchTasks(slug)
-  cacheTasksForPrd(slug, tasks)
-  return tasks
+  try {
+    const tasks = await fetchTasks(slug)
+    cacheTasksForPrd(slug, tasks)
+    return tasks
+  } catch (error) {
+    showError('Failed to load tasks', getErrorMessage(error, `Could not load tasks for ${slug}.`))
+    return null
+  }
 }
 
 const taskTitles = computed(() => {
@@ -85,6 +95,8 @@ async function loadGraph(force: boolean = false) {
     }
 
     graph.value = payload
+  } catch (error) {
+    graphError.value = getErrorMessage(error, 'Failed to load repository graph.')
   } finally {
     graphLoading.value = false
   }
@@ -103,7 +115,12 @@ async function handleGraphTaskClick(payload: { prdSlug: string; taskId: string }
   selectedTaskPrdSlug.value = payload.prdSlug
   detailOpen.value = true
   selectedTaskCommits.value = []
-  selectedTaskCommits.value = await fetchTaskCommits(payload.prdSlug, task.id)
+
+  try {
+    selectedTaskCommits.value = await fetchTaskCommits(payload.prdSlug, task.id)
+  } catch (error) {
+    showError('Failed to load commits', getErrorMessage(error, 'Could not resolve task commits.'))
+  }
 }
 
 const fileChangeEvent = inject<Ref<{ category: string; path?: string; timestamp: number } | null>>('fileChangeEvent', ref(null))

@@ -1,4 +1,5 @@
 import { getRepos } from '~~/server/utils/repos'
+import { assertValidPrdSlug } from '~~/server/utils/prd-service'
 import { buildPrdGraph } from '~~/server/utils/task-graph'
 
 export default defineEventHandler(async (event) => {
@@ -9,6 +10,16 @@ export default defineEventHandler(async (event) => {
     throw createError({
       statusCode: 400,
       statusMessage: 'Repository ID and PRD slug are required'
+    })
+  }
+
+  try {
+    assertValidPrdSlug(prdSlug)
+  } catch (error) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Invalid PRD slug',
+      message: (error as Error).message
     })
   }
 

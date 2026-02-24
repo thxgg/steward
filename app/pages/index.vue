@@ -16,16 +16,18 @@ const isAdding = ref(false)
 // Directory browser state (reused from RepoSelector pattern)
 const showBrowser = ref(false)
 const browserPath = ref('')
+const browserParent = ref<string | null>(null)
 const browserDirs = ref<{ name: string; path: string }[]>([])
 const browserLoading = ref(false)
 
 async function browseDirectory(path?: string) {
   browserLoading.value = true
   try {
-    const data = await $fetch('/api/browse', {
+    const data = await $fetch<{ current: string; parent: string | null; directories: { name: string; path: string }[] }>('/api/browse', {
       query: { path: path || browserPath.value || undefined }
     })
     browserPath.value = data.current
+    browserParent.value = data.parent
     browserDirs.value = data.directories
   } catch {
     // Silently fail - directory browser will show empty state
@@ -46,8 +48,9 @@ function selectDirectory(path: string) {
 }
 
 function navigateUp() {
-  const parent = browserPath.value.split('/').slice(0, -1).join('/') || '/'
-  browseDirectory(parent)
+  if (browserParent.value) {
+    browseDirectory(browserParent.value)
+  }
 }
 
 async function handleAddRepo() {
@@ -153,7 +156,7 @@ watch(
             <button
               type="button"
               class="hover:text-foreground text-muted-foreground"
-              :disabled="browserPath === '/'"
+              :disabled="!browserParent"
               @click="navigateUp"
             >
               ..

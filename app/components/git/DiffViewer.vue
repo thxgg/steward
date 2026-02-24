@@ -1,8 +1,15 @@
 <script setup lang="ts">
-import { codeToHtml } from 'shiki/bundle/full'
 import { Link, Link2Off, FileWarning, AlertTriangle, ChevronDown } from 'lucide-vue-next'
 import { Button } from '~/components/ui/button'
 import type { DiffHunk, DiffLine } from '~/types/git'
+
+type CodeToHtmlFn = (code: string, options: {
+  lang: string
+  themes: {
+    light: string
+    dark: string
+  }
+}) => Promise<string>
 
 const props = defineProps<{
   /** Diff hunks to display */
@@ -23,6 +30,8 @@ const props = defineProps<{
 
 // Line limit for large files (truncation threshold)
 const LINE_LIMIT = 10000
+const MAX_DIFF_HIGHLIGHT_LINES = 1500
+const MAX_FULL_FILE_HIGHLIGHT_LINES = 4000
 const showAll = ref(false)
 
 // Synchronized scrolling state
@@ -154,6 +163,16 @@ const language = computed(() => detectLanguage(props.filePath))
 // Highlighted lines state
 const highlightedLines = ref<Map<string, string>>(new Map())
 const isLoading = ref(true)
+const lineHighlightCache = new Map<string, string>()
+let codeToHtmlLoader: Promise<CodeToHtmlFn> | null = null
+
+async function getCodeToHtml(): Promise<CodeToHtmlFn> {
+  if (!codeToHtmlLoader) {
+    codeToHtmlLoader = import('shiki').then((module) => module.codeToHtml as CodeToHtmlFn)
+  }
+
+  return codeToHtmlLoader
+}
 
 // Generate line pairs for side-by-side view
 interface LinePair {
@@ -290,7 +309,14 @@ async function highlightLine(content: string, lang: string): Promise<string> {
     return ''
   }
 
+  const cacheKey = `${lang}:${content}`
+  const cached = lineHighlightCache.get(cacheKey)
+  if (cached !== undefined) {
+    return cached
+  }
+
   try {
+    const codeToHtml = await getCodeToHtml()
     const html = await codeToHtml(content, {
       lang,
       themes: {
@@ -301,9 +327,13 @@ async function highlightLine(content: string, lang: string): Promise<string> {
     // Extract just the code content from shiki output
     // Shiki wraps in <pre><code>...</code></pre>
     const codeMatch = html.match(/<code[^>]*>([\s\S]*?)<\/code>/)
-    return codeMatch ? codeMatch[1] || '' : escapeHtml(content)
+    const highlighted = codeMatch ? codeMatch[1] || '' : escapeHtml(content)
+    lineHighlightCache.set(cacheKey, highlighted)
+    return highlighted
   } catch {
-    return escapeHtml(content)
+    const fallback = escapeHtml(content)
+    lineHighlightCache.set(cacheKey, fallback)
+    return fallback
   }
 }
 
@@ -314,7 +344,13 @@ async function highlightFullContent(content: string, lang: string): Promise<stri
     return []
   }
 
+  const lines = content.split('\n')
+  if (lines.length > MAX_FULL_FILE_HIGHLIGHT_LINES) {
+    return lines.map(escapeHtml)
+  }
+
   try {
+    const codeToHtml = await getCodeToHtml()
     const html = await codeToHtml(content, {
       lang,
       themes: {
@@ -325,7 +361,7 @@ async function highlightFullContent(content: string, lang: string): Promise<stri
     // Extract the code content from shiki output
     const codeMatch = html.match(/<code[^>]*>([\s\S]*?)<\/code>/)
     if (!codeMatch || !codeMatch[1]) {
-      return content.split('\n').map(escapeHtml)
+      return lines.map(escapeHtml)
     }
 
     // Split by newlines, preserving HTML tags that span lines
@@ -333,7 +369,7 @@ async function highlightFullContent(content: string, lang: string): Promise<stri
     const highlightedContent = codeMatch[1]
     return highlightedContent.split('\n')
   } catch {
-    return content.split('\n').map(escapeHtml)
+    return lines.map(escapeHtml)
   }
 }
 
@@ -418,9 +454,16 @@ watch(
     }
 
     // Highlight remaining lines individually (removed lines)
+    const limitedLines = linesToHighlight.slice(0, MAX_DIFF_HIGHLIGHT_LINES)
+    const overflowLines = linesToHighlight.slice(MAX_DIFF_HIGHLIGHT_LINES)
+
+    for (const { key, content } of overflowLines) {
+      newHighlighted.set(key, escapeHtml(content))
+    }
+
     const batchSize = 50
-    for (let i = 0; i < linesToHighlight.length; i += batchSize) {
-      const batch = linesToHighlight.slice(i, i + batchSize)
+    for (let i = 0; i < limitedLines.length; i += batchSize) {
+      const batch = limitedLines.slice(i, i + batchSize)
       const results = await Promise.all(
         batch.map(async ({ key, content }) => {
           const result = await highlightLine(content, lang)

@@ -63,7 +63,7 @@ function handleAddClick() {
 // Directory browser state
 const showBrowser = ref(false)
 const browserPath = ref('')
-const browserParent = ref('')
+const browserParent = ref<string | null>(null)
 const browserDirs = ref<{ name: string; path: string }[]>([])
 const browserLoading = ref(false)
 
@@ -74,7 +74,7 @@ const canNavigateUp = computed(() => {
 async function browseDirectory(path?: string) {
   browserLoading.value = true
   try {
-    const data = await $fetch<{ current: string; parent: string; directories: { name: string; path: string }[] }>('/api/browse', {
+    const data = await $fetch<{ current: string; parent: string | null; directories: { name: string; path: string }[] }>('/api/browse', {
       query: { path: path || browserPath.value || undefined }
     })
     browserPath.value = data.current
@@ -99,11 +99,12 @@ function selectDirectory(path: string) {
 }
 
 function navigateUp() {
-  if (!canNavigateUp.value) {
+  const parent = browserParent.value
+  if (!canNavigateUp.value || !parent) {
     return
   }
 
-  browseDirectory(browserParent.value)
+  browseDirectory(parent)
 }
 
 // Add repo dialog state

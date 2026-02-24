@@ -1,5 +1,9 @@
-import { getRepos } from '~~/server/utils/repos'
-import { getPrdState, migrateLegacyStateForRepo } from '~~/server/utils/prd-state'
+import { readPrdProgress } from '~~/server/utils/prd-service'
+import { getRepoById } from '~~/server/utils/repos'
+
+function normalizeErrorMessage(message: string): string {
+  return message.replace(/\s+/g, ' ').trim()
+}
 
 export default defineEventHandler(async (event) => {
   const repoId = getRouterParam(event, 'repoId')
@@ -12,9 +16,7 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const repos = await getRepos()
-  const repo = repos.find(r => r.id === repoId)
-
+  const repo = await getRepoById(repoId)
   if (!repo) {
     throw createError({
       statusCode: 404,
@@ -22,16 +24,23 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  await migrateLegacyStateForRepo(repo)
-
   try {
-    const state = await getPrdState(repo.id, prdSlug)
-    return state?.progress ?? null
+    return await readPrdProgress(repo, prdSlug)
   } catch (error) {
+    const message = normalizeErrorMessage((error as Error).message)
+
+    if (message.includes('Invalid PRD slug')) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Invalid PRD slug',
+        message
+      })
+    }
+
     throw createError({
       statusCode: 500,
       statusMessage: 'Failed to read progress state',
-      message: (error as Error).message.replace(/\s+/g, ' ').trim()
+      message
     })
   }
 })

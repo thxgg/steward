@@ -1,6 +1,10 @@
 import { readdir, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { homedir } from 'node:os'
+
+function toPosixPath(path: string): string {
+  return path.replaceAll('\\', '/')
+}
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
@@ -11,8 +15,10 @@ export default defineEventHandler(async (event) => {
     path = path.replace('~', homedir())
   }
 
+  const resolvedPath = resolve(path)
+
   try {
-    const stats = await stat(path)
+    const stats = await stat(resolvedPath)
     if (!stats.isDirectory()) {
       throw createError({
         statusCode: 400,
@@ -20,18 +26,20 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    const entries = await readdir(path, { withFileTypes: true })
+    const entries = await readdir(resolvedPath, { withFileTypes: true })
     const directories = entries
       .filter(entry => entry.isDirectory() && !entry.name.startsWith('.'))
       .map(entry => ({
         name: entry.name,
-        path: join(path, entry.name)
+        path: toPosixPath(join(resolvedPath, entry.name))
       }))
       .sort((a, b) => a.name.localeCompare(b.name))
 
+    const parentPath = dirname(resolvedPath)
+
     return {
-      current: path,
-      parent: join(path, '..'),
+      current: toPosixPath(resolvedPath),
+      parent: parentPath === resolvedPath ? null : toPosixPath(parentPath),
       directories
     }
   } catch (err: any) {

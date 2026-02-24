@@ -7,6 +7,15 @@ import type { GraphPrdPayload } from '~/types/graph'
 import type { Task, TasksFile, ProgressFile, CommitRef } from '~/types/task'
 
 type PrdViewTab = 'document' | 'board' | 'graph'
+type FetchError = {
+  status?: number
+  statusCode?: number
+  statusMessage?: string
+  message?: string
+  data?: {
+    message?: string
+  }
+}
 
 const TAB_STORAGE_KEY = 'prd-viewer-tab'
 const TASK_QUERY_KEY = 'task'
@@ -31,6 +40,16 @@ function getSingleQueryParam(value: unknown): string | null {
   }
 
   return null
+}
+
+function getStatusCode(error: unknown): number | undefined {
+  const fetchError = error as FetchError
+  return fetchError.statusCode ?? fetchError.status
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  const fetchError = error as FetchError
+  return fetchError.data?.message || fetchError.statusMessage || fetchError.message || fallback
 }
 
 // Disable SSR for this page - requires client-side localStorage for repo context
@@ -110,9 +129,14 @@ async function getTasksForPrd(slug: string): Promise<TasksFile | null> {
     return tasksByPrd.value[slug] ?? null
   }
 
-  const tasks = await fetchTasks(slug)
-  cacheTasksForPrd(slug, tasks)
-  return tasks
+  try {
+    const tasks = await fetchTasks(slug)
+    cacheTasksForPrd(slug, tasks)
+    return tasks
+  } catch (error) {
+    showError('Failed to load tasks', getErrorMessage(error, `Could not load tasks for ${slug}.`))
+    return null
+  }
 }
 
 function buildBaseQuery(): Record<string, string | string[]> {
@@ -167,7 +191,13 @@ async function openTaskDetail(task: Task, sourcePrdSlug: string) {
   selectedTaskCommits.value = []
 
   await syncTaskQuery(task.id, sourcePrdSlug)
-  selectedTaskCommits.value = await fetchTaskCommits(sourcePrdSlug, task.id)
+
+  try {
+    selectedTaskCommits.value = await fetchTaskCommits(sourcePrdSlug, task.id)
+  } catch (error) {
+    selectedTaskCommits.value = []
+    showError('Failed to load commits', getErrorMessage(error, 'Could not resolve commits for this task.'))
+  }
 }
 
 async function syncTaskDetailFromRoute() {
@@ -201,7 +231,12 @@ async function syncTaskDetailFromRoute() {
   detailOpen.value = true
 
   if (!isSameTask) {
-    selectedTaskCommits.value = await fetchTaskCommits(selection.prdSlug, task.id)
+    try {
+      selectedTaskCommits.value = await fetchTaskCommits(selection.prdSlug, task.id)
+    } catch (error) {
+      selectedTaskCommits.value = []
+      showError('Failed to load commits', getErrorMessage(error, 'Could not resolve commits for this task.'))
+    }
   }
 }
 
@@ -262,22 +297,37 @@ const fileChangeEvent = inject<Ref<{ category: string; path?: string; timestamp:
 
 // Load PRD document only
 async function loadDocument() {
-  const doc = await fetchDocument(prdSlug.value)
-  if (doc) {
-    document.value = doc
+  try {
+    const doc = await fetchDocument(prdSlug.value)
+    if (doc) {
+      document.value = doc
+      error.value = null
+    }
+  } catch (err) {
+    const statusCode = getStatusCode(err)
+    if (statusCode === 404) {
+      error.value = `PRD "${prdSlug.value}" not found in this repository.`
+      return
+    }
+
+    showError('Failed to reload PRD', getErrorMessage(err, 'Could not refresh the PRD document.'))
   }
 }
 
 // Load tasks and progress only
 async function loadTasksAndProgress() {
-  const [tasks, progress] = await Promise.all([
-    fetchTasks(prdSlug.value),
-    fetchProgress(prdSlug.value)
-  ])
+  try {
+    const [tasks, progress] = await Promise.all([
+      fetchTasks(prdSlug.value),
+      fetchProgress(prdSlug.value)
+    ])
 
-  tasksFile.value = tasks
-  progressFile.value = progress
-  cacheTasksForPrd(prdSlug.value, tasks)
+    tasksFile.value = tasks
+    progressFile.value = progress
+    cacheTasksForPrd(prdSlug.value, tasks)
+  } catch (err) {
+    showError('Failed to refresh task state', getErrorMessage(err, 'Could not refresh tasks and progress.'))
+  }
 }
 
 async function loadGraph(force: boolean = false) {
@@ -296,6 +346,8 @@ async function loadGraph(force: boolean = false) {
 
     prdGraph.value = graph
     graphError.value = null
+  } catch (err) {
+    graphError.value = getErrorMessage(err, 'Failed to load PRD graph.')
   } finally {
     graphLoading.value = false
   }
@@ -347,15 +399,15 @@ async function loadData() {
     await ensureGraphLoaded()
     await syncTaskDetailFromRoute()
   } catch (err) {
-    const fetchErr = err as { statusCode?: number; data?: { message?: string } }
-    if (fetchErr.statusCode === 404) {
+    const statusCode = getStatusCode(err)
+    if (statusCode === 404) {
       error.value = `PRD "${prdSlug.value}" not found. Check if the file exists in docs/prd/.`
-    } else if (fetchErr.statusCode === 500) {
+    } else if (statusCode === 500) {
       error.value = 'Server error while loading the PRD. Check the file format.'
-      showError('Server error', fetchErr.data?.message || 'Failed to read PRD file')
+      showError('Server error', getErrorMessage(err, 'Failed to read PRD file'))
     } else {
       error.value = 'Failed to load PRD document. Please try again.'
-      showError('Load failed', 'Could not fetch the PRD document')
+      showError('Load failed', getErrorMessage(err, 'Could not fetch the PRD document'))
     }
   } finally {
     isLoading.value = false

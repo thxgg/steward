@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
@@ -54,12 +57,39 @@ function buildUnexpectedErrorEnvelope(error: unknown): ExecutionEnvelope {
   }
 }
 
+function resolvePackageVersion(): string {
+  let currentDir = dirname(fileURLToPath(import.meta.url))
+
+  while (true) {
+    const packageJsonPath = join(currentDir, 'package.json')
+    if (existsSync(packageJsonPath)) {
+      try {
+        const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8')) as { version?: unknown }
+        if (typeof packageJson.version === 'string' && packageJson.version.trim().length > 0) {
+          return packageJson.version
+        }
+      } catch {
+        break
+      }
+    }
+
+    const parentDir = dirname(currentDir)
+    if (parentDir === currentDir) {
+      break
+    }
+
+    currentDir = parentDir
+  }
+
+  return '0.0.0'
+}
+
 export async function runMcpServer(): Promise<void> {
   await assertSqliteRuntimeSupport()
 
   const server = new McpServer({
     name: 'steward',
-    version: '0.1.0'
+    version: resolvePackageVersion()
   })
 
   registerStewardPrompts(server)

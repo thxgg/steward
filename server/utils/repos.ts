@@ -195,6 +195,16 @@ export async function getRepoById(id: string): Promise<RepoConfig | undefined> {
   return row ? rowToRepo(row) : undefined
 }
 
+export async function updateRepoGitRepos(id: string, gitRepos?: GitRepoInfo[]): Promise<boolean> {
+  await importLegacyReposIfNeeded()
+  const result = await dbRun(
+    'UPDATE repos SET git_repos_json = ? WHERE id = ?',
+    [serializeGitRepos(gitRepos), id]
+  )
+
+  return result.changes > 0
+}
+
 export async function removeRepo(id: string): Promise<boolean> {
   await importLegacyReposIfNeeded()
   const result = await dbRun('DELETE FROM repos WHERE id = ?', [id])

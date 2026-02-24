@@ -5,7 +5,7 @@ import {
   getRepoById,
   getRepos,
   removeRepo,
-  saveRepos,
+  updateRepoGitRepos,
   validateRepoPath
 } from '../../../server/utils/repos.js'
 import { migrateLegacyStateForRepo } from '../../../server/utils/prd-state.js'
@@ -47,25 +47,10 @@ export const repos = {
   },
 
   async refreshGitRepos(repoId: string): Promise<{ discovered: number; gitRepos: GitRepoInfo[] }> {
-    await requireRepo(repoId)
-
-    const allRepos = await getRepos()
-    const repoIndex = allRepos.findIndex((repo) => repo.id === repoId)
-    if (repoIndex === -1) {
-      throw new Error('Repository not found')
-    }
-
-    const repo = allRepos[repoIndex]!
+    const repo = await requireRepo(repoId)
     const gitRepos = await discoverGitRepos(repo.path)
 
-    if (gitRepos.length > 0) {
-      repo.gitRepos = gitRepos
-    } else {
-      delete repo.gitRepos
-    }
-
-    allRepos[repoIndex] = repo
-    await saveRepos(allRepos)
+    await updateRepoGitRepos(repo.id, gitRepos.length > 0 ? gitRepos : undefined)
 
     return {
       discovered: gitRepos.length,

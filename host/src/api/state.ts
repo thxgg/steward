@@ -7,6 +7,7 @@ import {
   type PrdStateUpdate,
   upsertPrdState
 } from '../../../server/utils/prd-state.js'
+import { parseProgressFile, parseTasksFile } from '../../../server/utils/state-schema.js'
 import { requireCurrentRepo, requireRepo, requireRepoByPath } from './repo-context.js'
 
 export interface StatePayload {
@@ -17,8 +18,12 @@ export interface StatePayload {
 
 function mapStateUpdate(payload: StatePayload): PrdStateUpdate {
   return {
-    ...(payload.tasks !== undefined && { tasks: payload.tasks }),
-    ...(payload.progress !== undefined && { progress: payload.progress }),
+    ...(payload.tasks !== undefined && {
+      tasks: payload.tasks === null ? null : parseTasksFile(payload.tasks)
+    }),
+    ...(payload.progress !== undefined && {
+      progress: payload.progress === null ? null : parseProgressFile(payload.progress)
+    }),
     ...(payload.notes !== undefined && { notes: payload.notes })
   }
 }

@@ -453,7 +453,7 @@ function parseDiffHunks(diffOutput: string): DiffHunk[] {
           oldNumber: oldLineNum++,
         }
         currentHunk.lines.push(diffLine)
-      } else if (line.startsWith(' ') || line === '') {
+      } else if (line.startsWith(' ')) {
         const diffLine: DiffLine = {
           type: 'context',
           content: line.substring(1),
@@ -470,6 +470,10 @@ function parseDiffHunks(diffOutput: string): DiffHunk[] {
   }
 
   return hunks
+}
+
+export function parseDiffHunksForTest(diffOutput: string): DiffHunk[] {
+  return parseDiffHunks(diffOutput)
 }
 
 /**

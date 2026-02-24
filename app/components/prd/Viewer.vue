@@ -91,13 +91,17 @@ async function renderMarkdown(content: string): Promise<string> {
 
 // Render on mount and when content changes
 watch(() => props.content, async (newContent) => {
-  if (newContent) {
-    isLoading.value = true
-    try {
-      renderedHtml.value = await renderMarkdown(newContent)
-    } finally {
-      isLoading.value = false
-    }
+  if (!newContent) {
+    renderedHtml.value = ''
+    isLoading.value = false
+    return
+  }
+
+  isLoading.value = true
+  try {
+    renderedHtml.value = await renderMarkdown(newContent)
+  } finally {
+    isLoading.value = false
   }
 }, { immediate: true })
 </script>
@@ -118,13 +122,13 @@ watch(() => props.content, async (newContent) => {
 <style>
 /* Prose styling for markdown content */
 .prd-viewer .prose {
-  --tw-prose-body: hsl(var(--foreground));
-  --tw-prose-headings: hsl(var(--foreground));
-  --tw-prose-links: hsl(var(--primary));
-  --tw-prose-code: hsl(var(--foreground));
-  --tw-prose-pre-bg: hsl(var(--muted));
-  --tw-prose-quotes: hsl(var(--muted-foreground));
-  --tw-prose-hr: hsl(var(--border));
+  --tw-prose-body: var(--foreground);
+  --tw-prose-headings: var(--foreground);
+  --tw-prose-links: var(--primary);
+  --tw-prose-code: var(--foreground);
+  --tw-prose-pre-bg: var(--muted);
+  --tw-prose-quotes: var(--muted-foreground);
+  --tw-prose-hr: var(--border);
 }
 
 .prd-viewer .prose h1,
@@ -138,13 +142,13 @@ watch(() => props.content, async (newContent) => {
 
 .prd-viewer .prose h1 {
   font-size: 1.875rem;
-  border-bottom: 1px solid hsl(var(--border));
+  border-bottom: 1px solid var(--border);
   padding-bottom: 0.5rem;
 }
 
 .prd-viewer .prose h2 {
   font-size: 1.5rem;
-  border-bottom: 1px solid hsl(var(--border));
+  border-bottom: 1px solid var(--border);
   padding-bottom: 0.25rem;
 }
 
@@ -159,7 +163,7 @@ watch(() => props.content, async (newContent) => {
 }
 
 .prd-viewer .prose a {
-  color: hsl(var(--primary));
+  color: var(--primary);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -169,7 +173,7 @@ watch(() => props.content, async (newContent) => {
 }
 
 .prd-viewer .prose code:not(pre code) {
-  background: hsl(var(--muted));
+  background: var(--muted);
   padding: 0.125rem 0.375rem;
   border-radius: 0.25rem;
   font-size: 0.875em;
@@ -177,7 +181,7 @@ watch(() => props.content, async (newContent) => {
 }
 
 .prd-viewer .prose pre {
-  background: hsl(var(--muted));
+  background: var(--muted);
   border-radius: 0.5rem;
   padding: 1rem;
   overflow-x: auto;
@@ -186,7 +190,7 @@ watch(() => props.content, async (newContent) => {
 
 /* Shiki code blocks */
 .prd-viewer .prose pre.shiki {
-  background-color: hsl(var(--muted)) !important;
+  background-color: var(--muted) !important;
 }
 
 .prd-viewer .prose .shiki code {
@@ -199,7 +203,7 @@ watch(() => props.content, async (newContent) => {
 /* Dark mode shiki */
 .dark .prd-viewer .prose pre.shiki,
 .dark .prd-viewer .prose .shiki {
-  background-color: hsl(var(--muted)) !important;
+  background-color: var(--muted) !important;
 }
 
 .dark .prd-viewer .prose .shiki.github-light {
@@ -220,18 +224,18 @@ watch(() => props.content, async (newContent) => {
 
 .prd-viewer .prose th,
 .prd-viewer .prose td {
-  border: 1px solid hsl(var(--border));
+  border: 1px solid var(--border);
   padding: 0.5rem 0.75rem;
   text-align: left;
 }
 
 .prd-viewer .prose th {
-  background: hsl(var(--muted));
+  background: var(--muted);
   font-weight: 600;
 }
 
 .prd-viewer .prose tr:nth-child(even) {
-  background: hsl(var(--muted) / 0.3);
+  background: color-mix(in oklch, var(--muted) 30%, transparent);
 }
 
 /* Lists */
@@ -261,17 +265,17 @@ watch(() => props.content, async (newContent) => {
 
 /* Blockquotes */
 .prd-viewer .prose blockquote {
-  border-left: 4px solid hsl(var(--border));
+  border-left: 4px solid var(--border);
   padding-left: 1rem;
   margin: 1rem 0;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   font-style: italic;
 }
 
 /* Horizontal rules */
 .prd-viewer .prose hr {
   border: none;
-  border-top: 1px solid hsl(var(--border));
+  border-top: 1px solid var(--border);
   margin: 2rem 0;
 }
 

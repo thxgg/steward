@@ -36,63 +36,39 @@ export function usePrd() {
   // Fetch a PRD document by slug
   async function fetchDocument(slug: string): Promise<PrdDocument | null> {
     if (!currentRepoId.value) return null
-    try {
-      return await $fetch<PrdDocument>(`/api/repos/${currentRepoId.value}/prd/${slug}`)
-    } catch {
-      return null
-    }
+    return await $fetch<PrdDocument>(`/api/repos/${currentRepoId.value}/prd/${slug}`)
   }
 
   // Fetch tasks.json for a PRD
   async function fetchTasks(slug: string): Promise<TasksFile | null> {
     if (!currentRepoId.value) return null
-    try {
-      return await $fetch<TasksFile | null>(`/api/repos/${currentRepoId.value}/prd/${slug}/tasks`)
-    } catch {
-      return null
-    }
+    return await $fetch<TasksFile | null>(`/api/repos/${currentRepoId.value}/prd/${slug}/tasks`)
   }
 
   // Fetch progress.json for a PRD
   async function fetchProgress(slug: string): Promise<ProgressFile | null> {
     if (!currentRepoId.value) return null
-    try {
-      return await $fetch<ProgressFile | null>(`/api/repos/${currentRepoId.value}/prd/${slug}/progress`)
-    } catch {
-      return null
-    }
+    return await $fetch<ProgressFile | null>(`/api/repos/${currentRepoId.value}/prd/${slug}/progress`)
   }
 
   // Fetch resolved commits for a task (returns { sha, repo }[] format)
   async function fetchTaskCommits(slug: string, taskId: string): Promise<CommitRef[]> {
     if (!currentRepoId.value) return []
-    try {
-      return await $fetch<CommitRef[]>(
-        `/api/repos/${currentRepoId.value}/prd/${slug}/tasks/${taskId}/commits`
-      )
-    } catch {
-      return []
-    }
+    return await $fetch<CommitRef[]>(
+      `/api/repos/${currentRepoId.value}/prd/${slug}/tasks/${taskId}/commits`
+    )
   }
 
   // Fetch graph payload for a single PRD
   async function fetchPrdGraph(slug: string): Promise<GraphPrdPayload | null> {
     if (!currentRepoId.value) return null
-    try {
-      return await $fetch<GraphPrdPayload>(`/api/repos/${currentRepoId.value}/prd/${slug}/graph`)
-    } catch {
-      return null
-    }
+    return await $fetch<GraphPrdPayload>(`/api/repos/${currentRepoId.value}/prd/${slug}/graph`)
   }
 
   // Fetch graph payload across all PRDs in a repo
   async function fetchRepoGraph(): Promise<GraphRepoPayload | null> {
     if (!currentRepoId.value) return null
-    try {
-      return await $fetch<GraphRepoPayload>(`/api/repos/${currentRepoId.value}/graph`)
-    } catch {
-      return null
-    }
+    return await $fetch<GraphRepoPayload>(`/api/repos/${currentRepoId.value}/graph`)
   }
 
   return {

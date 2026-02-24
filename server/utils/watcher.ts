@@ -1,107 +1,84 @@
+import { basename, isAbsolute, join, relative, resolve } from 'node:path'
 import chokidar from 'chokidar'
 import type { FSWatcher } from 'chokidar'
-import { getRepos } from './repos'
+import { emitChange, getChangeListenerCount, type FileChangeEvent } from './change-events'
 import { migrateLegacyStateForRepo } from './prd-state'
-
-export type FileChangeEvent = {
-  type: 'change' | 'add' | 'unlink'
-  path: string
-  repoId: string
-  category: 'prd' | 'tasks' | 'progress'
-}
-
-type Listener = (event: FileChangeEvent) => void
+import { getRepos } from './repos'
 
 // Singleton watcher instance
 let watcher: FSWatcher | null = null
-const listeners = new Set<Listener>()
 let watchedPaths: string[] = []
-let debounceTimer: ReturnType<typeof setTimeout> | null = null
-let pendingEvents: FileChangeEvent[] = []
 
-// Debounce delay in ms
-const DEBOUNCE_MS = 300
+function toPosixPath(path: string): string {
+  return path.replaceAll('\\', '/')
+}
+
+function isPathWithin(basePath: string, candidatePath: string): boolean {
+  const relativePath = relative(resolve(basePath), resolve(candidatePath))
+  return relativePath === '' || (!relativePath.startsWith('..') && !isAbsolute(relativePath))
+}
 
 function getRepoIdFromPath(filePath: string, repos: { id: string; path: string }[]): string | null {
   for (const repo of repos) {
-    if (filePath.startsWith(repo.path)) {
+    if (isPathWithin(repo.path, filePath)) {
       return repo.id
     }
   }
+
   return null
 }
 
 function getCategoryFromPath(filePath: string): FileChangeEvent['category'] | null {
-  if (filePath.includes('/docs/prd/') && filePath.endsWith('.md')) {
+  const normalizedPath = toPosixPath(filePath)
+
+  if (normalizedPath.includes('/docs/prd/') && normalizedPath.endsWith('.md')) {
     return 'prd'
   }
+
   // Legacy state files are still watched so they can be migrated into SQLite.
-  if (filePath.includes('/.claude/state/') && filePath.endsWith('tasks.json')) {
+  if (normalizedPath.includes('/.claude/state/') && normalizedPath.endsWith('tasks.json')) {
     return 'tasks'
   }
-  if (filePath.includes('/.claude/state/') && filePath.endsWith('progress.json')) {
+
+  if (normalizedPath.includes('/.claude/state/') && normalizedPath.endsWith('progress.json')) {
     return 'progress'
   }
+
   return null
-}
-
-function emitDebounced(event: FileChangeEvent) {
-  pendingEvents.push(event)
-
-  if (debounceTimer) {
-    clearTimeout(debounceTimer)
-  }
-
-  debounceTimer = setTimeout(() => {
-    // Deduplicate events by path
-    const uniqueEvents = new Map<string, FileChangeEvent>()
-    for (const e of pendingEvents) {
-      uniqueEvents.set(e.path, e)
-    }
-
-    // Emit to all listeners
-    for (const e of uniqueEvents.values()) {
-      for (const listener of listeners) {
-        listener(e)
-      }
-    }
-
-    pendingEvents = []
-    debounceTimer = null
-  }, DEBOUNCE_MS)
 }
 
 export async function initWatcher() {
   if (watcher) {
-    return // Already initialized
+    return
   }
 
   const repos = await getRepos()
   if (repos.length === 0) {
-    return // No repos to watch
+    return
   }
 
   // Build watch paths - docs + legacy state path for migration triggers.
-  watchedPaths = repos.flatMap(repo => [
-    `${repo.path}/docs/prd`,
-    `${repo.path}/.claude/state`
+  watchedPaths = repos.flatMap((repo) => [
+    join(repo.path, 'docs', 'prd'),
+    join(repo.path, '.claude', 'state')
   ])
 
   watcher = chokidar.watch(watchedPaths, {
     ignoreInitial: true,
     persistent: true,
-    depth: 2, // Watch subdirectories (state/<prd-name>/tasks.json)
+    depth: 2,
     awaitWriteFinish: {
       stabilityThreshold: 200,
       pollInterval: 100
     },
     // Allow legacy .claude directory (chokidar ignores dotfiles by default)
     ignored: (path: string) => {
-      // Never ignore paths containing .claude
-      if (path.includes('.claude')) return false
-      // Ignore other dotfiles
-      const basename = path.split('/').pop() || ''
-      return basename.startsWith('.') && basename !== '.claude'
+      if (path.includes('.claude')) {
+        return false
+      }
+
+      const fileName = basename(path)
+      return fileName.startsWith('.') && fileName !== '.claude'
     },
     followSymlinks: true
   })
@@ -124,7 +101,7 @@ export async function initWatcher() {
     }
 
     if (category === 'tasks' || category === 'progress') {
-      const repo = repos.find(r => r.id === repoId)
+      const repo = repos.find((candidate) => candidate.id === repoId)
       if (repo) {
         try {
           await migrateLegacyStateForRepo(repo, {
@@ -137,43 +114,30 @@ export async function initWatcher() {
       }
     }
 
-    const event: FileChangeEvent = {
+    emitChange({
       type: eventType,
-      path: filePath,
+      path: toPosixPath(filePath),
       repoId,
       category
-    }
-
-    emitDebounced(event)
+    })
   })
 
   console.log('[watcher] File watcher initialized, watching', watchedPaths.length, 'directories')
 }
 
 export async function refreshWatcher() {
-  // Close existing watcher
   if (watcher) {
     await watcher.close()
     watcher = null
   }
 
-  // Re-initialize with updated repo list
   await initWatcher()
-}
-
-export function addListener(listener: Listener): () => void {
-  listeners.add(listener)
-
-  // Return cleanup function
-  return () => {
-    listeners.delete(listener)
-  }
 }
 
 export function getWatcherStatus() {
   return {
     active: watcher !== null,
     watchedPaths,
-    listenerCount: listeners.size
+    listenerCount: getChangeListenerCount()
   }
 }

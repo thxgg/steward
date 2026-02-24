@@ -49,6 +49,7 @@
     "preview": "nuxt preview",
     "mcp": "npm run build:host && node ./bin/prd mcp",
     "ui": "npm run build && node ./bin/prd ui",
+    "test": "npm run build:host && node --test \"tests/**/*.test.mjs\"",
     "typecheck": "nuxt typecheck && npm run typecheck:host",
     "typecheck:host": "tsc -p tsconfig.host.json",
     "prepack": "npm run build"

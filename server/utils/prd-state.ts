@@ -2,7 +2,9 @@ import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import type { RepoConfig } from '../../app/types/repo.js'
 import type { TasksFile, ProgressFile } from '../../app/types/task.js'
+import { emitChange } from './change-events.js'
 import { dbAll, dbGet, dbRun } from './db.js'
+import { parseProgressFile, parseTasksFile } from './state-schema.js'
 
 type PrdStateRow = {
   repo_id: string
@@ -37,13 +39,18 @@ const LEGACY_STATE_STABLE_MS = 0
 const migrationInFlight = new Map<string, Promise<void>>()
 const cleanupCompletedRepoIds = new Set<string>()
 
-function parseStoredJson<T>(raw: string | null, fieldName: string): T | null {
+function parseStoredJson<T>(
+  raw: string | null,
+  fieldName: string,
+  parseValue: (value: unknown) => T
+): T | null {
   if (!raw) {
     return null
   }
 
   try {
-    return JSON.parse(raw) as T
+    const parsed = JSON.parse(raw) as unknown
+    return parseValue(parsed)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     throw new Error(`Invalid JSON stored in ${fieldName}: ${message}`)
@@ -60,29 +67,6 @@ function getTaskCounts(tasksFile: TasksFile): { taskCount: number; completedCoun
   return { taskCount, completedCount }
 }
 
-function normalizeLegacyTasksFile(tasksFile: TasksFile | null): TasksFile | null {
-  if (!tasksFile || !Array.isArray(tasksFile.tasks)) {
-    return tasksFile
-  }
-
-  const tasks = tasksFile.tasks.map((task) => {
-    const passes = (task as { passes?: unknown }).passes
-    if (Array.isArray(passes)) {
-      return task
-    }
-
-    return {
-      ...task,
-      passes: []
-    }
-  })
-
-  return {
-    ...tasksFile,
-    tasks
-  }
-}
-
 export async function getPrdState(repoId: string, slug: string): Promise<StoredPrdState | null> {
   const row = await dbGet<PrdStateRow>(
     `
@@ -97,12 +81,21 @@ export async function getPrdState(repoId: string, slug: string): Promise<StoredP
     return null
   }
 
-  const tasks = normalizeLegacyTasksFile(parseStoredJson<TasksFile>(row.tasks_json, 'prd_states.tasks_json'))
+  const tasks = parseStoredJson<TasksFile>(
+    row.tasks_json,
+    'prd_states.tasks_json',
+    parseTasksFile
+  )
+  const progress = parseStoredJson<ProgressFile>(
+    row.progress_json,
+    'prd_states.progress_json',
+    parseProgressFile
+  )
 
   return {
     slug: row.slug,
     tasks,
-    progress: parseStoredJson<ProgressFile>(row.progress_json, 'prd_states.progress_json'),
+    progress,
     notes: row.notes_md,
     updatedAt: row.updated_at
   }
@@ -121,7 +114,7 @@ export async function getPrdStateSummaries(repoId: string): Promise<Map<string, 
 
     if (row.tasks_json) {
       try {
-        const tasksFile = JSON.parse(row.tasks_json) as TasksFile
+        const tasksFile = parseTasksFile(JSON.parse(row.tasks_json) as unknown)
         const counts = getTaskCounts(tasksFile)
         if (counts) {
           summary.taskCount = counts.taskCount
@@ -139,6 +132,14 @@ export async function getPrdStateSummaries(repoId: string): Promise<Map<string, 
 }
 
 export async function upsertPrdState(repoId: string, slug: string, update: PrdStateUpdate): Promise<void> {
+  const validatedTasks = update.tasks === undefined
+    ? undefined
+    : (update.tasks === null ? null : parseTasksFile(update.tasks))
+
+  const validatedProgress = update.progress === undefined
+    ? undefined
+    : (update.progress === null ? null : parseProgressFile(update.progress))
+
   const existing = await dbGet<PrdStateRow>(
     `
       SELECT repo_id, slug, tasks_json, progress_json, notes_md, updated_at
@@ -148,13 +149,13 @@ export async function upsertPrdState(repoId: string, slug: string, update: PrdSt
     [repoId, slug]
   )
 
-  const tasksJson = update.tasks === undefined
+  const tasksJson = validatedTasks === undefined
     ? existing?.tasks_json ?? null
-    : (update.tasks === null ? null : JSON.stringify(update.tasks))
+    : (validatedTasks === null ? null : JSON.stringify(validatedTasks))
 
-  const progressJson = update.progress === undefined
+  const progressJson = validatedProgress === undefined
     ? existing?.progress_json ?? null
-    : (update.progress === null ? null : JSON.stringify(update.progress))
+    : (validatedProgress === null ? null : JSON.stringify(validatedProgress))
 
   const notesMd = update.notes === undefined
     ? existing?.notes_md ?? null
@@ -171,6 +172,25 @@ export async function upsertPrdState(repoId: string, slug: string, update: PrdSt
       `,
       [tasksJson, progressJson, notesMd, updatedAt, repoId, slug]
     )
+
+    if (validatedTasks !== undefined) {
+      emitChange({
+        type: 'change',
+        path: `state://${repoId}/${slug}/tasks.json`,
+        repoId,
+        category: 'tasks'
+      })
+    }
+
+    if (validatedProgress !== undefined) {
+      emitChange({
+        type: 'change',
+        path: `state://${repoId}/${slug}/progress.json`,
+        repoId,
+        category: 'progress'
+      })
+    }
+
     return
   }
 
@@ -181,6 +201,24 @@ export async function upsertPrdState(repoId: string, slug: string, update: PrdSt
     `,
     [repoId, slug, tasksJson, progressJson, notesMd, updatedAt]
   )
+
+  if (validatedTasks !== undefined) {
+    emitChange({
+      type: 'change',
+      path: `state://${repoId}/${slug}/tasks.json`,
+      repoId,
+      category: 'tasks'
+    })
+  }
+
+  if (validatedProgress !== undefined) {
+    emitChange({
+      type: 'change',
+      path: `state://${repoId}/${slug}/progress.json`,
+      repoId,
+      category: 'progress'
+    })
+  }
 }
 
 type LegacyJsonReadResult<T> = {

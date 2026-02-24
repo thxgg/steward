@@ -1,13 +1,25 @@
-import vm from 'node:vm'
-import { git, prds, repos, state } from './api/index.js'
-import { getStewardHelp } from './help.js'
+import { spawn } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 
-const MAX_OUTPUT_SIZE = 50_000
 const EXECUTION_TIMEOUT_MS = 30_000
-const MAX_TIMERS = 100
-const MAX_LOG_ENTRIES = 200
-const MAX_LOG_OUTPUT_SIZE = 20_000
-const MAX_LOG_ENTRY_SIZE = 2_000
+const MAX_STDIO_CAPTURE = 200_000
+
+function getForwardedNodeFlags(): string[] {
+  const forwarded: string[] = []
+
+  for (const arg of process.execArgv) {
+    if (arg === '--experimental-sqlite' || arg === '--no-experimental-sqlite') {
+      forwarded.push(arg)
+      continue
+    }
+
+    if (arg.startsWith('--experimental-sqlite=')) {
+      forwarded.push(arg)
+    }
+  }
+
+  return forwarded
+}
 
 export type ExecutionLogLevel = 'log' | 'info' | 'warn' | 'error'
 
@@ -38,121 +50,7 @@ export type ExecutionEnvelope = {
   }
 }
 
-export class ExecutionError extends Error {
-  constructor(
-    message: string,
-    public readonly options?: {
-      code?: string
-      stackTrace?: string
-      details?: unknown
-    }
-  ) {
-    super(message)
-    this.name = 'ExecutionError'
-  }
-}
-
-function safeJsonStringify(value: unknown): string | undefined {
-  const seen = new WeakSet<object>()
-
-  try {
-    return JSON.stringify(value, (_key, currentValue: unknown) => {
-      if (typeof currentValue === 'bigint') {
-        return `${currentValue}n`
-      }
-
-      if (typeof currentValue === 'function') {
-        const functionName = currentValue.name ? ` ${currentValue.name}` : ''
-        return `[Function${functionName}]`
-      }
-
-      if (typeof currentValue === 'symbol') {
-        return currentValue.toString()
-      }
-
-      if (typeof currentValue === 'object' && currentValue !== null) {
-        if (seen.has(currentValue)) {
-          return '[Circular]'
-        }
-
-        seen.add(currentValue)
-      }
-
-      return currentValue
-    })
-  } catch {
-    return undefined
-  }
-}
-
-function formatLogValue(value: unknown): string {
-  if (typeof value === 'string') {
-    return value
-  }
-
-  const json = safeJsonStringify(value)
-  if (json !== undefined) {
-    return json
-  }
-
-  return String(value)
-}
-
-function truncateResult(result: unknown): {
-  result: unknown | null
-  truncatedResult: boolean
-  resultWasUndefined: boolean
-} {
-  if (result === undefined) {
-    return {
-      result: null,
-      truncatedResult: false,
-      resultWasUndefined: true
-    }
-  }
-
-  const json = safeJsonStringify(result)
-  if (json === undefined) {
-    return {
-      result: {
-        _unserializable: true,
-        preview: String(result)
-      },
-      truncatedResult: false,
-      resultWasUndefined: false
-    }
-  }
-
-  if (json.length <= MAX_OUTPUT_SIZE) {
-    return {
-      result,
-      truncatedResult: false,
-      resultWasUndefined: false
-    }
-  }
-
-  return {
-    result: {
-      _truncated: true,
-      size: json.length,
-      preview: json.slice(0, MAX_OUTPUT_SIZE),
-      message: `Output truncated (${json.length} chars, showing first ${MAX_OUTPUT_SIZE})`
-    },
-    truncatedResult: true,
-    resultWasUndefined: false
-  }
-}
-
 function normalizeFailure(error: unknown): ExecutionFailure {
-  if (error instanceof ExecutionError) {
-    return {
-      code: error.options?.code || 'EXECUTION_ERROR',
-      message: error.message,
-      ...(error.options?.stackTrace && { stack: error.options.stackTrace }),
-      ...(error.options?.details !== undefined && { details: error.options.details })
-    }
-  }
-
   if (error instanceof Error) {
     const { code, details } = error as { code?: unknown; details?: unknown }
 
@@ -170,213 +68,171 @@ function normalizeFailure(error: unknown): ExecutionFailure {
   }
 }
 
-export async function execute(code: string): Promise<ExecutionEnvelope> {
-  const startedAt = Date.now()
-  const logs: ExecutionLogEntry[] = []
-  let totalLogChars = 0
-  let logsTruncated = false
-
-  const appendLog = (level: ExecutionLogLevel, args: unknown[]): void => {
-    if (logs.length >= MAX_LOG_ENTRIES) {
-      logsTruncated = true
-      return
-    }
-
-    let message = args.map(formatLogValue).join(' ')
-    if (message.length > MAX_LOG_ENTRY_SIZE) {
-      message = `${message.slice(0, MAX_LOG_ENTRY_SIZE)}...`
-      logsTruncated = true
-    }
-
-    if (totalLogChars + message.length > MAX_LOG_OUTPUT_SIZE) {
-      logsTruncated = true
-      return
-    }
-
-    totalLogChars += message.length
-    logs.push({
-      level,
+function buildFailureEnvelope(
+  startedAt: number,
+  code: string,
+  message: string,
+  details?: unknown
+): ExecutionEnvelope {
+  return {
+    ok: false,
+    result: null,
+    logs: [],
+    error: {
+      code,
       message,
-      timestamp: new Date().toISOString()
-    })
-  }
-
-  const buildEnvelope = (params: {
-    ok: boolean
-    result: unknown | null
-    error: ExecutionFailure | null
-    truncatedResult: boolean
-    resultWasUndefined: boolean
-  }): ExecutionEnvelope => ({
-    ok: params.ok,
-    result: params.result,
-    logs,
-    error: params.error,
+      ...(details !== undefined && { details })
+    },
     meta: {
       timeoutMs: EXECUTION_TIMEOUT_MS,
       durationMs: Date.now() - startedAt,
-      truncatedResult: params.truncatedResult,
-      truncatedLogs: logsTruncated,
-      resultWasUndefined: params.resultWasUndefined
+      truncatedResult: false,
+      truncatedLogs: false,
+      resultWasUndefined: false
     }
-  })
+  }
+}
+
+function withDurationFallback(envelope: ExecutionEnvelope, startedAt: number): ExecutionEnvelope {
+  const durationMs = Number.isFinite(envelope.meta.durationMs) && envelope.meta.durationMs >= 0
+    ? envelope.meta.durationMs
+    : Date.now() - startedAt
+
+  return {
+    ...envelope,
+    meta: {
+      ...envelope.meta,
+      timeoutMs: EXECUTION_TIMEOUT_MS,
+      durationMs
+    }
+  }
+}
+
+function looksLikeExecutionEnvelope(value: unknown): value is ExecutionEnvelope {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const candidate = value as Partial<ExecutionEnvelope>
+  return typeof candidate.ok === 'boolean'
+    && Array.isArray(candidate.logs)
+    && candidate.meta !== undefined
+}
+
+export async function execute(code: string): Promise<ExecutionEnvelope> {
+  const startedAt = Date.now()
 
   if (!code || !code.trim()) {
-    const error = normalizeFailure(new ExecutionError('Code cannot be empty', { code: 'EMPTY_CODE' }))
-
-    return buildEnvelope({
-      ok: false,
-      result: null,
-      error,
-      truncatedResult: false,
-      resultWasUndefined: false
-    })
+    return buildFailureEnvelope(startedAt, 'EMPTY_CODE', 'Code cannot be empty')
   }
 
-  const timers = new Set<NodeJS.Timeout>()
-  let executionTimeout: NodeJS.Timeout | null = null
-  let asyncCallbackError: unknown = null
+  const runnerPath = fileURLToPath(new URL('./executor-runner.js', import.meta.url))
+  const childArgs = [
+    ...getForwardedNodeFlags(),
+    '--max-old-space-size=256',
+    runnerPath
+  ]
 
-  const wrapTimerHandler = (handler: () => void) => {
-    return () => {
-      try {
-        handler()
-      } catch (error) {
-        const normalizedError = error instanceof Error
-          ? error
-          : new Error(String(error))
-
-        asyncCallbackError = normalizedError
-        appendLog('error', ['Timer callback error:', normalizedError.message])
-      }
-    }
-  }
-
-  const ensureTimerHandler = (handler: unknown): (() => void) => {
-    if (typeof handler !== 'function') {
-      throw new ExecutionError('Timer handler must be a function', {
-        code: 'INVALID_TIMER_HANDLER'
-      })
-    }
-
-    return wrapTimerHandler(handler as () => void)
-  }
-
-  const sandbox = {
-    repos,
-    prds,
-    git,
-    state,
-    steward: {
-      help: () => getStewardHelp()
-    },
-    console: {
-      log: (...args: unknown[]) => appendLog('log', args),
-      info: (...args: unknown[]) => appendLog('info', args),
-      warn: (...args: unknown[]) => appendLog('warn', args),
-      error: (...args: unknown[]) => appendLog('error', args)
-    },
-    setTimeout: (handler: unknown, timeout?: number) => {
-      if (timers.size >= MAX_TIMERS) {
-        throw new ExecutionError(`Timer limit exceeded (max ${MAX_TIMERS})`, {
-          code: 'TIMER_LIMIT'
-        })
-      }
-
-      const wrappedHandler = ensureTimerHandler(handler)
-      const timer = setTimeout(() => {
-        timers.delete(timer)
-        wrappedHandler()
-      }, timeout)
-
-      timers.add(timer)
-      return timer
-    },
-    clearTimeout: (timer: NodeJS.Timeout) => {
-      timers.delete(timer)
-      clearTimeout(timer)
-    },
-    setInterval: (handler: unknown, timeout?: number) => {
-      if (timers.size >= MAX_TIMERS) {
-        throw new ExecutionError(`Timer limit exceeded (max ${MAX_TIMERS})`, {
-          code: 'TIMER_LIMIT'
-        })
-      }
-
-      const wrappedHandler = ensureTimerHandler(handler)
-      const timer = setInterval(wrappedHandler, timeout)
-      timers.add(timer)
-      return timer
-    },
-    clearInterval: (timer: NodeJS.Timeout) => {
-      timers.delete(timer)
-      clearInterval(timer)
-    },
-    Promise
-  }
-
-  const wrappedCode = `
-    (async () => {
-      ${code}
-    })()
-  `
-
-  try {
-    const script = new vm.Script(wrappedCode, {
-      filename: 'codemode.js'
+  return await new Promise<ExecutionEnvelope>((resolveEnvelope) => {
+    const child = spawn(process.execPath, childArgs, {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        STEWARD_EXECUTION_TIMEOUT_MS: String(EXECUTION_TIMEOUT_MS)
+      },
+      stdio: ['pipe', 'pipe', 'pipe']
     })
 
-    const context = vm.createContext(sandbox)
-    const executionPromise = Promise.resolve(script.runInContext(context, {
-      timeout: EXECUTION_TIMEOUT_MS
-    }))
+    let settled = false
+    let stdout = ''
+    let stderr = ''
 
-    const timeoutPromise = new Promise<never>((_resolve, reject) => {
-      executionTimeout = setTimeout(() => {
-        reject(new ExecutionError(`Execution timed out after ${EXECUTION_TIMEOUT_MS}ms`, {
-          code: 'TIMEOUT'
+    const finish = (envelope: ExecutionEnvelope) => {
+      if (settled) {
+        return
+      }
+
+      settled = true
+      clearTimeout(killTimer)
+      resolveEnvelope(withDurationFallback(envelope, startedAt))
+    }
+
+    const captureOutput = (current: string, chunk: Buffer): string => {
+      if (current.length >= MAX_STDIO_CAPTURE) {
+        return current
+      }
+
+      const remaining = MAX_STDIO_CAPTURE - current.length
+      return current + chunk.toString('utf-8', 0, remaining)
+    }
+
+    const killTimer = setTimeout(() => {
+      child.kill('SIGKILL')
+      finish(buildFailureEnvelope(startedAt, 'TIMEOUT', `Execution timed out after ${EXECUTION_TIMEOUT_MS}ms`))
+    }, EXECUTION_TIMEOUT_MS)
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdout = captureOutput(stdout, chunk)
+    })
+
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr = captureOutput(stderr, chunk)
+    })
+
+    child.on('error', (error) => {
+      const failure = normalizeFailure(error)
+      finish(buildFailureEnvelope(startedAt, failure.code, failure.message, failure.details))
+    })
+
+    child.on('close', (exitCode, signal) => {
+      if (settled) {
+        return
+      }
+
+      const trimmedStdout = stdout.trim()
+
+      if (!trimmedStdout) {
+        const message = signal
+          ? `Execution process terminated by signal ${signal}`
+          : `Execution process exited with code ${exitCode ?? 0}`
+
+        finish(buildFailureEnvelope(startedAt, 'EXECUTION_PROCESS_FAILURE', message, {
+          exitCode,
+          signal,
+          stderr: stderr.trim() || undefined
         }))
-      }, EXECUTION_TIMEOUT_MS)
+        return
+      }
+
+      try {
+        const parsed = JSON.parse(trimmedStdout) as unknown
+        if (looksLikeExecutionEnvelope(parsed)) {
+          finish(parsed)
+          return
+        }
+
+        finish(buildFailureEnvelope(startedAt, 'INVALID_ENVELOPE', 'Execution process returned an invalid envelope', {
+          outputPreview: trimmedStdout.slice(0, 2000),
+          stderr: stderr.trim() || undefined,
+          exitCode,
+          signal
+        }))
+      } catch (error) {
+        const failure = normalizeFailure(error)
+        finish(buildFailureEnvelope(startedAt, 'INVALID_JSON', failure.message, {
+          outputPreview: trimmedStdout.slice(0, 2000),
+          stderr: stderr.trim() || undefined,
+          exitCode,
+          signal
+        }))
+      }
     })
 
-    const rawResult = await Promise.race([executionPromise, timeoutPromise])
-
-    if (asyncCallbackError instanceof Error) {
-      throw new ExecutionError(asyncCallbackError.message, {
-        code: 'ASYNC_CALLBACK_ERROR',
-        stackTrace: asyncCallbackError.stack
-      })
+    try {
+      child.stdin.end(JSON.stringify({ code }))
+    } catch (error) {
+      const failure = normalizeFailure(error)
+      finish(buildFailureEnvelope(startedAt, 'EXECUTION_PIPE_FAILURE', failure.message))
     }
-
-    const truncated = truncateResult(rawResult)
-
-    return buildEnvelope({
-      ok: true,
-      result: truncated.result,
-      error: null,
-      truncatedResult: truncated.truncatedResult,
-      resultWasUndefined: truncated.resultWasUndefined
-    })
-  } catch (error) {
-    const failure = normalizeFailure(error)
-    appendLog('error', [`${failure.code}: ${failure.message}`])
-
-    return buildEnvelope({
-      ok: false,
-      result: null,
-      error: failure,
-      truncatedResult: false,
-      resultWasUndefined: false
-    })
-  } finally {
-    if (executionTimeout) {
-      clearTimeout(executionTimeout)
-    }
-
-    timers.forEach((timer) => {
-      clearTimeout(timer)
-      clearInterval(timer)
-    })
-    timers.clear()
-  }
+  })
 }

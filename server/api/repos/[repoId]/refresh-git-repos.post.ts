@@ -1,4 +1,4 @@
-import { getRepos, saveRepos, discoverGitRepos } from '~~/server/utils/repos'
+import { discoverGitRepos, getRepoById, updateRepoGitRepos } from '~~/server/utils/repos'
 
 export default defineEventHandler(async (event) => {
   const repoId = getRouterParam(event, 'repoId')
@@ -10,30 +10,18 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const repos = await getRepos()
-  const repoIndex = repos.findIndex(r => r.id === repoId)
-
-  if (repoIndex === -1) {
+  const repo = await getRepoById(repoId)
+  if (!repo) {
     throw createError({
       statusCode: 404,
       statusMessage: 'Repository not found',
     })
   }
 
-  const repo = repos[repoIndex]!
-
   // Re-discover git repos
   const gitRepos = await discoverGitRepos(repo.path)
 
-  // Update the repo config
-  if (gitRepos.length > 0) {
-    repo.gitRepos = gitRepos
-  } else {
-    delete repo.gitRepos
-  }
-
-  repos[repoIndex] = repo
-  await saveRepos(repos)
+  await updateRepoGitRepos(repo.id, gitRepos.length > 0 ? gitRepos : undefined)
 
   return {
     discovered: gitRepos.length,

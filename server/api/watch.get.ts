@@ -1,4 +1,5 @@
-import { initWatcher, addListener, type FileChangeEvent } from '~~/server/utils/watcher'
+import { addChangeListener, type FileChangeEvent } from '~~/server/utils/change-events'
+import { initWatcher } from '~~/server/utils/watcher'
 
 export default defineEventHandler(async (event) => {
   // Initialize watcher if not already done
@@ -17,7 +18,7 @@ export default defineEventHandler(async (event) => {
       controller.enqueue(new TextEncoder().encode(connectMsg))
 
       // Add listener for file changes
-      const removeListener = addListener((fileEvent: FileChangeEvent) => {
+      const removeListener = addChangeListener((fileEvent: FileChangeEvent) => {
         const msg = `data: ${JSON.stringify(fileEvent)}\n\n`
         try {
           controller.enqueue(new TextEncoder().encode(msg))

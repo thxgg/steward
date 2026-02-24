@@ -1,5 +1,4 @@
 import { promises as fs } from 'node:fs'
-import { join } from 'node:path'
 import type {
   GraphDependencyEdge,
   GraphExternalNode,
@@ -12,6 +11,7 @@ import type {
 import type { RepoConfig } from '../../app/types/repo.js'
 import type { Task } from '../../app/types/task.js'
 import { getPrdState, getPrdStateSummaries, migrateLegacyStateForRepo } from './prd-state.js'
+import { resolvePrdMarkdownPath } from './prd-service.js'
 
 type GraphPrdInput = {
   prdSlug: string
@@ -70,8 +70,8 @@ function parseDependency(rawDependency: string, currentPrdSlug: string): ParsedD
 }
 
 async function resolvePrdName(repo: RepoConfig, prdSlug: string): Promise<string> {
-  const prdPath = join(repo.path, 'docs', 'prd', `${prdSlug}.md`)
   try {
+    const prdPath = resolvePrdMarkdownPath(repo.path, prdSlug)
     const content = await fs.readFile(prdPath, 'utf-8')
     const h1Match = content.match(/^#\s+(.+)$/m)
     return h1Match?.[1]?.trim() || prdSlug
