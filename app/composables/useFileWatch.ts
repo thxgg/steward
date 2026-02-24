@@ -119,11 +119,24 @@ export function useFileWatch(callback: FileWatchCallback) {
     }, RECONNECT_DELAY_MS)
   }
 
+  function getWatchUrl(): string {
+    if (!import.meta.client) {
+      return '/api/watch'
+    }
+
+    const token = new URLSearchParams(window.location.search).get('token')
+    if (!token) {
+      return '/api/watch'
+    }
+
+    return `/api/watch?token=${encodeURIComponent(token)}`
+  }
+
   function connect() {
     if (!import.meta.client || eventSource.value) return
 
     try {
-      const es = new EventSource('/api/watch')
+      const es = new EventSource(getWatchUrl())
 
       es.onopen = async () => {
         isConnected.value = true

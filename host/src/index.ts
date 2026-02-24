@@ -5,13 +5,14 @@ type UiCliOptions = {
   preview: boolean
   port?: number
   host?: string
+  allowRemote: boolean
 }
 
 function printUsage(): void {
   console.log(`prd - Steward CLI
 
 Usage:
-  prd ui [--preview] [--port <port>] [--host <host>]
+  prd ui [--preview] [--port <port>] [--host <host>] [--allow-remote]
   prd mcp
 
 Commands:
@@ -22,6 +23,7 @@ Options:
   --preview      Deprecated; ignored (kept for compatibility)
   --port <port>  Port for ui mode
   --host <host>  Host for ui mode
+  --allow-remote Allow non-loopback host binding
   -h, --help     Show this help message
 `)
 }
@@ -36,7 +38,7 @@ function parsePort(value: string): number {
 }
 
 function parseUiArgs(args: string[]): UiCliOptions {
-  const options: UiCliOptions = { preview: false }
+  const options: UiCliOptions = { preview: false, allowRemote: false }
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]
@@ -65,6 +67,11 @@ function parseUiArgs(args: string[]): UiCliOptions {
 
       options.host = next
       i += 1
+      continue
+    }
+
+    if (arg === '--allow-remote') {
+      options.allowRemote = true
       continue
     }
 

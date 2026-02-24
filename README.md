@@ -55,6 +55,7 @@ Note: `execute` runs in a VM sandbox by design, so globals like `process` are in
 ```bash
 prd ui
 prd ui --port 3100 --host 127.0.0.1
+prd ui --host 0.0.0.0 --allow-remote
 prd mcp
 ```
 
@@ -143,8 +144,10 @@ Detailed API docs and examples: `docs/MCP.md`
 
 Steward reads local filesystem and git metadata by design.
 
-- Run only on trusted local machines
-- Do not expose directly to the public internet
+- By default, UI/API only accept loopback requests
+- Non-loopback access requires explicit opt-in (`--allow-remote` or `STEWARD_ALLOW_REMOTE=1`)
+- Optional token auth for remote API access: set `STEWARD_API_TOKEN`
+- For browser sessions, you can initialize the auth cookie with `?token=<STEWARD_API_TOKEN>`
 - Treat as a workstation tool, not a hosted multi-user service
 
 ## Storage
@@ -171,6 +174,8 @@ npm run build
 | `PRD_STATE_DB_PATH` | Absolute path to SQLite DB file |
 | `PRD_STATE_HOME` | Base directory for DB (`state.db` inside) |
 | `XDG_DATA_HOME` | Fallback base path for default DB location |
+| `STEWARD_ALLOW_REMOTE` | Set to `1` to allow non-loopback requests |
+| `STEWARD_API_TOKEN` | Optional token required for remote `/api/*` access |
 
 ## OpenCode Bundle
 
