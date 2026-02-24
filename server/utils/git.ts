@@ -267,17 +267,6 @@ export async function getCommitDiff(repoPath: string, sha: string): Promise<File
     throw new Error(`Invalid commit SHA: ${sha}`)
   }
 
-  // Get file status and stats
-  const output = await execGit(repoPath, [
-    'show', sha,
-    '--format=',
-    '--name-status',
-    '--numstat',
-  ])
-
-  // Parse the output - first part is numstat, then name-status
-  const lines = output.trim().split('\n').filter(l => l.trim())
-
   // We need to get both numstat and name-status info
   const numstatOutput = await execGit(repoPath, ['show', sha, '--format=', '--numstat'])
   const nameStatusOutput = await execGit(repoPath, ['show', sha, '--format=', '--name-status'])
@@ -428,12 +417,14 @@ function parseDiffHunks(diffOutput: string): DiffHunk[] {
       continue
     }
 
-    // Skip diff headers
-    if (line.startsWith('diff --git') ||
-        line.startsWith('index ') ||
-        line.startsWith('---') ||
-        line.startsWith('+++') ||
-        line.startsWith('\\')) {
+    const isDiffHeader = line.startsWith('diff --git')
+      || line.startsWith('index ')
+      || /^--- (?:a\/.*|\/dev\/null)$/.test(line)
+      || /^\+\+\+ (?:b\/.*|\/dev\/null)$/.test(line)
+      || line === '\\ No newline at end of file'
+
+    // Skip diff metadata lines
+    if (isDiffHeader) {
       continue
     }
 

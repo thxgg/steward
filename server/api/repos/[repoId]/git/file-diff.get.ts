@@ -3,6 +3,9 @@ import { findRepoForCommit, getFileDiff, isGitRepo, validatePathInRepo } from '~
 import {
   buildRepoLookup,
   normalizeErrorMessage,
+  parseCommitShaParam,
+  parseGitFilePathParam,
+  parseOptionalGitRepoPathParam,
   resolveRequestedGitRepoPath,
 } from '~~/server/utils/git-api'
 
@@ -28,21 +31,19 @@ export default defineEventHandler(async (event) => {
 
   // Get query parameters
   const query = getQuery(event)
-  const commit = query.commit as string | undefined
-  const file = query.file as string | undefined
-  const repoPath = query.repo as string | undefined
+  let commit: string
+  let file: string
+  let repoPath: string | undefined
 
-  if (!commit) {
+  try {
+    commit = parseCommitShaParam(query.commit, 'commit query parameter')
+    file = parseGitFilePathParam(query.file)
+    repoPath = parseOptionalGitRepoPathParam(query.repo)
+  } catch (error) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'commit query parameter is required',
-    })
-  }
-
-  if (!file) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'file query parameter is required',
+      statusMessage: 'Invalid git query parameters',
+      message: normalizeErrorMessage((error as Error).message),
     })
   }
 

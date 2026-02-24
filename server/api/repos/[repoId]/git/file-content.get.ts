@@ -3,26 +3,49 @@ import { findRepoForCommit, getFileContent, isGitRepo, validatePathInRepo } from
 import {
   buildRepoLookup,
   normalizeErrorMessage,
+  parseCommitShaParam,
+  parseGitFilePathParam,
+  parseOptionalGitRepoPathParam,
   resolveRequestedGitRepoPath,
 } from '~~/server/utils/git-api'
+
+const MAX_FILE_CONTENT_CHARS = 1_000_000
+
+function formatFileContentResponse(content: string) {
+  if (content.length <= MAX_FILE_CONTENT_CHARS) {
+    return { content }
+  }
+
+  return {
+    content: content.slice(0, MAX_FILE_CONTENT_CHARS),
+    truncated: true,
+    maxChars: MAX_FILE_CONTENT_CHARS,
+    originalChars: content.length,
+    message: `File content was truncated to ${MAX_FILE_CONTENT_CHARS.toLocaleString()} characters.`
+  }
+}
 
 export default defineEventHandler(async (event) => {
   const repoId = getRouterParam(event, 'repoId')
   const query = getQuery(event)
-  const commit = query.commit as string | undefined
-  const file = query.file as string | undefined
-  const repoPath = query.repo as string | undefined
+  let commit: string
+  let file: string
+  let repoPath: string | undefined
 
   if (!repoId) {
     throw createError({ statusCode: 400, message: 'Repository ID is required' })
   }
 
-  if (!commit) {
-    throw createError({ statusCode: 400, message: 'Commit SHA is required' })
-  }
-
-  if (!file) {
-    throw createError({ statusCode: 400, message: 'File path is required' })
+  try {
+    commit = parseCommitShaParam(query.commit, 'commit query parameter')
+    file = parseGitFilePathParam(query.file)
+    repoPath = parseOptionalGitRepoPathParam(query.repo)
+  } catch (error) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Invalid git query parameters',
+      message: normalizeErrorMessage((error as Error).message),
+    })
   }
 
   const repos = await getRepos()
@@ -62,7 +85,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     const content = await getFileContent(gitRepoPath, commit, file)
-    return { content }
+    return formatFileContentResponse(content)
   } catch (error) {
     const message = normalizeErrorMessage(error instanceof Error ? error.message : String(error))
 
@@ -70,7 +93,7 @@ export default defineEventHandler(async (event) => {
     if (fallback && fallback.absolutePath !== gitRepoPath && validatePathInRepo(fallback.absolutePath, file)) {
       try {
         const content = await getFileContent(fallback.absolutePath, commit, file)
-        return { content }
+        return formatFileContentResponse(content)
       } catch {
         // Keep original error below for clearer context.
       }

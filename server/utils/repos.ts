@@ -1,10 +1,38 @@
-import { promises as fs } from 'node:fs'
-import { join, basename, resolve, relative } from 'node:path'
+import { existsSync, promises as fs } from 'node:fs'
+import { join, basename, dirname, resolve, relative, isAbsolute } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { fileURLToPath } from 'node:url'
 import type { RepoConfig, GitRepoInfo } from '../../app/types/repo.js'
 import { dbAll, dbGet, dbRun } from './db.js'
 
-const LEGACY_REPOS_FILE = join(process.cwd(), 'server', 'data', 'repos.json')
+function findPackageRoot(startDir: string): string {
+  let currentDir = startDir
+
+  while (true) {
+    if (existsSync(join(currentDir, 'package.json'))) {
+      return currentDir
+    }
+
+    const parentDir = dirname(currentDir)
+    if (parentDir === currentDir) {
+      return startDir
+    }
+
+    currentDir = parentDir
+  }
+}
+
+function normalizePathSlashes(path: string): string {
+  return path.replaceAll('\\', '/')
+}
+
+function isPathWithin(basePath: string, candidatePath: string): boolean {
+  const relativePath = relative(resolve(basePath), resolve(candidatePath))
+  return relativePath === '' || (!relativePath.startsWith('..') && !isAbsolute(relativePath))
+}
+
+const PACKAGE_ROOT = findPackageRoot(dirname(fileURLToPath(import.meta.url)))
+const LEGACY_REPOS_FILE = join(PACKAGE_ROOT, 'server', 'data', 'repos.json')
 
 type RepoRow = {
   id: string
@@ -20,7 +48,7 @@ function serializeGitRepos(gitRepos?: GitRepoInfo[]): string | null {
   return gitRepos && gitRepos.length > 0 ? JSON.stringify(gitRepos) : null
 }
 
-function parseGitRepos(gitReposJson: string | null): GitRepoInfo[] | undefined {
+function parseGitRepos(repoPath: string, gitReposJson: string | null): GitRepoInfo[] | undefined {
   if (!gitReposJson) {
     return undefined
   }
@@ -31,22 +59,46 @@ function parseGitRepos(gitReposJson: string | null): GitRepoInfo[] | undefined {
       return undefined
     }
 
-    const validRepos = parsed.filter((item): item is GitRepoInfo => {
-      return !!item
-        && typeof item === 'object'
-        && typeof (item as { relativePath?: unknown }).relativePath === 'string'
-        && typeof (item as { absolutePath?: unknown }).absolutePath === 'string'
-        && typeof (item as { name?: unknown }).name === 'string'
-    })
+    const repoRoot = resolve(repoPath)
+    const validRepos = new Map<string, GitRepoInfo>()
 
-    return validRepos.length > 0 ? validRepos : undefined
+    for (const item of parsed) {
+      if (!item || typeof item !== 'object') {
+        continue
+      }
+
+      const relativePath = (item as { relativePath?: string }).relativePath
+      const name = (item as { name?: string }).name
+
+      if (!relativePath || !name) {
+        continue
+      }
+
+      const normalizedRelativePath = normalizePathSlashes(relativePath).replace(/^\.\//, '')
+      if (!normalizedRelativePath || normalizedRelativePath === '.') {
+        continue
+      }
+
+      const absolutePath = resolve(repoRoot, normalizedRelativePath)
+      if (!isPathWithin(repoRoot, absolutePath)) {
+        continue
+      }
+
+      validRepos.set(normalizedRelativePath, {
+        relativePath: normalizedRelativePath,
+        absolutePath,
+        name
+      })
+    }
+
+    return validRepos.size > 0 ? Array.from(validRepos.values()) : undefined
   } catch {
     return undefined
   }
 }
 
 function rowToRepo(row: RepoRow): RepoConfig {
-  const gitRepos = parseGitRepos(row.git_repos_json)
+  const gitRepos = parseGitRepos(row.path, row.git_repos_json)
   return {
     id: row.id,
     name: row.name,

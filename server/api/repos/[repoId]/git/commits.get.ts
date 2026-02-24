@@ -4,6 +4,8 @@ import {
   buildRepoLookup,
   getRepoRelativePath,
   normalizeErrorMessage,
+  parseCommitShaListParam,
+  parseOptionalGitRepoPathParam,
   resolveRequestedGitRepoPath,
 } from '~~/server/utils/git-api'
 import type { GitCommit } from '~/types/git'
@@ -30,22 +32,17 @@ export default defineEventHandler(async (event) => {
 
   // Get query parameters
   const query = getQuery(event)
-  const shasParam = query.shas as string | undefined
-  const repoPath = query.repo as string | undefined
+  let shas: string[]
+  let repoPath: string | undefined
 
-  if (!shasParam) {
+  try {
+    shas = parseCommitShaListParam(query.shas)
+    repoPath = parseOptionalGitRepoPathParam(query.repo)
+  } catch (error) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'shas query parameter is required',
-    })
-  }
-
-  const shas = shasParam.split(',').map(s => s.trim()).filter(Boolean)
-
-  if (shas.length === 0) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'At least one SHA is required',
+      statusMessage: 'Invalid git query parameters',
+      message: normalizeErrorMessage((error as Error).message),
     })
   }
 
