@@ -4,7 +4,7 @@ import type { PrdDocument, PrdListItem, PrdMetadata } from '../../app/types/prd.
 import type { RepoConfig } from '../../app/types/repo.js'
 import type { CommitRef, ProgressFile, TasksFile } from '../../app/types/task.js'
 import { resolveCommitRepo } from './git.js'
-import { getPrdState, getPrdStateSummaries, migrateLegacyStateForRepo } from './prd-state.js'
+import { getPrdState, getPrdStateSummaries } from './prd-state.js'
 import { discoverGitRepos, updateRepoGitRepos } from './repos.js'
 
 const PRD_SLUG_PATTERN = /^[A-Za-z0-9][A-Za-z0-9-]*$/
@@ -121,8 +121,6 @@ export async function readPrdDocument(repo: RepoConfig, prdSlug: string): Promis
 }
 
 export async function listPrdDocuments(repo: RepoConfig): Promise<PrdListItem[]> {
-  await migrateLegacyStateForRepo(repo)
-
   const prdDir = join(repo.path, 'docs', 'prd')
   let prdFiles: string[] = []
 
@@ -180,16 +178,12 @@ export async function listPrdDocuments(repo: RepoConfig): Promise<PrdListItem[]>
 
 export async function readPrdTasks(repo: RepoConfig, prdSlug: string): Promise<TasksFile | null> {
   assertValidPrdSlug(prdSlug)
-  await migrateLegacyStateForRepo(repo)
-
   const state = await getPrdState(repo.id, prdSlug)
   return state?.tasks ?? null
 }
 
 export async function readPrdProgress(repo: RepoConfig, prdSlug: string): Promise<ProgressFile | null> {
   assertValidPrdSlug(prdSlug)
-  await migrateLegacyStateForRepo(repo)
-
   const state = await getPrdState(repo.id, prdSlug)
   return state?.progress ?? null
 }
@@ -235,8 +229,6 @@ export async function resolveTaskCommits(
   taskId: string
 ): Promise<ResolvedTaskCommit[]> {
   assertValidPrdSlug(prdSlug)
-  await migrateLegacyStateForRepo(repo)
-
   const state = await getPrdState(repo.id, prdSlug)
   const progress = state?.progress ?? null
 

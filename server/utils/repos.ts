@@ -353,13 +353,27 @@ export async function discoverGitRepos(
 }
 
 export async function validateRepoPath(path: string): Promise<{ valid: boolean; error?: string }> {
-  // Normalize the path
-  const resolvedPath = resolve(path)
+  const trimmedPath = path.trim()
 
-  // Ensure path is absolute (starts with / on Unix or drive letter on Windows)
-  if (!resolvedPath.startsWith('/') && !/^[A-Za-z]:/.test(resolvedPath)) {
+  if (trimmedPath.length === 0) {
+    return { valid: false, error: 'Path is required' }
+  }
+
+  if (trimmedPath.length > 4096) {
+    return { valid: false, error: 'Path is too long' }
+  }
+
+  if (trimmedPath.includes('\u0000')) {
+    return { valid: false, error: 'Path contains invalid characters' }
+  }
+
+  const isWindowsAbsolutePath = /^[A-Za-z]:[\\/]/.test(trimmedPath)
+  if (!isAbsolute(trimmedPath) && !isWindowsAbsolutePath) {
     return { valid: false, error: 'Path must be absolute' }
   }
+
+  // Normalize the path
+  const resolvedPath = resolve(trimmedPath)
 
   try {
     const stats = await fs.stat(resolvedPath)

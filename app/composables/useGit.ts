@@ -97,7 +97,7 @@ export function useGit() {
       return files
     } catch (error) {
       showError('Failed to fetch diff', getErrorMessage(error))
-      return []
+      throw error
     } finally {
       isLoadingDiff.value = false
     }
@@ -134,7 +134,7 @@ export function useGit() {
       return hunks
     } catch (error) {
       showError('Failed to fetch file diff', getErrorMessage(error))
-      return []
+      throw error
     } finally {
       isLoadingFileDiff.value = false
     }
@@ -171,7 +171,7 @@ export function useGit() {
       return result.content
     } catch (error) {
       showError('Failed to fetch file content', getErrorMessage(error))
-      return null
+      throw error
     } finally {
       isLoadingFileContent.value = false
     }

@@ -2,7 +2,6 @@ import type { ProgressFile, TasksFile } from '../../../app/types/task.js'
 import {
   getPrdState,
   getPrdStateSummaries,
-  migrateLegacyStateForRepo,
   type PrdStateSummary,
   type PrdStateUpdate,
   upsertPrdState
@@ -35,39 +34,33 @@ function mapSummaryMap(summaries: Map<string, PrdStateSummary>): Record<string, 
 export const state = {
   async get(repoId: string, slug: string) {
     const repo = await requireRepo(repoId)
-    await migrateLegacyStateForRepo(repo)
     return await getPrdState(repo.id, slug)
   },
 
   async getByPath(repoPath: string, slug: string) {
     const repo = await requireRepoByPath(repoPath)
-    await migrateLegacyStateForRepo(repo)
     return await getPrdState(repo.id, slug)
   },
 
   async getCurrent(slug: string) {
     const repo = await requireCurrentRepo()
-    await migrateLegacyStateForRepo(repo)
     return await getPrdState(repo.id, slug)
   },
 
   async summaries(repoId: string): Promise<Record<string, PrdStateSummary>> {
     const repo = await requireRepo(repoId)
-    await migrateLegacyStateForRepo(repo)
     const summaries = await getPrdStateSummaries(repo.id)
     return mapSummaryMap(summaries)
   },
 
   async summariesByPath(repoPath: string): Promise<Record<string, PrdStateSummary>> {
     const repo = await requireRepoByPath(repoPath)
-    await migrateLegacyStateForRepo(repo)
     const summaries = await getPrdStateSummaries(repo.id)
     return mapSummaryMap(summaries)
   },
 
   async summariesCurrent(): Promise<Record<string, PrdStateSummary>> {
     const repo = await requireCurrentRepo()
-    await migrateLegacyStateForRepo(repo)
     const summaries = await getPrdStateSummaries(repo.id)
     return mapSummaryMap(summaries)
   },

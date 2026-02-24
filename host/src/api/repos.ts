@@ -8,7 +8,6 @@ import {
   updateRepoGitRepos,
   validateRepoPath
 } from '../../../server/utils/repos.js'
-import { migrateLegacyStateForRepo } from '../../../server/utils/prd-state.js'
 import { requireCurrentRepo, requireRepo } from './repo-context.js'
 
 export const repos = {
@@ -31,7 +30,6 @@ export const repos = {
     }
 
     const repo = await addRepo(path, name)
-    await migrateLegacyStateForRepo(repo)
     return repo
   },
 

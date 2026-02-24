@@ -68,11 +68,8 @@ export default defineEventHandler(async (event) => {
     fixedRepoPath = ''
   }
 
-  // Fetch commit info for each SHA
-  const commits: GitCommit[] = []
-  const errors: string[] = []
-
-  for (const sha of shas) {
+  // Fetch commit info for each SHA in parallel.
+  const commitResults = await Promise.all(shas.map(async (sha) => {
     try {
       let gitRepoPathForCommit = fixedGitRepoPath
       let resolvedRepoPath = fixedRepoPath
@@ -102,14 +99,27 @@ export default defineEventHandler(async (event) => {
         gitRepoPathForCommit = fallback.absolutePath
       }
 
-      commits.push({
-        ...commit,
-        repoPath: resolvedRepoPath || getRepoRelativePath(repo.path, gitRepoPathForCommit),
-      })
+      return {
+        commit: {
+          ...commit,
+          repoPath: resolvedRepoPath || getRepoRelativePath(repo.path, gitRepoPathForCommit),
+        },
+        error: null
+      }
     } catch (error) {
-      errors.push(`${sha}: ${normalizeErrorMessage((error as Error).message)}`)
+      return {
+        commit: null,
+        error: `${sha}: ${normalizeErrorMessage((error as Error).message)}`
+      }
     }
-  }
+  }))
+
+  const commits: GitCommit[] = commitResults.flatMap((result) => {
+    return result.commit ? [result.commit] : []
+  })
+  const errors = commitResults
+    .map((result) => result.error)
+    .filter((message): message is string => message !== null)
 
   // If all commits failed, throw error
   if (commits.length === 0 && errors.length > 0) {

@@ -7,7 +7,6 @@ export interface UiOptions {
   preview: boolean
   port?: number
   host?: string
-  allowRemote?: boolean
 }
 
 const DEFAULT_UI_HOST = '127.0.0.1'
@@ -54,12 +53,10 @@ export async function runUi(options: UiOptions): Promise<number> {
   const env = { ...process.env }
   const hostFromEnv = env.NITRO_HOST || env.HOST
   const requestedHost = (options.host || hostFromEnv || DEFAULT_UI_HOST).trim()
-  const allowRemote = options.allowRemote || env.STEWARD_ALLOW_REMOTE === '1'
 
-  if (!isLoopbackHost(requestedHost) && !allowRemote) {
+  if (!isLoopbackHost(requestedHost)) {
     throw new Error(
-      `Refusing to bind UI to non-loopback host "${requestedHost}" without explicit opt-in. `
-      + 'Use --allow-remote or set STEWARD_ALLOW_REMOTE=1.'
+      `Refusing to bind UI to non-loopback host "${requestedHost}". Steward only supports loopback hosts.`
     )
   }
 
@@ -73,10 +70,6 @@ export async function runUi(options: UiOptions): Promise<number> {
 
   env.HOST = requestedHost
   env.NITRO_HOST = requestedHost
-
-  if (allowRemote) {
-    env.STEWARD_ALLOW_REMOTE = '1'
-  }
 
   const child = spawn(process.execPath, args, {
     cwd: packageRoot,

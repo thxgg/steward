@@ -10,7 +10,7 @@ import type {
 } from '../../app/types/graph.js'
 import type { RepoConfig } from '../../app/types/repo.js'
 import type { Task } from '../../app/types/task.js'
-import { getPrdState, getPrdStateSummaries, migrateLegacyStateForRepo } from './prd-state.js'
+import { getPrdState, getPrdStateSummaries } from './prd-state.js'
 import { resolvePrdMarkdownPath } from './prd-service.js'
 
 type GraphPrdInput = {
@@ -187,8 +187,6 @@ function buildGraphFromInputs(inputs: GraphPrdInput[]): {
 }
 
 export async function buildPrdGraph(repo: RepoConfig, prdSlug: string): Promise<GraphPrdPayload> {
-  await migrateLegacyStateForRepo(repo)
-
   const [state, prdName] = await Promise.all([
     getPrdState(repo.id, prdSlug),
     resolvePrdName(repo, prdSlug)
@@ -214,26 +212,26 @@ export async function buildPrdGraph(repo: RepoConfig, prdSlug: string): Promise<
 }
 
 export async function buildRepoGraph(repo: RepoConfig): Promise<GraphRepoPayload> {
-  await migrateLegacyStateForRepo(repo)
-
   const summaries = await getPrdStateSummaries(repo.id)
   const slugs = [...summaries.keys()].sort((a, b) => a.localeCompare(b))
 
-  const inputs: GraphPrdInput[] = []
+  const inputs = (await Promise.all(slugs.map(async (slug): Promise<GraphPrdInput | null> => {
+    const [state, prdName] = await Promise.all([
+      getPrdState(repo.id, slug),
+      resolvePrdName(repo, slug)
+    ])
 
-  for (const slug of slugs) {
-    const state = await getPrdState(repo.id, slug)
     const tasks = state?.tasks?.tasks
     if (!Array.isArray(tasks)) {
-      continue
+      return null
     }
 
-    inputs.push({
+    return {
       prdSlug: slug,
-      prdName: await resolvePrdName(repo, slug),
+      prdName,
       tasks
-    })
-  }
+    }
+  }))).filter((input): input is GraphPrdInput => input !== null)
 
   const graph = buildGraphFromInputs(inputs)
 

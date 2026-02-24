@@ -17,11 +17,36 @@ const emit = defineEmits<{
 
 const { fetchCommits, isLoadingCommits } = useGit()
 
-// Fetched commit details (keyed by sha for lookup)
+// Fetched commit details keyed by repo + requested SHA.
 const commitDetails = ref<Map<string, GitCommit>>(new Map())
 
-// Track commits that failed to load
+// Track commits that failed to load using the same key shape.
 const failedCommits = ref<Set<string>>(new Set())
+
+function toShaLookupValue(sha: string): string {
+  return sha.trim().toLowerCase()
+}
+
+function toRepoLookupValue(repo: string | undefined): string {
+  return (repo || '').trim()
+}
+
+function createCommitKey(sha: string, repo: string | undefined): string {
+  return `${toRepoLookupValue(repo)}::${toShaLookupValue(sha)}`
+}
+
+function matchesRequestedSha(requestedSha: string, commit: GitCommit): boolean {
+  const requested = toShaLookupValue(requestedSha)
+  const fullSha = toShaLookupValue(commit.sha)
+  const shortSha = toShaLookupValue(commit.shortSha)
+
+  return fullSha === requested
+    || shortSha === requested
+    || fullSha.startsWith(requested)
+    || requested.startsWith(fullSha)
+    || shortSha.startsWith(requested)
+    || requested.startsWith(shortSha)
+}
 
 // Check if any commits have repo info (indicates pseudo-monorepo)
 const hasMultipleRepos = computed(() => {
@@ -55,23 +80,41 @@ watch(
       Array.from(commitsByRepo.entries()).map(async ([repoPath, shas]) => {
         const result = await fetchCommits(repoId, shas, repoPath || undefined)
         return {
-          commits: result.commits.map(c => ({ ...c, repoPath })),
-          failedShas: result.failedShas,
+          repoPath,
+          requestedShas: [...shas],
+          commits: result.commits,
+          failedShas: result.failedShas
         }
       })
     )
 
-    // Build map of sha -> commit details and collect failed SHAs
+    // Build map of requested commit key -> commit details and collect failures.
     const detailsMap = new Map<string, GitCommit>()
     const failed = new Set<string>()
 
-    for (const { commits: repoCommits, failedShas } of results) {
-      for (const commit of repoCommits) {
-        // Key by shortSha since props contain abbreviated SHAs
-        detailsMap.set(commit.shortSha, commit)
+    for (const { repoPath, requestedShas, commits: repoCommits, failedShas } of results) {
+      const remainingCommits = [...repoCommits]
+
+      for (const requestedSha of requestedShas) {
+        const key = createCommitKey(requestedSha, repoPath)
+        const matchIndex = remainingCommits.findIndex((commit) => matchesRequestedSha(requestedSha, commit))
+
+        if (matchIndex >= 0) {
+          const [matchedCommit] = remainingCommits.splice(matchIndex, 1)
+          if (matchedCommit) {
+            detailsMap.set(key, {
+              ...matchedCommit,
+              repoPath
+            })
+            continue
+          }
+        }
+
+        failed.add(key)
       }
+
       for (const sha of failedShas) {
-        failed.add(sha)
+        failed.add(createCommitKey(sha, repoPath))
       }
     }
 
@@ -108,31 +151,51 @@ function handleClick(commit: CommitRef) {
   emit('select', commit.sha, commit.repo)
 }
 
-// Get commit details by SHA (supports prefix matching for abbreviated SHAs)
-function getDetails(sha: string): GitCommit | undefined {
-  // Direct lookup first
-  const direct = commitDetails.value.get(sha)
-  if (direct) return direct
+// Get commit details by commit reference.
+function getDetails(commitRef: CommitRef): GitCommit | undefined {
+  const direct = commitDetails.value.get(createCommitKey(commitRef.sha, commitRef.repo))
+  if (direct) {
+    return direct
+  }
 
-  // Try prefix matching (short SHA might be abbreviated differently)
+  const requestedSha = toShaLookupValue(commitRef.sha)
+  const repoPrefix = `${toRepoLookupValue(commitRef.repo)}::`
+
   for (const [key, commit] of commitDetails.value) {
-    if (key.startsWith(sha) || sha.startsWith(key)) {
+    if (!key.startsWith(repoPrefix)) {
+      continue
+    }
+
+    const storedSha = key.slice(repoPrefix.length)
+    if (storedSha.startsWith(requestedSha) || requestedSha.startsWith(storedSha)) {
       return commit
     }
   }
+
   return undefined
 }
 
-// Check if a commit failed to load (supports prefix matching)
-function isFailed(sha: string): boolean {
-  if (failedCommits.value.has(sha)) return true
+// Check if a commit failed to load.
+function isFailed(commitRef: CommitRef): boolean {
+  const directKey = createCommitKey(commitRef.sha, commitRef.repo)
+  if (failedCommits.value.has(directKey)) {
+    return true
+  }
 
-  // Try prefix matching
-  for (const failedSha of failedCommits.value) {
-    if (failedSha.startsWith(sha) || sha.startsWith(failedSha)) {
+  const requestedSha = toShaLookupValue(commitRef.sha)
+  const repoPrefix = `${toRepoLookupValue(commitRef.repo)}::`
+
+  for (const failedKey of failedCommits.value) {
+    if (!failedKey.startsWith(repoPrefix)) {
+      continue
+    }
+
+    const failedSha = failedKey.slice(repoPrefix.length)
+    if (failedSha.startsWith(requestedSha) || requestedSha.startsWith(failedSha)) {
       return true
     }
   }
+
   return false
 }
 </script>
@@ -169,7 +232,7 @@ function isFailed(sha: string): boolean {
     <template v-else>
       <button
         v-for="commit in commits"
-        :key="commit.sha"
+        :key="`${commit.repo || ''}:${commit.sha}`"
         class="w-full rounded-lg border bg-card p-3 text-left transition-colors hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring"
         @click="handleClick(commit)"
       >
@@ -179,18 +242,18 @@ function isFailed(sha: string): boolean {
             <!-- SHA, stats, and repo badge -->
             <div class="flex flex-wrap items-center gap-2">
               <code class="font-mono text-xs font-medium text-primary">
-                {{ getDetails(commit.sha)?.shortSha || commit.sha.substring(0, 7) }}
+                {{ getDetails(commit)?.shortSha || commit.sha.substring(0, 7) }}
               </code>
-              <template v-if="getDetails(commit.sha)">
+              <template v-if="getDetails(commit)">
                 <span class="flex items-center gap-1 text-xs text-muted-foreground">
                   <FileText class="size-3" />
-                  {{ getDetails(commit.sha)!.filesChanged }}
+                  {{ getDetails(commit)!.filesChanged }}
                 </span>
                 <span class="flex items-center gap-0.5 text-xs text-green-600 dark:text-green-400">
-                  <Plus class="size-3" />{{ getDetails(commit.sha)!.additions }}
+                  <Plus class="size-3" />{{ getDetails(commit)!.additions }}
                 </span>
                 <span class="flex items-center gap-0.5 text-xs text-red-600 dark:text-red-400">
-                  <Minus class="size-3" />{{ getDetails(commit.sha)!.deletions }}
+                  <Minus class="size-3" />{{ getDetails(commit)!.deletions }}
                 </span>
               </template>
               <!-- Repo badge - only show for pseudo-monorepos with multiple repos -->
@@ -202,10 +265,10 @@ function isFailed(sha: string): boolean {
 
             <!-- Message -->
             <p class="mt-1 truncate text-sm">
-              <template v-if="getDetails(commit.sha)">
-                {{ getDetails(commit.sha)!.message }}
+              <template v-if="getDetails(commit)">
+                {{ getDetails(commit)!.message }}
               </template>
-              <span v-else-if="isFailed(commit.sha)" class="flex items-center gap-1 text-muted-foreground">
+              <span v-else-if="isFailed(commit)" class="flex items-center gap-1 text-muted-foreground">
                 <AlertCircle class="size-3" />
                 Commit unavailable
               </span>
@@ -213,8 +276,8 @@ function isFailed(sha: string): boolean {
             </p>
 
             <!-- Author and date -->
-            <p v-if="getDetails(commit.sha)" class="mt-1 text-xs text-muted-foreground">
-              {{ getDetails(commit.sha)!.author }} &middot; {{ formatRelativeDate(getDetails(commit.sha)!.date) }}
+            <p v-if="getDetails(commit)" class="mt-1 text-xs text-muted-foreground">
+              {{ getDetails(commit)!.author }} &middot; {{ formatRelativeDate(getDetails(commit)!.date) }}
             </p>
           </div>
         </div>

@@ -1,21 +1,46 @@
 import { readdir, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { homedir } from 'node:os'
+import { z } from 'zod'
+
+const browseQuerySchema = z.object({
+  path: z.string().max(4096, 'Path is too long').optional()
+}).passthrough()
+
+function validationError(message: string): never {
+  throw createError({
+    statusCode: 400,
+    statusMessage: 'Invalid browse query',
+    message
+  })
+}
 
 function toPosixPath(path: string): string {
   return path.replaceAll('\\', '/')
 }
 
 export default defineEventHandler(async (event) => {
-  const query = getQuery(event)
-  let path = (query.path as string) || homedir()
-
-  // Expand ~ to home directory
-  if (path.startsWith('~')) {
-    path = path.replace('~', homedir())
+  const parsedQuery = browseQuerySchema.safeParse(getQuery(event))
+  if (!parsedQuery.success) {
+    validationError(parsedQuery.error.issues[0]?.message || 'Invalid query parameters')
   }
 
-  const resolvedPath = resolve(path)
+  const requestedPath = parsedQuery.data.path?.trim() || homedir()
+
+  if (requestedPath.includes('\u0000')) {
+    validationError('Path contains invalid characters')
+  }
+
+  // Expand ~ to home directory
+  const expandedPath = requestedPath.startsWith('~')
+    ? requestedPath.replace('~', homedir())
+    : requestedPath
+
+  if (expandedPath.length > 4096) {
+    validationError('Path is too long')
+  }
+
+  const resolvedPath = resolve(expandedPath)
 
   try {
     const stats = await stat(resolvedPath)

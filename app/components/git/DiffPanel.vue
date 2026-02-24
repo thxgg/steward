@@ -36,6 +36,24 @@ const fileDiffError = ref<string | null>(null)
 // View mode: 'changes' shows only hunks, 'full' shows entire file with changes highlighted
 const viewMode = ref<'changes' | 'full'>('changes')
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object') {
+    const fetchError = error as {
+      data?: { message?: string; statusMessage?: string }
+      statusMessage?: string
+      message?: string
+    }
+
+    return fetchError.data?.message
+      || fetchError.data?.statusMessage
+      || fetchError.statusMessage
+      || fetchError.message
+      || fallback
+  }
+
+  return fallback
+}
+
 // Get the selected file's metadata
 const selectedFileDiff = computed(() => files.value.find(f => f.path === selectedFile.value))
 
@@ -45,20 +63,18 @@ async function loadDiff() {
   files.value = []
   selectedFile.value = undefined
   hunks.value = []
+  fileContent.value = null
 
-  const result = await fetchDiff(props.repoId, props.commitSha, props.repoPath)
+  try {
+    const result = await fetchDiff(props.repoId, props.commitSha, props.repoPath)
+    files.value = result
 
-  if (result.length === 0 && !isLoadingDiff.value) {
-    // Check if it was an error (empty could be valid, but error is set by toast)
-    // We'll set a generic message if truly no files
-    error.value = null // Let empty state show naturally
-  }
-
-  files.value = result
-
-  // Auto-select first file
-  if (result.length > 0) {
-    selectedFile.value = result[0]!.path
+    // Auto-select first file
+    if (result.length > 0) {
+      selectedFile.value = result[0]!.path
+    }
+  } catch (loadError) {
+    error.value = getErrorMessage(loadError, 'Could not load commit diff.')
   }
 }
 
@@ -72,14 +88,20 @@ async function loadFileDiff() {
 
   fileDiffError.value = null
 
-  // Fetch hunks (always needed for highlighting changes)
-  const result = await fetchFileDiff(props.repoId, props.commitSha, selectedFile.value, props.repoPath)
-  hunks.value = result
+  try {
+    // Fetch hunks (always needed for highlighting changes)
+    const result = await fetchFileDiff(props.repoId, props.commitSha, selectedFile.value, props.repoPath)
+    hunks.value = result
 
-  // Fetch full file content if in full mode
-  if (viewMode.value === 'full') {
-    const content = await fetchFileContent(props.repoId, props.commitSha, selectedFile.value, props.repoPath)
-    fileContent.value = content
+    // Fetch full file content if in full mode
+    if (viewMode.value === 'full') {
+      const content = await fetchFileContent(props.repoId, props.commitSha, selectedFile.value, props.repoPath)
+      fileContent.value = content
+    } else {
+      fileContent.value = null
+    }
+  } catch (loadError) {
+    fileDiffError.value = getErrorMessage(loadError, 'Could not load file diff.')
   }
 }
 
@@ -91,8 +113,13 @@ function toggleViewMode() {
 // Reload file content when switching to full mode
 watch(viewMode, async (mode) => {
   if (mode === 'full' && selectedFile.value && !fileContent.value) {
-    const content = await fetchFileContent(props.repoId, props.commitSha, selectedFile.value, props.repoPath)
-    fileContent.value = content
+    try {
+      const content = await fetchFileContent(props.repoId, props.commitSha, selectedFile.value, props.repoPath)
+      fileContent.value = content
+      fileDiffError.value = null
+    } catch (loadError) {
+      fileDiffError.value = getErrorMessage(loadError, 'Could not load file content.')
+    }
   }
 })
 
