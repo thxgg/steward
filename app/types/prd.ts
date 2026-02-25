@@ -1,6 +1,13 @@
 /**
  * PRD list item returned when listing PRDs in a repository
  */
+export interface PrdArchiveState {
+  /** Whether this PRD is archived */
+  archived: boolean
+  /** ISO timestamp when this PRD was archived */
+  archivedAt?: string
+}
+
 export interface PrdListItem {
   /** URL-safe identifier (derived from filename) */
   slug: string
@@ -16,6 +23,10 @@ export interface PrdListItem {
   completedCount?: number
   /** File modification timestamp (ms since epoch) */
   modifiedAt: number
+  /** Archive visibility state */
+  archived: boolean
+  /** ISO timestamp when this PRD was archived */
+  archivedAt?: string
 }
 
 /**
@@ -46,4 +57,8 @@ export interface PrdDocument {
   content: string
   /** Extracted metadata */
   metadata: PrdMetadata
+  /** Archive visibility state */
+  archived: boolean
+  /** ISO timestamp when this PRD was archived */
+  archivedAt?: string
 }

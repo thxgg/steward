@@ -16,6 +16,7 @@ const router = useRouter()
 const route = useRoute()
 const { repos, currentRepo, currentRepoId, selectRepo, addRepo, removeRepo } = useRepos()
 const { showSuccess } = useToast()
+const showArchived = useState<boolean>('prd-show-archived', () => false)
 
 // Dropdown state
 const open = ref(false)
@@ -43,16 +44,23 @@ async function handleSelectRepo(id: string) {
 
   // Fetch PRDs for new repo and navigate to first one
   try {
-    const prds = await $fetch<{ slug: string }[]>(`/api/repos/${id}/prds`)
-    const firstPrd = prds?.[0]
+    const firstPrd = await fetchFirstPrdSlug(id)
     if (firstPrd) {
-      router.push(`/${id}/${firstPrd.slug}`)
+      router.push(`/${id}/${firstPrd}`)
     } else {
       router.push('/')
     }
   } catch {
     router.push('/')
   }
+}
+
+async function fetchFirstPrdSlug(repoId: string): Promise<string | null> {
+  const prds = await $fetch<{ slug: string }[]>(`/api/repos/${repoId}/prds`, {
+    query: showArchived.value ? { includeArchived: '1' } : undefined
+  })
+
+  return prds?.[0]?.slug || null
 }
 
 function handleAddClick() {
@@ -141,10 +149,9 @@ async function handleAddRepo() {
     // Navigate to first PRD of newly added repo
     if (newRepo?.id) {
       try {
-        const prds = await $fetch<{ slug: string }[]>(`/api/repos/${newRepo.id}/prds`)
-        const firstPrd = prds?.[0]
+        const firstPrd = await fetchFirstPrdSlug(newRepo.id)
         if (firstPrd) {
-          router.push(`/${newRepo.id}/${firstPrd.slug}`)
+          router.push(`/${newRepo.id}/${firstPrd}`)
         }
       } catch {
         // Ignore navigation errors

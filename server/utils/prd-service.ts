@@ -4,6 +4,7 @@ import type { PrdDocument, PrdListItem, PrdMetadata } from '../../app/types/prd.
 import type { RepoConfig } from '../../app/types/repo.js'
 import type { CommitRef, ProgressFile, TasksFile } from '../../app/types/task.js'
 import { resolveCommitRepo } from './git.js'
+import { getPrdArchiveMap, getPrdArchiveState } from './prd-archive.js'
 import { getPrdState, getPrdStateSummaries } from './prd-state.js'
 import { discoverGitRepos, updateRepoGitRepos } from './repos.js'
 
@@ -12,6 +13,10 @@ const PRD_SLUG_PATTERN = /^[A-Za-z0-9][A-Za-z0-9-]*$/
 export interface ResolvedTaskCommit {
   sha: string
   repo: string
+}
+
+export interface ListPrdDocumentsOptions {
+  includeArchived?: boolean
 }
 
 function normalizePathSlashes(path: string): string {
@@ -112,15 +117,23 @@ export async function readPrdDocument(repo: RepoConfig, prdSlug: string): Promis
     throw new Error('PRD not found')
   }
 
+  const archiveState = await getPrdArchiveState(repo.id, prdSlug)
+
   return {
     slug: prdSlug,
     name: extractPrdTitle(content, prdSlug),
     content,
-    metadata: parseMetadata(content)
+    metadata: parseMetadata(content),
+    archived: archiveState.archived,
+    ...(archiveState.archivedAt && { archivedAt: archiveState.archivedAt })
   }
 }
 
-export async function listPrdDocuments(repo: RepoConfig): Promise<PrdListItem[]> {
+export async function listPrdDocuments(
+  repo: RepoConfig,
+  options: ListPrdDocumentsOptions = {}
+): Promise<PrdListItem[]> {
+  const includeArchived = options.includeArchived === true
   const prdDir = join(repo.path, 'docs', 'prd')
   let prdFiles: string[] = []
 
@@ -138,10 +151,20 @@ export async function listPrdDocuments(repo: RepoConfig): Promise<PrdListItem[]>
     return []
   }
 
-  const stateSummaries = await getPrdStateSummaries(repo.id)
+  const [stateSummaries, archiveMap] = await Promise.all([
+    getPrdStateSummaries(repo.id),
+    getPrdArchiveMap(repo.id)
+  ])
 
-  const items: PrdListItem[] = await Promise.all(prdFiles.map(async (filename) => {
+  const items = (await Promise.all(prdFiles.map(async (filename) => {
     const slug = basename(filename, '.md')
+    const archivedAt = archiveMap.get(slug)
+    const archived = typeof archivedAt === 'string'
+
+    if (!includeArchived && archived) {
+      return null
+    }
+
     const filePath = join(prdDir, filename)
 
     let name = slug
@@ -167,12 +190,21 @@ export async function listPrdDocuments(repo: RepoConfig): Promise<PrdListItem[]>
       source: `docs/prd/${filename}`,
       hasState: !!stateSummary?.hasState,
       modifiedAt,
+      archived,
+      ...(archivedAt && { archivedAt }),
       ...(stateSummary?.taskCount !== undefined && { taskCount: stateSummary.taskCount }),
       ...(stateSummary?.completedCount !== undefined && { completedCount: stateSummary.completedCount })
     }
-  }))
+  }))).filter((item): item is PrdListItem => item !== null)
 
-  items.sort((a, b) => b.modifiedAt - a.modifiedAt)
+  items.sort((a, b) => {
+    if (a.archived !== b.archived) {
+      return a.archived ? 1 : -1
+    }
+
+    return b.modifiedAt - a.modifiedAt
+  })
+
   return items
 }
 

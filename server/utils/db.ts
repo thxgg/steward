@@ -246,7 +246,22 @@ async function initializeDatabase(): Promise<SqliteAdapter> {
       FOREIGN KEY (repo_id) REFERENCES repos(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS prd_archives (
+      repo_id TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      archived_at TEXT NOT NULL,
+      PRIMARY KEY (repo_id, slug),
+      FOREIGN KEY (repo_id) REFERENCES repos(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS app_meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_prd_states_repo_id ON prd_states(repo_id);
+    CREATE INDEX IF NOT EXISTS idx_prd_archives_repo_id ON prd_archives(repo_id);
   `)
 
   return adapter

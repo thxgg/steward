@@ -2,6 +2,7 @@
 import { FileText, LayoutGrid, AlertCircle, Loader2, RefreshCw, GitBranch } from 'lucide-vue-next'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { Button } from '~/components/ui/button'
+import { Badge } from '~/components/ui/badge'
 import type { PrdDocument } from '~/types/prd'
 import type { GraphPrdPayload } from '~/types/graph'
 import type { Task, TasksFile, ProgressFile, CommitRef } from '~/types/task'
@@ -61,6 +62,9 @@ const route = useRoute()
 const router = useRouter()
 const { selectRepo } = useRepos()
 const {
+  prds,
+  showArchived,
+  setPrdArchived,
   fetchDocument,
   fetchTasks,
   fetchProgress,
@@ -98,6 +102,7 @@ const detailOpen = ref(false)
 
 // Resolved commits for selected task (fetched from API with repo context)
 const selectedTaskCommits = ref<CommitRef[]>([])
+const isUpdatingArchive = ref(false)
 
 const taskQueryId = computed(() => getSingleQueryParam(route.query[TASK_QUERY_KEY]))
 const taskQueryPrd = computed(() => getSingleQueryParam(route.query[TASK_PRD_QUERY_KEY]))
@@ -495,6 +500,40 @@ async function handleGraphTaskClick(payload: { prdSlug: string; taskId: string }
 
   await openTaskDetail(task, payload.prdSlug)
 }
+
+async function handleArchiveToggle(archived: boolean) {
+  if (!document.value || isUpdatingArchive.value) {
+    return
+  }
+
+  isUpdatingArchive.value = true
+
+  try {
+    const archiveState = await setPrdArchived(prdSlug.value, archived)
+
+    if (document.value) {
+      document.value = {
+        ...document.value,
+        archived: archiveState.archived,
+        archivedAt: archiveState.archivedAt
+      }
+    }
+
+    if (archived && !showArchived.value) {
+      const nextPrd = prds.value?.find((entry) => entry.slug !== prdSlug.value)
+
+      if (nextPrd) {
+        await router.push(`/${repoId.value}/${nextPrd.slug}`)
+      } else {
+        await router.push('/')
+      }
+    }
+  } catch (err) {
+    showError('Failed to update archive state', getErrorMessage(err, 'Could not update this PRD archive state.'))
+  } finally {
+    isUpdatingArchive.value = false
+  }
+}
 </script>
 
 <template>
@@ -530,9 +569,30 @@ async function handleGraphTaskClick(payload: { prdSlug: string; taskId: string }
     <!-- Content -->
     <div v-else-if="document" class="mx-auto max-w-6xl space-y-6">
       <!-- Header with PRD name -->
-      <div class="space-y-2">
-        <h1 class="text-2xl font-bold tracking-tight">{{ document.name }}</h1>
-        <PrdMeta :metadata="document.metadata" />
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="space-y-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <h1 class="text-2xl font-bold tracking-tight">{{ document.name }}</h1>
+            <Badge
+              v-if="document.archived"
+              variant="outline"
+              class="text-[10px] uppercase tracking-wide"
+            >
+              Archived
+            </Badge>
+          </div>
+          <PrdMeta :metadata="document.metadata" />
+        </div>
+
+        <Button
+          variant="outline"
+          size="sm"
+          :disabled="isUpdatingArchive"
+          @click="handleArchiveToggle(!document.archived)"
+        >
+          <span v-if="isUpdatingArchive">Saving...</span>
+          <span v-else>{{ document.archived ? 'Restore document' : 'Archive document' }}</span>
+        </Button>
       </div>
 
       <!-- Tabs -->

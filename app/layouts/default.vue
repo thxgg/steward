@@ -8,6 +8,9 @@ const { themeMode, cycleThemeMode } = useThemeMode()
 const { refreshPrds } = usePrd()
 const { currentRepoId } = useRepos()
 const route = useRoute()
+const runtimeConfig = useRuntimeConfig()
+const stewardVersion = computed(() => runtimeConfig.public.stewardVersion || '0.0.0')
+const stewardPackageName = computed(() => runtimeConfig.public.stewardPackageName || 'steward')
 
 // File change event for live updates (provided to child components)
 const fileChangeEvent = ref<{ category: string; path?: string; timestamp: number } | null>(null)
@@ -127,6 +130,8 @@ useFileWatch((event) => {
 
 <template>
   <div class="min-h-screen bg-background text-foreground">
+    <LayoutStateMigrationOverlay />
+
     <!-- Command Palette -->
     <CommandPalette
       v-model:open="commandPaletteOpen"
@@ -142,10 +147,13 @@ useFileWatch((event) => {
     >
       <div class="flex h-full items-center justify-between px-4 md:px-6">
         <!-- App Title -->
-        <div class="flex items-center gap-4">
+        <div class="flex items-center gap-3">
           <h1 class="text-lg font-semibold tracking-tight">
             PRD Viewer
           </h1>
+          <span class="hidden text-xs text-muted-foreground md:inline">
+            {{ stewardPackageName }} v{{ stewardVersion }}
+          </span>
         </div>
 
         <!-- Right side: Repo Selector + Theme Toggle (ClientOnly to prevent hydration mismatch) -->

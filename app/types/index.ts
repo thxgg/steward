@@ -2,7 +2,7 @@
 export type { RepoConfig, AddRepoRequest, GitRepoInfo } from './repo'
 
 // PRD types
-export type { PrdListItem, PrdMetadata, PrdDocument } from './prd'
+export type { PrdArchiveState, PrdListItem, PrdMetadata, PrdDocument } from './prd'
 
 // Task types
 export type {

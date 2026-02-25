@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { FileText, Monitor, Moon, Sun, Folder, Check, Keyboard, RefreshCw, GitBranch } from 'lucide-vue-next'
+import { FileText, Monitor, Moon, Sun, Folder, Check, Keyboard, RefreshCw, GitBranch, Archive } from 'lucide-vue-next'
 import {
   CommandDialog,
   CommandEmpty,
@@ -19,7 +19,7 @@ const emit = defineEmits<{
 
 const router = useRouter()
 const { themeMode, cycleThemeMode } = useThemeMode()
-const { prds } = usePrd()
+const { prds, showArchived, toggleShowArchived } = usePrd()
 const { repos, currentRepoId, selectRepo, refreshGitRepos } = useRepos()
 const { showSuccess, showError } = useToast()
 
@@ -108,6 +108,11 @@ function openShortcutsHelp() {
   emit('openShortcutsHelp')
 }
 
+function toggleArchivedVisibility() {
+  toggleShowArchived()
+  open.value = false
+}
+
 const isRefreshingGitRepos = ref(false)
 
 async function handleRefreshGitRepos() {
@@ -155,7 +160,10 @@ const modKey = computed(() => isMac.value ? '⌘' : 'Ctrl')
           @select="navigateToPrd(prd.slug)"
         >
           <FileText class="size-4" />
-          <span>{{ prd.name }}</span>
+          <span class="flex items-center gap-1">
+            <span>{{ prd.name }}</span>
+            <span v-if="prd.archived" class="text-[10px] uppercase tracking-wide text-muted-foreground">Archived</span>
+          </span>
         </CommandItem>
       </CommandGroup>
 
@@ -214,6 +222,10 @@ const modKey = computed(() => isMac.value ? '⌘' : 'Ctrl')
         >
           <RefreshCw class="size-4" :class="{ 'animate-spin': isRefreshingGitRepos }" />
           <span class="flex-1">Refresh git repos</span>
+        </CommandItem>
+        <CommandItem value="toggle archived documents" @select="toggleArchivedVisibility">
+          <Archive class="size-4" />
+          <span class="flex-1">{{ showArchived ? 'Hide archived documents' : 'Show archived documents' }}</span>
         </CommandItem>
       </CommandGroup>
     </CommandList>

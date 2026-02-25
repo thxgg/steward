@@ -1,11 +1,17 @@
 <script setup lang="ts">
-import { FileText, Loader2, AlertCircle, RefreshCw, GitBranch } from 'lucide-vue-next'
+import { FileText, Loader2, AlertCircle, RefreshCw, GitBranch, Archive } from 'lucide-vue-next'
 import { ScrollArea } from '~/components/ui/scroll-area'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from '~/components/ui/tooltip'
 
 const route = useRoute()
-const { prds, prdsStatus, refreshPrds } = usePrd()
+const { prds, prdsStatus, showArchived, toggleShowArchived, refreshPrds } = usePrd()
 const { currentRepoId } = useRepos()
 
 // Determine which PRD is currently selected based on route
@@ -55,7 +61,27 @@ const isRepoGraphActive = computed(() => {
         </NuxtLink>
 
         <!-- Documents Header -->
-        <h2 class="flex h-10 items-center px-2 text-sm font-medium text-muted-foreground">Documents</h2>
+        <div class="flex h-10 items-center justify-between px-2">
+          <h2 class="text-sm font-medium text-muted-foreground">Documents</h2>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="size-7 text-muted-foreground/70 hover:text-foreground"
+                  @click="toggleShowArchived"
+                >
+                  <Archive class="size-3.5" />
+                  <span class="sr-only">{{ showArchived ? 'Hide archived documents' : 'Show archived documents' }}</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" align="end">
+                {{ showArchived ? 'Hide archived documents' : 'Show archived documents' }}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
         <!-- Loading state -->
         <div v-if="prdsStatus === 'pending'" class="flex items-center justify-center py-8">
           <Loader2 class="size-5 animate-spin text-muted-foreground" />
@@ -84,10 +110,10 @@ const isRepoGraphActive = computed(() => {
         <div v-else-if="!prds?.length" class="px-2 py-8 text-center">
           <FileText class="mx-auto size-8 text-muted-foreground/50" />
           <p class="mt-2 text-sm text-muted-foreground">
-            No PRDs found
+            {{ showArchived ? 'No PRDs found' : 'No active PRDs found' }}
           </p>
           <p class="mt-1 text-xs text-muted-foreground/70">
-            Add .md files to docs/prd/
+            {{ showArchived ? 'Add .md files to docs/prd/' : 'Archived PRDs are hidden. Use the archive toggle above.' }}
           </p>
         </div>
 
@@ -101,11 +127,20 @@ const isRepoGraphActive = computed(() => {
             :class="[
               isActive(prd.slug)
                 ? 'bg-accent text-accent-foreground'
-                : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                : prd.archived
+                  ? 'text-muted-foreground/75 hover:bg-accent/40 hover:text-foreground'
+                  : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
             ]"
           >
             <FileText class="size-4 shrink-0" />
             <span class="flex-1 truncate">{{ prd.name }}</span>
+            <Badge
+              v-if="prd.archived"
+              variant="outline"
+              class="shrink-0 text-[10px] uppercase tracking-wide"
+            >
+              Archived
+            </Badge>
             <Badge
               v-if="prd.hasState && prd.taskCount"
               variant="secondary"

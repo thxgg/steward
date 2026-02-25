@@ -10,7 +10,7 @@ definePageMeta({
 
 const route = useRoute()
 const { selectRepo } = useRepos()
-const { fetchRepoGraph, fetchTasks, fetchTaskCommits } = usePrd()
+const { fetchRepoGraph, fetchTasks, fetchTaskCommits, showArchived } = usePrd()
 const { showError } = useToast()
 
 const repoId = computed(() => route.params.repo as string)
@@ -165,6 +165,17 @@ watch(repoId, async () => {
   selectRepo(repoId.value)
   await loadGraph(true)
 })
+
+watch(showArchived, async () => {
+  graph.value = null
+  graphError.value = null
+
+  if (!repoId.value) {
+    return
+  }
+
+  await loadGraph(true)
+})
 </script>
 
 <template>
@@ -178,6 +189,7 @@ watch(repoId, async () => {
           </h1>
           <p class="mt-1 text-sm text-muted-foreground">
             Dependency graph across PRDs with task state in this repository.
+            <span v-if="!showArchived" class="ml-1">Archived PRDs are hidden.</span>
           </p>
         </div>
 

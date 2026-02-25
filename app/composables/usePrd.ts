@@ -1,15 +1,21 @@
-import type { PrdListItem, PrdDocument } from '~/types/prd'
+import type { PrdArchiveState, PrdListItem, PrdDocument } from '~/types/prd'
 import type { TasksFile, ProgressFile, CommitRef } from '~/types/task'
 import type { GraphPrdPayload, GraphRepoPayload } from '~/types/graph'
 
 export function usePrd() {
   const { currentRepoId } = useRepos()
   const { showError } = useToast()
+  const showArchived = useState<boolean>('prd-show-archived', () => false)
 
   // PRD list for current repo - refetches when currentRepoId changes
-  const prdsUrl = computed(() =>
-    currentRepoId.value ? `/api/repos/${currentRepoId.value}/prds` : ''
-  )
+  const prdsUrl = computed(() => {
+    if (!currentRepoId.value) {
+      return ''
+    }
+
+    const includeArchivedQuery = showArchived.value ? '?includeArchived=1' : ''
+    return `/api/repos/${currentRepoId.value}/prds${includeArchivedQuery}`
+  })
 
   const { data: prds, refresh: refreshPrds, status: prdsStatus, error: prdsError } = useFetch<PrdListItem[]>(
     prdsUrl,
@@ -32,6 +38,14 @@ export function usePrd() {
       await refreshPrds()
     }
   }, { immediate: true })
+
+  watch(showArchived, async () => {
+    if (!currentRepoId.value) {
+      return
+    }
+
+    await refreshPrds()
+  })
 
   // Fetch a PRD document by slug
   async function fetchDocument(slug: string): Promise<PrdDocument | null> {
@@ -68,13 +82,41 @@ export function usePrd() {
   // Fetch graph payload across all PRDs in a repo
   async function fetchRepoGraph(): Promise<GraphRepoPayload | null> {
     if (!currentRepoId.value) return null
-    return await $fetch<GraphRepoPayload>(`/api/repos/${currentRepoId.value}/graph`)
+    return await $fetch<GraphRepoPayload>(`/api/repos/${currentRepoId.value}/graph`, {
+      query: showArchived.value ? { includeArchived: '1' } : undefined
+    })
+  }
+
+  function setShowArchived(value: boolean) {
+    showArchived.value = value
+  }
+
+  function toggleShowArchived() {
+    showArchived.value = !showArchived.value
+  }
+
+  async function setPrdArchived(slug: string, archived: boolean): Promise<PrdArchiveState> {
+    if (!currentRepoId.value) {
+      throw new Error('No repository selected')
+    }
+
+    const result = await $fetch<PrdArchiveState>(`/api/repos/${currentRepoId.value}/prd/${slug}/archive`, {
+      method: 'POST',
+      body: { archived }
+    })
+
+    await refreshPrds()
+    return result
   }
 
   return {
     prds,
     prdsStatus,
+    showArchived,
     refreshPrds,
+    setShowArchived,
+    toggleShowArchived,
+    setPrdArchived,
     fetchDocument,
     fetchTasks,
     fetchProgress,

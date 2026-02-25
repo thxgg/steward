@@ -10,6 +10,7 @@ import type {
 } from '../../app/types/graph.js'
 import type { RepoConfig } from '../../app/types/repo.js'
 import type { Task } from '../../app/types/task.js'
+import { getPrdArchiveMap } from './prd-archive.js'
 import { getPrdState, getPrdStateSummaries } from './prd-state.js'
 import { resolvePrdMarkdownPath } from './prd-service.js'
 
@@ -211,9 +212,23 @@ export async function buildPrdGraph(repo: RepoConfig, prdSlug: string): Promise<
   }
 }
 
-export async function buildRepoGraph(repo: RepoConfig): Promise<GraphRepoPayload> {
-  const summaries = await getPrdStateSummaries(repo.id)
-  const slugs = [...summaries.keys()].sort((a, b) => a.localeCompare(b))
+export type BuildRepoGraphOptions = {
+  includeArchived?: boolean
+}
+
+export async function buildRepoGraph(
+  repo: RepoConfig,
+  options: BuildRepoGraphOptions = {}
+): Promise<GraphRepoPayload> {
+  const includeArchived = options.includeArchived === true
+  const [summaries, archiveMap] = await Promise.all([
+    getPrdStateSummaries(repo.id),
+    getPrdArchiveMap(repo.id)
+  ])
+
+  const slugs = [...summaries.keys()]
+    .filter((slug) => includeArchived || !archiveMap.has(slug))
+    .sort((a, b) => a.localeCompare(b))
 
   const inputs = (await Promise.all(slugs.map(async (slug): Promise<GraphPrdInput | null> => {
     const [state, prdName] = await Promise.all([
