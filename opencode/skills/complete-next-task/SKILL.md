@@ -64,7 +64,12 @@ date -u +"%Y-%m-%dT%H:%M:%SZ"
 ```json
 {
   "prdName": "<prdName from tasks.json>",
-  "started": "<UTC timestamp from bash>",
+  "totalTasks": "<tasks.json length>",
+  "completed": 0,
+  "inProgress": 0,
+  "blocked": 0,
+  "startedAt": "<UTC timestamp from bash>",
+  "lastUpdated": "<UTC timestamp from bash>",
   "patterns": [],
   "taskLogs": []
 }
@@ -96,6 +101,10 @@ date -u +"%Y-%m-%dT%H:%M:%SZ"
   "startedAt": "<UTC timestamp from bash>"
 }
 ```
+
+Also update counters in `progress.json`:
+- `inProgress += 1`
+- `lastUpdated = <UTC timestamp from bash>`
 
 **Sync to Database:**
 ```bash

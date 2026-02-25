@@ -1,0 +1,309 @@
+import { emitChange } from './change-events.js'
+import { dbAll, dbExec, dbGet, dbRun } from './db.js'
+import { needsProgressMigration, parseStoredProgressFile, parseTasksFile } from './state-schema.js'
+
+type MigrationState = 'idle' | 'running' | 'completed' | 'failed'
+
+type PrdStateRow = {
+  repo_id: string
+  slug: string
+  tasks_json: string | null
+  progress_json: string | null
+}
+
+type MetaRow = {
+  value: string
+}
+
+type MigrationMarker = {
+  version: string
+  completedAt: string
+  totalRows: number
+  migratedRows: number
+}
+
+export type StateMigrationStatus = {
+  state: MigrationState
+  version: string
+  startedAt: string | null
+  completedAt: string | null
+  totalRows: number
+  processedRows: number
+  migratedRows: number
+  failedRows: number
+  currentSlug: string | null
+  errorMessage: string | null
+  percent: number
+}
+
+const MIGRATION_VERSION = 'progress-json-v2'
+const MIGRATION_META_KEY = `state-migration:${MIGRATION_VERSION}`
+
+let status: StateMigrationStatus = {
+  state: 'idle',
+  version: MIGRATION_VERSION,
+  startedAt: null,
+  completedAt: null,
+  totalRows: 0,
+  processedRows: 0,
+  migratedRows: 0,
+  failedRows: 0,
+  currentSlug: null,
+  errorMessage: null,
+  percent: 0
+}
+
+let migrationPromise: Promise<void> | null = null
+
+function nowIso(): string {
+  return new Date().toISOString()
+}
+
+function toPercent(processedRows: number, totalRows: number): number {
+  if (totalRows <= 0) {
+    return 100
+  }
+
+  return Math.min(100, Math.floor((processedRows / totalRows) * 100))
+}
+
+function resetRunningStatus(totalRows: number): void {
+  status = {
+    state: 'running',
+    version: MIGRATION_VERSION,
+    startedAt: nowIso(),
+    completedAt: null,
+    totalRows,
+    processedRows: 0,
+    migratedRows: 0,
+    failedRows: 0,
+    currentSlug: null,
+    errorMessage: null,
+    percent: totalRows === 0 ? 100 : 0
+  }
+}
+
+function markCompleted(marker?: MigrationMarker): void {
+  const completedAt = marker?.completedAt || nowIso()
+  const totalRows = marker?.totalRows ?? status.totalRows
+  const migratedRows = marker?.migratedRows ?? status.migratedRows
+
+  status = {
+    ...status,
+    state: 'completed',
+    completedAt,
+    totalRows,
+    processedRows: totalRows,
+    migratedRows,
+    failedRows: 0,
+    currentSlug: null,
+    errorMessage: null,
+    percent: 100
+  }
+}
+
+function markFailed(message: string): void {
+  status = {
+    ...status,
+    state: 'failed',
+    completedAt: nowIso(),
+    currentSlug: null,
+    errorMessage: message,
+    percent: toPercent(status.processedRows, status.totalRows)
+  }
+}
+
+async function ensureMetaTable(): Promise<void> {
+  await dbExec(`
+    CREATE TABLE IF NOT EXISTS app_meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `)
+}
+
+async function readMigrationMarker(): Promise<MigrationMarker | null> {
+  const row = await dbGet<MetaRow>(
+    'SELECT value FROM app_meta WHERE key = ?',
+    [MIGRATION_META_KEY]
+  )
+
+  if (!row?.value) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(row.value) as MigrationMarker
+    if (!parsed || typeof parsed !== 'object') {
+      return null
+    }
+
+    if (parsed.version !== MIGRATION_VERSION) {
+      return null
+    }
+
+    if (typeof parsed.completedAt !== 'string') {
+      return null
+    }
+
+    if (typeof parsed.totalRows !== 'number' || typeof parsed.migratedRows !== 'number') {
+      return null
+    }
+
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+async function writeMigrationMarker(totalRows: number, migratedRows: number): Promise<void> {
+  const completedAt = nowIso()
+  const marker: MigrationMarker = {
+    version: MIGRATION_VERSION,
+    completedAt,
+    totalRows,
+    migratedRows
+  }
+
+  await dbRun(
+    `
+      INSERT INTO app_meta (key, value, updated_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(key) DO UPDATE SET
+        value = excluded.value,
+        updated_at = excluded.updated_at
+    `,
+    [MIGRATION_META_KEY, JSON.stringify(marker), completedAt]
+  )
+}
+
+async function migrateProgressRows(): Promise<void> {
+  await ensureMetaTable()
+
+  const marker = await readMigrationMarker()
+  if (marker) {
+    markCompleted(marker)
+    return
+  }
+
+  const rows = await dbAll<PrdStateRow>(
+    `
+      SELECT repo_id, slug, tasks_json, progress_json
+      FROM prd_states
+      WHERE progress_json IS NOT NULL
+      ORDER BY repo_id ASC, slug ASC
+    `
+  )
+
+  resetRunningStatus(rows.length)
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index]!
+    status.currentSlug = row.slug
+
+    try {
+      const parsedProgress = row.progress_json
+        ? (JSON.parse(row.progress_json) as unknown)
+        : null
+
+      let tasksCountHint: number | undefined
+      let prdNameFallback: string | undefined
+
+      if (row.tasks_json) {
+        try {
+          const tasks = parseTasksFile(JSON.parse(row.tasks_json) as unknown)
+          tasksCountHint = tasks.tasks.length
+          prdNameFallback = tasks.prd.name
+        } catch {
+          // Keep fallback below when tasks_json is malformed.
+        }
+      }
+
+      const shouldMigrate = needsProgressMigration(parsedProgress)
+
+      if (shouldMigrate) {
+        const normalized = parseStoredProgressFile(parsedProgress, {
+          prdNameFallback: prdNameFallback || row.slug,
+          totalTasksHint: tasksCountHint
+        })
+
+        const updatedAt = nowIso()
+        await dbRun(
+          `
+            UPDATE prd_states
+            SET progress_json = ?, updated_at = ?
+            WHERE repo_id = ? AND slug = ?
+          `,
+          [JSON.stringify(normalized), updatedAt, row.repo_id, row.slug]
+        )
+
+        status.migratedRows += 1
+
+        emitChange({
+          type: 'change',
+          path: `state://${row.repo_id}/${row.slug}/progress.json`,
+          repoId: row.repo_id,
+          category: 'progress'
+        })
+      }
+    } catch {
+      status.failedRows += 1
+    }
+
+    status.processedRows = index + 1
+    status.percent = toPercent(status.processedRows, status.totalRows)
+  }
+
+  if (status.failedRows > 0) {
+    markFailed(`Failed to migrate ${status.failedRows} PRD progress row(s).`)
+    return
+  }
+
+  await writeMigrationMarker(status.totalRows, status.migratedRows)
+  markCompleted()
+}
+
+async function runMigration(): Promise<void> {
+  try {
+    await migrateProgressRows()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    markFailed(message)
+  }
+}
+
+export function getStateMigrationStatus(): StateMigrationStatus {
+  return { ...status }
+}
+
+export function startStateMigration(): Promise<void> {
+  if (!migrationPromise) {
+    if (status.state === 'idle') {
+      status = {
+        ...status,
+        state: 'running',
+        startedAt: nowIso(),
+        completedAt: null,
+        errorMessage: null,
+        percent: 0
+      }
+    }
+
+    migrationPromise = runMigration().finally(() => {
+      migrationPromise = null
+    })
+  }
+
+  return migrationPromise
+}
+
+export async function ensureStateMigrationReady(): Promise<void> {
+  if (status.state !== 'completed') {
+    await startStateMigration()
+  }
+
+  if (status.state === 'failed') {
+    throw new Error(status.errorMessage || 'State migration failed')
+  }
+}

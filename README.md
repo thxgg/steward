@@ -146,6 +146,9 @@ Steward reads local filesystem and git metadata by design.
 - UI/API accept loopback requests only
 - Non-loopback requests are rejected
 - Treat as a workstation tool, not a hosted multi-user service
+- `npm run dev` skips loopback enforcement because Nuxt dev proxying can mask loopback source addresses
+
+On startup, Steward also performs a one-time automatic state migration when legacy `progress_json` data is detected. During this migration, the UI shows a blocking progress overlay until migration completes.
 
 ## Storage
 

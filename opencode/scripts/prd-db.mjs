@@ -13,6 +13,155 @@ const DB_PATH = customPath && customPath.trim().length > 0
   ? customPath
   : (customHome && customHome.trim().length > 0 ? join(customHome, 'state.db') : DEFAULT_DB_PATH)
 
+function toNonNegativeNumber(value) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined
+  }
+
+  return Math.max(0, Math.floor(value))
+}
+
+function toCanonicalPattern(pattern) {
+  if (typeof pattern === 'string') {
+    const trimmed = pattern.trim()
+    if (!trimmed) {
+      return null
+    }
+
+    return {
+      name: trimmed,
+      description: trimmed
+    }
+  }
+
+  if (!pattern || typeof pattern !== 'object' || Array.isArray(pattern)) {
+    return null
+  }
+
+  const name = typeof pattern.name === 'string' ? pattern.name.trim() : ''
+  if (!name) {
+    return null
+  }
+
+  const description = typeof pattern.description === 'string' && pattern.description.trim().length > 0
+    ? pattern.description.trim()
+    : name
+
+  return { name, description }
+}
+
+function toCanonicalTaskLogs(progress, now) {
+  if (Array.isArray(progress.taskLogs)) {
+    return progress.taskLogs.filter((entry) => {
+      return entry && typeof entry === 'object' && !Array.isArray(entry) && typeof entry.taskId === 'string'
+    }).map((entry) => ({
+      taskId: entry.taskId,
+      status: entry.status === 'in_progress' || entry.status === 'completed' ? entry.status : 'pending',
+      startedAt: typeof entry.startedAt === 'string' ? entry.startedAt : now,
+      ...(typeof entry.completedAt === 'string' && { completedAt: entry.completedAt }),
+      ...(typeof entry.implemented === 'string' && { implemented: entry.implemented }),
+      ...(Array.isArray(entry.filesChanged) && { filesChanged: entry.filesChanged.filter((file) => typeof file === 'string') }),
+      ...(typeof entry.learnings === 'string' && { learnings: entry.learnings }),
+      ...(Array.isArray(entry.commits) && {
+        commits: entry.commits.filter((commit) => {
+          if (typeof commit === 'string') {
+            return commit.trim().length > 0
+          }
+
+          if (!commit || typeof commit !== 'object' || Array.isArray(commit)) {
+            return false
+          }
+
+          return typeof commit.sha === 'string' && commit.sha.trim().length > 0 && typeof commit.repo === 'string'
+        })
+      })
+    }))
+  }
+
+  if (progress.taskProgress && typeof progress.taskProgress === 'object' && !Array.isArray(progress.taskProgress)) {
+    return Object.entries(progress.taskProgress).map(([taskId, value]) => ({
+      taskId,
+      status: value?.status === 'in_progress' || value?.status === 'completed' ? value.status : 'pending',
+      startedAt: typeof value?.startedAt === 'string' ? value.startedAt : now,
+      ...(typeof value?.completedAt === 'string' && { completedAt: value.completedAt }),
+      ...(typeof value?.implemented === 'string' && { implemented: value.implemented }),
+      ...(Array.isArray(value?.filesChanged) && { filesChanged: value.filesChanged.filter((file) => typeof file === 'string') }),
+      ...(typeof value?.learnings === 'string' && { learnings: value.learnings }),
+      ...(Array.isArray(value?.commits) && { commits: value.commits })
+    }))
+  }
+
+  return []
+}
+
+function normalizeProgress(progressRaw, slug, tasksRaw) {
+  const now = new Date().toISOString()
+
+  const progress = progressRaw && typeof progressRaw === 'object' && !Array.isArray(progressRaw)
+    ? progressRaw
+    : {}
+
+  const tasks = tasksRaw && typeof tasksRaw === 'object' && !Array.isArray(tasksRaw)
+    ? tasksRaw
+    : {}
+
+  const taskCountHint = Array.isArray(tasks.tasks) ? tasks.tasks.length : 0
+  const prdNameFallback = typeof tasks.prd?.name === 'string' && tasks.prd.name.trim().length > 0
+    ? tasks.prd.name
+    : slug
+
+  const patterns = Array.isArray(progress.patterns)
+    ? progress.patterns.map(toCanonicalPattern).filter((value) => value !== null)
+    : []
+
+  const taskLogs = toCanonicalTaskLogs(progress, now)
+
+  const completed = typeof progress.completed === 'number'
+    ? Math.max(0, Math.floor(progress.completed))
+    : (Array.isArray(progress.completed) ? progress.completed.length : taskLogs.filter((entry) => entry.status === 'completed').length)
+
+  const inProgress = toNonNegativeNumber(progress.inProgress)
+    ?? taskLogs.filter((entry) => entry.status === 'in_progress').length
+
+  const blocked = toNonNegativeNumber(progress.blocked) ?? 0
+
+  const totalTasks = toNonNegativeNumber(progress.totalTasks)
+    ?? toNonNegativeNumber(taskCountHint)
+    ?? Math.max(completed + inProgress + blocked, taskLogs.length)
+
+  return {
+    prdName: typeof progress.prdName === 'string' && progress.prdName.trim().length > 0
+      ? progress.prdName
+      : prdNameFallback,
+    totalTasks,
+    completed,
+    inProgress,
+    blocked,
+    startedAt: typeof progress.startedAt === 'string'
+      ? progress.startedAt
+      : (typeof progress.started === 'string' ? progress.started : null),
+    lastUpdated: typeof progress.lastUpdated === 'string' && progress.lastUpdated.trim().length > 0
+      ? progress.lastUpdated
+      : now,
+    patterns,
+    taskLogs
+  }
+}
+
+function createDefaultProgress(prdName, totalTasks = 0) {
+  return {
+    prdName,
+    totalTasks,
+    completed: 0,
+    inProgress: 0,
+    blocked: 0,
+    startedAt: null,
+    lastUpdated: new Date().toISOString(),
+    patterns: [],
+    taskLogs: []
+  }
+}
+
 function findRepoRoot(startPath) {
   let current = resolve(startPath)
   while (current !== '/') {
@@ -53,6 +202,12 @@ function getDb() {
     );
 
     CREATE INDEX IF NOT EXISTS idx_prd_states_repo_id ON prd_states(repo_id);
+
+    CREATE TABLE IF NOT EXISTS app_meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `)
 
   return db
@@ -105,7 +260,7 @@ function getState(repoPath, slug, outDir) {
     writeFileSync(join(outDir, 'progress.json'), state.progress_json)
     console.log(`Wrote progress.json to ${outDir}`)
   } else {
-    writeFileSync(join(outDir, 'progress.json'), JSON.stringify({ prdName: slug, patterns: [], taskLogs: [] }, null, 2))
+    writeFileSync(join(outDir, 'progress.json'), JSON.stringify(createDefaultProgress(slug), null, 2))
     console.log(`Initialized empty progress.json in ${outDir}`)
   }
 
@@ -128,8 +283,15 @@ function saveState(repoPath, slug, tasksFile, progressFile, notesFile) {
   let progressJson = null
   let notesMd = null
 
-  if (existsSync(tasksFile)) tasksJson = readFileSync(tasksFile, 'utf8')
-  if (existsSync(progressFile)) progressJson = readFileSync(progressFile, 'utf8')
+  if (existsSync(tasksFile)) {
+    tasksJson = readFileSync(tasksFile, 'utf8')
+  }
+
+  if (existsSync(progressFile)) {
+    const parsedTasks = tasksJson ? JSON.parse(tasksJson) : null
+    const parsedProgress = JSON.parse(readFileSync(progressFile, 'utf8'))
+    progressJson = JSON.stringify(normalizeProgress(parsedProgress, slug, parsedTasks))
+  }
   if (notesFile && existsSync(notesFile)) notesMd = readFileSync(notesFile, 'utf8')
 
   const existing = db.prepare('SELECT 1 FROM prd_states WHERE repo_id = ? AND slug = ?').get(repo.id, slug)

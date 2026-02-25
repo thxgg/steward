@@ -121,7 +121,8 @@ Create `progress.json`:
   "blocked": 0,
   "startedAt": null,
   "lastUpdated": "2024-01-15T10:00:00Z",
-  "taskProgress": {}
+  "patterns": [],
+  "taskLogs": []
 }
 ```
 

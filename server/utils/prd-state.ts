@@ -1,7 +1,8 @@
 import type { TasksFile, ProgressFile } from '../../app/types/task.js'
 import { emitChange } from './change-events.js'
 import { dbAll, dbGet, dbRun } from './db.js'
-import { parseProgressFile, parseTasksFile } from './state-schema.js'
+import { ensureStateMigrationReady } from './state-migration.js'
+import { parseProgressFile, parseStoredProgressFile, parseTasksFile } from './state-schema.js'
 
 type PrdStateRow = {
   repo_id: string
@@ -61,6 +62,8 @@ function getTaskCounts(tasksFile: TasksFile): { taskCount: number; completedCoun
 }
 
 export async function getPrdState(repoId: string, slug: string): Promise<StoredPrdState | null> {
+  await ensureStateMigrationReady()
+
   const row = await dbGet<PrdStateRow>(
     `
       SELECT repo_id, slug, tasks_json, progress_json, notes_md, updated_at
@@ -79,10 +82,17 @@ export async function getPrdState(repoId: string, slug: string): Promise<StoredP
     'prd_states.tasks_json',
     parseTasksFile
   )
+
+  const tasksCountHint = Array.isArray(tasks?.tasks) ? tasks.tasks.length : undefined
+  const prdNameFallback = tasks?.prd?.name || row.slug
+
   const progress = parseStoredJson<ProgressFile>(
     row.progress_json,
     'prd_states.progress_json',
-    parseProgressFile
+    (value) => parseStoredProgressFile(value, {
+      totalTasksHint: tasksCountHint,
+      prdNameFallback
+    })
   )
 
   return {
@@ -95,6 +105,8 @@ export async function getPrdState(repoId: string, slug: string): Promise<StoredP
 }
 
 export async function getPrdStateSummaries(repoId: string): Promise<Map<string, PrdStateSummary>> {
+  await ensureStateMigrationReady()
+
   const rows = await dbAll<Pick<PrdStateRow, 'slug' | 'tasks_json'>>(
     'SELECT slug, tasks_json FROM prd_states WHERE repo_id = ?',
     [repoId]
@@ -125,6 +137,8 @@ export async function getPrdStateSummaries(repoId: string): Promise<Map<string, 
 }
 
 export async function upsertPrdState(repoId: string, slug: string, update: PrdStateUpdate): Promise<void> {
+  await ensureStateMigrationReady()
+
   const validatedTasks = update.tasks === undefined
     ? undefined
     : (update.tasks === null ? null : parseTasksFile(update.tasks))
