@@ -16,6 +16,7 @@
     "server/utils/repos.ts",
     "server/utils/prd-state.ts",
     "server/utils/git.ts",
+    "server/utils/sync-apply.ts",
     "server/utils/sync-export.ts",
     "server/utils/sync-inspect.ts",
     "server/utils/sync-merge.ts",
