@@ -17,6 +17,7 @@
     "server/utils/prd-state.ts",
     "server/utils/git.ts",
     "server/utils/sync-export.ts",
+    "server/utils/sync-inspect.ts",
     "server/utils/sync-schema.ts",
     "server/utils/task-graph.ts",
     "app/lib/async-request.ts",
