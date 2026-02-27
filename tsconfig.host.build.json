@@ -15,6 +15,7 @@
     "server/utils/repos.ts",
     "server/utils/prd-state.ts",
     "server/utils/git.ts",
+    "server/utils/sync-schema.ts",
     "server/utils/task-graph.ts",
     "app/lib/async-request.ts",
     "app/types/repo.ts",
