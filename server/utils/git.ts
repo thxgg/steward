@@ -1,9 +1,10 @@
 import { spawn } from 'node:child_process'
 import { promises as fs } from 'node:fs'
-import { join, resolve, relative, isAbsolute } from 'node:path'
+import { resolve, relative, isAbsolute } from 'node:path'
 import type { GitCommit, FileDiff, DiffHunk, DiffLine, FileStatus, DiffLineType } from '../../app/types/git.js'
 import type { RepoConfig } from '../../app/types/repo.js'
 import type { CommitRef } from '../../app/types/task.js'
+import { normalizeCommitRepoRefPath } from './git-repo-path.js'
 
 export interface GitWorkingTreeStatus {
   staged: string[]
@@ -590,7 +591,8 @@ export async function findRepoForCommit(
 
 /**
  * Resolve a commit entry (string or CommitRef) to its repository information.
- * For CommitRef objects, returns immediately (O(1)).
+ * For CommitRef objects, validates and normalizes stored repo context, then falls
+ * back to SHA lookup when stored context is stale.
  * For string SHAs, searches repositories to find the commit.
  *
  * @param repoConfig - The repository configuration
@@ -601,13 +603,31 @@ export async function resolveCommitRepo(
   repoConfig: RepoConfig,
   commitEntry: string | CommitRef
 ): Promise<ResolvedCommit> {
-  // If it's a CommitRef object, we already have the repo info (O(1))
-  if (typeof commitEntry === 'object' && commitEntry.sha && commitEntry.repo) {
-    return {
-      sha: commitEntry.sha,
-      repoPath: commitEntry.repo,
-      absolutePath: join(repoConfig.path, commitEntry.repo),
+  const hasExplicitRepoPath = typeof commitEntry === 'object'
+    && commitEntry !== null
+    && typeof commitEntry.sha === 'string'
+    && Object.prototype.hasOwnProperty.call(commitEntry, 'repo')
+    && typeof commitEntry.repo === 'string'
+
+  // If it's a CommitRef object, normalize and validate its repo info first.
+  if (hasExplicitRepoPath) {
+    const normalizedRepoPath = normalizeCommitRepoRefPath(repoConfig, commitEntry.repo)
+    if (normalizedRepoPath !== null) {
+      const absolutePath = normalizedRepoPath
+        ? resolve(repoConfig.path, normalizedRepoPath)
+        : repoConfig.path
+
+      if (await isGitRepo(absolutePath) && await commitExistsInRepo(absolutePath, commitEntry.sha)) {
+        return {
+          sha: commitEntry.sha,
+          repoPath: normalizedRepoPath,
+          absolutePath,
+        }
+      }
     }
+
+    // Stored repo context can become stale or malformed; fall back to lookup by SHA.
+    return findRepoForCommit(repoConfig, commitEntry.sha)
   }
 
   // It's a string SHA, need to search for it

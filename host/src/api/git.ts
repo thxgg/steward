@@ -1,5 +1,7 @@
+import { resolve } from 'node:path'
 import type { DiffHunk, FileDiff, GitCommit } from '../../../app/types/git.js'
 import type { RepoConfig } from '../../../app/types/repo.js'
+import { normalizeCommitRepoRefPath } from '../../../server/utils/git-repo-path.js'
 import {
   commitStagedChanges,
   getCommitDiff,
@@ -59,17 +61,24 @@ function resolveGitRepoPath(repo: RepoConfig, repoPath?: string): string {
     return repo.path
   }
 
-  if (!repo.gitRepos || repo.gitRepos.length === 0) {
-    throw new Error('repo parameter provided but no git repos discovered in this repository')
+  const normalizedRepoPath = normalizeCommitRepoRefPath(repo, repoPath)
+  if (normalizedRepoPath === null) {
+    throw new Error('Invalid repo path: path traversal not allowed')
   }
 
-  const matchedRepo = repo.gitRepos.find((gitRepo) => gitRepo.relativePath === repoPath)
-  if (!matchedRepo) {
-    const available = repo.gitRepos.map((gitRepo) => gitRepo.relativePath).join(', ')
-    throw new Error(`repo "${repoPath}" is not a discovered git repo. Available: ${available}`)
+  if (!normalizedRepoPath) {
+    return repo.path
   }
 
-  return matchedRepo.absolutePath
+  const matchedRepo = (repo.gitRepos || []).find((gitRepo) => {
+    return gitRepo.relativePath === normalizedRepoPath
+  })
+
+  if (matchedRepo) {
+    return matchedRepo.absolutePath
+  }
+
+  return resolve(repo.path, normalizedRepoPath)
 }
 
 export const git = {

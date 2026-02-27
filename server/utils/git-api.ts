@@ -1,6 +1,12 @@
-import { isAbsolute, relative, resolve } from 'node:path'
+import { relative, resolve } from 'node:path'
 import type { GitRepoInfo, RepoConfig } from '../../app/types/repo.js'
 import { findRepoForCommit, isGitRepo } from './git.js'
+import {
+  isWithinPath,
+  normalizeCommitRepoRefPath,
+  normalizePathSlashes,
+  normalizeRepoRelativePath,
+} from './git-repo-path.js'
 import { discoverGitRepos } from './repos.js'
 
 const GIT_DISCOVERY_DEPTH = 4
@@ -10,35 +16,9 @@ export const MAX_COMMIT_QUERY_SHAS = 100
 export const MAX_GIT_REPO_PATH_LENGTH = 512
 export const MAX_GIT_FILE_PATH_LENGTH = 2048
 
-function normalizePathSlashes(path: string): string {
-  return path.replaceAll('\\', '/')
-}
-
-function isWithinPath(parentPath: string, candidatePath: string): boolean {
-  const relativePath = relative(resolve(parentPath), resolve(candidatePath))
-  return relativePath === '' || (!relativePath.startsWith('..') && !isAbsolute(relativePath))
-}
-
-function normalizeRepoRelativePath(repoRoot: string, repoPath: string): string | null {
-  const absolutePath = isAbsolute(repoPath)
-    ? resolve(repoPath)
-    : resolve(repoRoot, repoPath)
-
-  if (!isWithinPath(repoRoot, absolutePath)) {
-    return null
-  }
-
-  const relativePath = relative(resolve(repoRoot), absolutePath)
-  if (!relativePath || relativePath === '.') {
-    return ''
-  }
-
-  return normalizePathSlashes(relativePath)
-}
-
 function normalizeGitRepoInfo(repoRoot: string, gitRepo: GitRepoInfo): GitRepoInfo | null {
   const normalizedRelativePath = normalizeRepoRelativePath(repoRoot, gitRepo.relativePath)
-  if (!normalizedRelativePath) {
+  if (normalizedRelativePath === null || normalizedRelativePath === '') {
     return null
   }
 
@@ -112,10 +92,17 @@ export async function resolveRequestedGitRepoPath(
   }
 
   const repoRoot = resolve(repo.path)
-  const normalizedRequestedPath = normalizeRepoRelativePath(repoRoot, repoPath)
+  const normalizedRequestedPath = normalizeCommitRepoRefPath(repo, repoPath)
 
   if (normalizedRequestedPath === null) {
     throw new Error('Invalid repo path: path traversal not allowed')
+  }
+
+  if (normalizedRequestedPath === '') {
+    return {
+      gitRepoPath: repoRoot,
+      normalizedRepoPath: '',
+    }
   }
 
   const requestedAbsolutePath = resolve(repoRoot, normalizedRequestedPath)
