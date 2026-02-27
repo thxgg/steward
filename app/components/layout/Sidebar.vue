@@ -1,17 +1,12 @@
 <script setup lang="ts">
-import { FileText, Loader2, AlertCircle, RefreshCw, GitBranch, Archive } from 'lucide-vue-next'
+import { FileText, Loader2, AlertCircle, RefreshCw, GitBranch } from 'lucide-vue-next'
 import { ScrollArea } from '~/components/ui/scroll-area'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger
-} from '~/components/ui/tooltip'
+import { Switch } from '~/components/ui/switch'
 
 const route = useRoute()
-const { prds, prdsStatus, showArchived, toggleShowArchived, refreshPrds } = usePrd()
+const { prds, prdsStatus, showArchived, setShowArchived, refreshPrds } = usePrd()
 const { currentRepoId } = useRepos()
 
 // Determine which PRD is currently selected based on route
@@ -61,26 +56,16 @@ const isRepoGraphActive = computed(() => {
         </NuxtLink>
 
         <!-- Documents Header -->
-        <div class="flex h-10 items-center justify-between px-2">
+        <div class="flex h-10 items-center justify-between gap-2 px-2">
           <h2 class="text-sm font-medium text-muted-foreground">Documents</h2>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger as-child>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  class="size-7 text-muted-foreground/70 hover:text-foreground"
-                  @click="toggleShowArchived"
-                >
-                  <Archive class="size-3.5" />
-                  <span class="sr-only">{{ showArchived ? 'Hide archived documents' : 'Show archived documents' }}</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" align="end">
-                {{ showArchived ? 'Hide archived documents' : 'Show archived documents' }}
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <div class="flex items-center gap-2 whitespace-nowrap text-xs text-muted-foreground">
+            <span id="sidebar-show-archived-label">Show archived</span>
+            <Switch
+              :model-value="showArchived"
+              aria-labelledby="sidebar-show-archived-label"
+              @update:model-value="setShowArchived"
+            />
+          </div>
         </div>
         <!-- Loading state -->
         <div v-if="prdsStatus === 'pending'" class="flex items-center justify-center py-8">
