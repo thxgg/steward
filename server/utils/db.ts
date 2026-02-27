@@ -69,6 +69,62 @@ function resolveDbPath(): string {
   return DEFAULT_DB_PATH
 }
 
+function getTableColumnNames(adapter: SqliteAdapter, tableName: string): Set<string> {
+  const rows = adapter.all<{ name?: unknown }>(`PRAGMA table_info(${tableName})`)
+  const names = new Set<string>()
+
+  for (const row of rows) {
+    if (typeof row.name === 'string' && row.name.length > 0) {
+      names.add(row.name)
+    }
+  }
+
+  return names
+}
+
+function ensurePrdStateFieldClockColumns(adapter: SqliteAdapter): void {
+  const columnNames = getTableColumnNames(adapter, 'prd_states')
+  const requiredColumns = ['tasks_updated_at', 'progress_updated_at', 'notes_updated_at']
+
+  for (const columnName of requiredColumns) {
+    if (columnNames.has(columnName)) {
+      continue
+    }
+
+    adapter.exec(`ALTER TABLE prd_states ADD COLUMN ${columnName} TEXT;`)
+    columnNames.add(columnName)
+  }
+}
+
+function backfillPrdStateFieldClocks(adapter: SqliteAdapter): void {
+  adapter.run(
+    `
+      UPDATE prd_states
+      SET tasks_updated_at = updated_at
+      WHERE tasks_updated_at IS NULL
+        AND tasks_json IS NOT NULL
+    `
+  )
+
+  adapter.run(
+    `
+      UPDATE prd_states
+      SET progress_updated_at = updated_at
+      WHERE progress_updated_at IS NULL
+        AND progress_json IS NOT NULL
+    `
+  )
+
+  adapter.run(
+    `
+      UPDATE prd_states
+      SET notes_updated_at = updated_at
+      WHERE notes_updated_at IS NULL
+        AND notes_md IS NOT NULL
+    `
+  )
+}
+
 function formatNodeRuntimeHint(): string {
   const nodeOptions = process.env.NODE_OPTIONS || ''
   const hasDisableFlag = process.execArgv.includes(SQLITE_DISABLE_FLAG)
@@ -241,6 +297,9 @@ async function initializeDatabase(): Promise<SqliteAdapter> {
       tasks_json TEXT,
       progress_json TEXT,
       notes_md TEXT,
+      tasks_updated_at TEXT,
+      progress_updated_at TEXT,
+      notes_updated_at TEXT,
       updated_at TEXT NOT NULL,
       PRIMARY KEY (repo_id, slug),
       FOREIGN KEY (repo_id) REFERENCES repos(id) ON DELETE CASCADE
@@ -260,9 +319,30 @@ async function initializeDatabase(): Promise<SqliteAdapter> {
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS repo_sync_meta (
+      repo_id TEXT PRIMARY KEY,
+      sync_key TEXT NOT NULL UNIQUE,
+      fingerprint TEXT,
+      fingerprint_kind TEXT,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (repo_id) REFERENCES repos(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS sync_bundle_log (
+      bundle_id TEXT PRIMARY KEY,
+      source_device_id TEXT,
+      applied_at TEXT NOT NULL,
+      summary_json TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_prd_states_repo_id ON prd_states(repo_id);
     CREATE INDEX IF NOT EXISTS idx_prd_archives_repo_id ON prd_archives(repo_id);
+    CREATE INDEX IF NOT EXISTS idx_repo_sync_meta_sync_key ON repo_sync_meta(sync_key);
+    CREATE INDEX IF NOT EXISTS idx_sync_bundle_log_applied_at ON sync_bundle_log(applied_at);
   `)
+
+  ensurePrdStateFieldClockColumns(adapter)
+  backfillPrdStateFieldClocks(adapter)
 
   return adapter
 }
