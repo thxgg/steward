@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import type { RepoConfig, GitRepoInfo } from '../../app/types/repo.js'
 import { dbAll, dbGet, dbRun } from './db.js'
+import { ensureRepoSyncMetaForRepo, ensureRepoSyncMetaForRepos } from './sync-identity.js'
 
 function findPackageRoot(startDir: string): string {
   let currentDir = startDir
@@ -176,7 +177,9 @@ async function importLegacyReposIfNeeded(): Promise<void> {
 export async function getRepos(): Promise<RepoConfig[]> {
   await importLegacyReposIfNeeded()
   const rows = await dbAll<RepoRow>('SELECT id, name, path, added_at, git_repos_json FROM repos ORDER BY added_at ASC')
-  return rows.map(rowToRepo)
+  const repos = rows.map(rowToRepo)
+  await ensureRepoSyncMetaForRepos(repos)
+  return repos
 }
 
 export async function saveRepos(repos: RepoConfig[]): Promise<void> {
@@ -205,6 +208,8 @@ export async function saveRepos(repos: RepoConfig[]): Promise<void> {
   const repoIds = repos.map(repo => repo.id)
   const placeholders = repoIds.map(() => '?').join(', ')
   await dbRun(`DELETE FROM repos WHERE id NOT IN (${placeholders})`, repoIds)
+
+  await ensureRepoSyncMetaForRepos(repos)
 }
 
 export async function addRepo(path: string, name?: string): Promise<RepoConfig> {
@@ -232,6 +237,8 @@ export async function addRepo(path: string, name?: string): Promise<RepoConfig> 
     [repo.id, repo.name, repo.path, repo.addedAt, serializeGitRepos(repo.gitRepos)]
   )
 
+  await ensureRepoSyncMetaForRepo(repo)
+
   return repo
 }
 
@@ -244,7 +251,13 @@ export async function getRepoById(id: string): Promise<RepoConfig | undefined> {
     'SELECT id, name, path, added_at, git_repos_json FROM repos WHERE id = ?',
     [id]
   )
-  return row ? rowToRepo(row) : undefined
+  if (!row) {
+    return undefined
+  }
+
+  const repo = rowToRepo(row)
+  await ensureRepoSyncMetaForRepo(repo)
+  return repo
 }
 
 export async function updateRepoGitRepos(id: string, gitRepos?: GitRepoInfo[]): Promise<boolean> {
