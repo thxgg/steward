@@ -330,6 +330,7 @@ async function loadTasksAndProgress() {
     tasksFile.value = tasks
     progressFile.value = progress
     cacheTasksForPrd(prdSlug.value, tasks)
+    await syncTaskDetailFromRoute()
   } catch (err) {
     showError('Failed to refresh task state', getErrorMessage(err, 'Could not refresh tasks and progress.'))
   }

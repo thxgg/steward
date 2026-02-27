@@ -1,7 +1,14 @@
 import { basename, isAbsolute, join, relative, resolve } from 'node:path'
 import chokidar from 'chokidar'
 import type { FSWatcher } from 'chokidar'
-import { emitChange, getChangeListenerCount, type FileChangeEvent } from './change-events'
+import {
+  emitChange,
+  getChangeListenerCount,
+  getStateChangePollingStatus,
+  startStateChangePolling,
+  stopStateChangePolling,
+  type FileChangeEvent
+} from './change-events'
 import { getRepos } from './repos'
 
 // Singleton watcher instance
@@ -45,11 +52,14 @@ function getCategoryFromPath(filePath: string): FileChangeEvent['category'] | nu
 
 export async function initWatcher() {
   if (watcher) {
+    startStateChangePolling()
     return
   }
 
   const repos = await getRepos()
   if (repos.length === 0) {
+    watchedPaths = []
+    stopStateChangePolling()
     return
   }
 
@@ -93,6 +103,8 @@ export async function initWatcher() {
     })
   })
 
+  startStateChangePolling()
+
   console.log('[watcher] File watcher initialized, watching', watchedPaths.length, 'directories')
 }
 
@@ -102,13 +114,19 @@ export async function refreshWatcher() {
     watcher = null
   }
 
+  stopStateChangePolling()
+
   await initWatcher()
 }
 
 export function getWatcherStatus() {
+  const statePolling = getStateChangePollingStatus()
+
   return {
     active: watcher !== null,
     watchedPaths,
-    listenerCount: getChangeListenerCount()
+    listenerCount: getChangeListenerCount(),
+    statePollingActive: statePolling.active,
+    statePollingIntervalMs: statePolling.intervalMs
   }
 }
