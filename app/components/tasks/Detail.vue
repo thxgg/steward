@@ -273,10 +273,14 @@ watch(open, (isOpen) => {
             <Link2 class="size-4" />
             Dependencies
           </h4>
-          <ul class="space-y-1 text-sm text-muted-foreground">
-            <li v-for="depId in task.dependencies" :key="depId" class="flex items-center gap-2">
-              <span class="font-mono text-xs">{{ depId }}</span>
-              <span>{{ getTaskTitle(depId) }}</span>
+          <ul class="space-y-1.5">
+            <li
+              v-for="depId in task.dependencies"
+              :key="depId"
+              class="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-2.5 rounded-md border border-border/60 bg-muted/25 px-3 py-2"
+            >
+              <span class="mt-0.5 whitespace-nowrap rounded bg-background px-1.5 py-0.5 font-mono text-[11px] leading-none text-foreground/75">{{ depId }}</span>
+              <span class="min-w-0 text-sm leading-snug text-muted-foreground">{{ getTaskTitle(depId) }}</span>
             </li>
           </ul>
         </div>
