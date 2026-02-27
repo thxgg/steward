@@ -1,8 +1,15 @@
 import type { GitCommit, FileDiff, DiffHunk } from '~/types/git'
+import { isAbortError } from '~/lib/async-request'
 
 export interface FetchCommitsResult {
   commits: GitCommit[]
   failedShas: string[]
+}
+
+export interface GitRequestOptions {
+  repoPath?: string
+  signal?: AbortSignal
+  suppressError?: boolean
 }
 
 export function useGit() {
@@ -25,33 +32,53 @@ export function useGit() {
   }
 
   // Loading states
-  const isLoadingCommits = ref(false)
-  const isLoadingDiff = ref(false)
-  const isLoadingFileDiff = ref(false)
-  const isLoadingFileContent = ref(false)
+  const loadingCommitsCount = ref(0)
+  const loadingDiffCount = ref(0)
+  const loadingFileDiffCount = ref(0)
+  const loadingFileContentCount = ref(0)
+
+  const isLoadingCommits = computed(() => loadingCommitsCount.value > 0)
+  const isLoadingDiff = computed(() => loadingDiffCount.value > 0)
+  const isLoadingFileDiff = computed(() => loadingFileDiffCount.value > 0)
+  const isLoadingFileContent = computed(() => loadingFileContentCount.value > 0)
+
+  function startLoading(counter: { value: number }) {
+    counter.value += 1
+  }
+
+  function stopLoading(counter: { value: number }) {
+    counter.value = Math.max(0, counter.value - 1)
+  }
 
   /**
    * Fetch commit details for an array of SHAs
    * @param repoId - Repository ID
    * @param shas - Array of commit SHAs
-   * @param repoPath - Optional relative path to git repo (for pseudo-monorepos)
+   * @param options - Optional request options
    * @returns Object with fetched commits and SHAs that failed to load
    */
-  async function fetchCommits(repoId: string, shas: string[], repoPath?: string): Promise<FetchCommitsResult> {
+  async function fetchCommits(
+    repoId: string,
+    shas: string[],
+    options?: GitRequestOptions
+  ): Promise<FetchCommitsResult> {
     if (!repoId || shas.length === 0) {
       return { commits: [], failedShas: [] }
     }
 
-    isLoadingCommits.value = true
+    startLoading(loadingCommitsCount)
     try {
       const query: Record<string, string> = { shas: shas.join(',') }
-      if (repoPath) {
-        query.repo = repoPath
+      if (options?.repoPath) {
+        query.repo = options.repoPath
       }
 
       const commits = await $fetch<GitCommit[]>(
         `/api/repos/${repoId}/git/commits`,
-        { query }
+        {
+          query,
+          signal: options?.signal
+        }
       )
 
       // Determine which SHAs weren't returned (partial failures on server)
@@ -64,11 +91,18 @@ export function useGit() {
 
       return { commits, failedShas }
     } catch (error) {
-      showError('Failed to fetch commits', getErrorMessage(error))
+      if (isAbortError(error)) {
+        return { commits: [], failedShas: [] }
+      }
+
+      if (!options?.suppressError) {
+        showError('Failed to fetch commits', getErrorMessage(error))
+      }
+
       // All requested SHAs failed
       return { commits: [], failedShas: shas }
     } finally {
-      isLoadingCommits.value = false
+      stopLoading(loadingCommitsCount)
     }
   }
 
@@ -76,30 +110,39 @@ export function useGit() {
    * Fetch file list with stats for a commit
    * @param repoId - Repository ID
    * @param commitSha - Commit SHA
-   * @param repoPath - Optional relative path to git repo (for pseudo-monorepos)
+   * @param options - Optional request options
    */
-  async function fetchDiff(repoId: string, commitSha: string, repoPath?: string): Promise<FileDiff[]> {
+  async function fetchDiff(
+    repoId: string,
+    commitSha: string,
+    options?: GitRequestOptions
+  ): Promise<FileDiff[]> {
     if (!repoId || !commitSha) {
       return []
     }
 
-    isLoadingDiff.value = true
+    startLoading(loadingDiffCount)
     try {
       const query: Record<string, string> = { commit: commitSha }
-      if (repoPath) {
-        query.repo = repoPath
+      if (options?.repoPath) {
+        query.repo = options.repoPath
       }
 
       const files = await $fetch<FileDiff[]>(
         `/api/repos/${repoId}/git/diff`,
-        { query }
+        {
+          query,
+          signal: options?.signal
+        }
       )
       return files
     } catch (error) {
-      showError('Failed to fetch diff', getErrorMessage(error))
+      if (!isAbortError(error) && !options?.suppressError) {
+        showError('Failed to fetch diff', getErrorMessage(error))
+      }
       throw error
     } finally {
-      isLoadingDiff.value = false
+      stopLoading(loadingDiffCount)
     }
   }
 
@@ -108,35 +151,40 @@ export function useGit() {
    * @param repoId - Repository ID
    * @param commitSha - Commit SHA
    * @param filePath - Path to the file
-   * @param repoPath - Optional relative path to git repo (for pseudo-monorepos)
+   * @param options - Optional request options
    */
   async function fetchFileDiff(
     repoId: string,
     commitSha: string,
     filePath: string,
-    repoPath?: string
+    options?: GitRequestOptions
   ): Promise<DiffHunk[]> {
     if (!repoId || !commitSha || !filePath) {
       return []
     }
 
-    isLoadingFileDiff.value = true
+    startLoading(loadingFileDiffCount)
     try {
       const query: Record<string, string> = { commit: commitSha, file: filePath }
-      if (repoPath) {
-        query.repo = repoPath
+      if (options?.repoPath) {
+        query.repo = options.repoPath
       }
 
       const hunks = await $fetch<DiffHunk[]>(
         `/api/repos/${repoId}/git/file-diff`,
-        { query }
+        {
+          query,
+          signal: options?.signal
+        }
       )
       return hunks
     } catch (error) {
-      showError('Failed to fetch file diff', getErrorMessage(error))
+      if (!isAbortError(error) && !options?.suppressError) {
+        showError('Failed to fetch file diff', getErrorMessage(error))
+      }
       throw error
     } finally {
-      isLoadingFileDiff.value = false
+      stopLoading(loadingFileDiffCount)
     }
   }
 
@@ -145,35 +193,40 @@ export function useGit() {
    * @param repoId - Repository ID
    * @param commitSha - Commit SHA
    * @param filePath - Path to the file
-   * @param repoPath - Optional relative path to git repo (for pseudo-monorepos)
+   * @param options - Optional request options
    */
   async function fetchFileContent(
     repoId: string,
     commitSha: string,
     filePath: string,
-    repoPath?: string
+    options?: GitRequestOptions
   ): Promise<string | null> {
     if (!repoId || !commitSha || !filePath) {
       return null
     }
 
-    isLoadingFileContent.value = true
+    startLoading(loadingFileContentCount)
     try {
       const query: Record<string, string> = { commit: commitSha, file: filePath }
-      if (repoPath) {
-        query.repo = repoPath
+      if (options?.repoPath) {
+        query.repo = options.repoPath
       }
 
       const result = await $fetch<{ content: string }>(
         `/api/repos/${repoId}/git/file-content`,
-        { query }
+        {
+          query,
+          signal: options?.signal
+        }
       )
       return result.content
     } catch (error) {
-      showError('Failed to fetch file content', getErrorMessage(error))
+      if (!isAbortError(error) && !options?.suppressError) {
+        showError('Failed to fetch file content', getErrorMessage(error))
+      }
       throw error
     } finally {
-      isLoadingFileContent.value = false
+      stopLoading(loadingFileContentCount)
     }
   }
 
@@ -184,9 +237,9 @@ export function useGit() {
     fetchFileDiff,
     fetchFileContent,
     // Loading states
-    isLoadingCommits: readonly(isLoadingCommits),
-    isLoadingDiff: readonly(isLoadingDiff),
-    isLoadingFileDiff: readonly(isLoadingFileDiff),
-    isLoadingFileContent: readonly(isLoadingFileContent),
+    isLoadingCommits,
+    isLoadingDiff,
+    isLoadingFileDiff,
+    isLoadingFileContent,
   }
 }

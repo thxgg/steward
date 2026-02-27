@@ -42,6 +42,16 @@ const leftScrollRef = ref<HTMLElement | null>(null)
 const rightScrollRef = ref<HTMLElement | null>(null)
 const isScrolling = ref(false)
 
+let fullFileHighlightRunVersion = 0
+let diffHighlightRunVersion = 0
+
+watch(
+  () => props.filePath,
+  () => {
+    showAll.value = false
+  }
+)
+
 // Scroll sync handlers
 function onLeftScroll(event: Event) {
   if (!syncScrollEnabled.value || isScrolling.value) return
@@ -200,6 +210,7 @@ interface DisplayItem {
 // Generate display items including line pairs and separators
 const displayItems = computed<DisplayItem[]>(() => {
   const items: DisplayItem[] = []
+  const idPrefix = props.filePath
 
   for (let hunkIndex = 0; hunkIndex < props.hunks.length; hunkIndex++) {
     const hunk = props.hunks[hunkIndex]!
@@ -221,7 +232,7 @@ const displayItems = computed<DisplayItem[]>(() => {
         items.push({
           type: 'line',
           pair: {
-            id: `${hunkIndex}-${i}`,
+            id: `${idPrefix}:${hunkIndex}-${i}`,
             left: {
               lineNum: line.oldNumber,
               content: line.content,
@@ -261,7 +272,7 @@ const displayItems = computed<DisplayItem[]>(() => {
           items.push({
             type: 'line',
             pair: {
-              id: `${hunkIndex}-${i - maxLen + j}`,
+              id: `${idPrefix}:${hunkIndex}-${i - maxLen + j}`,
               left: removeLine
                 ? {
                     lineNum: removeLine.oldNumber,
@@ -284,7 +295,7 @@ const displayItems = computed<DisplayItem[]>(() => {
         items.push({
           type: 'line',
           pair: {
-            id: `${hunkIndex}-${i}`,
+            id: `${idPrefix}:${hunkIndex}-${i}`,
             left: { content: '', type: 'empty' },
             right: {
               lineNum: line.newNumber,
@@ -390,18 +401,34 @@ const isLoadingFullFile = ref(false)
 // Uses full-content highlighting to preserve context (important for Vue/JSX)
 watch(
   () => [props.fileContent, props.filePath] as const,
-  async ([content]) => {
+  async ([content], _, onCleanup) => {
+    const runVersion = ++fullFileHighlightRunVersion
+    let invalidated = false
+    onCleanup(() => {
+      invalidated = true
+    })
+
+    highlightedFullFile.value = []
+
     if (!content) {
-      highlightedFullFile.value = []
+      isLoadingFullFile.value = false
       return
     }
 
     isLoadingFullFile.value = true
-    const lang = language.value
 
-    // Highlight entire file at once to preserve context for Vue/JSX files
-    highlightedFullFile.value = await highlightFullContent(content, lang)
-    isLoadingFullFile.value = false
+    try {
+      const highlighted = await highlightFullContent(content, language.value)
+      if (invalidated || runVersion !== fullFileHighlightRunVersion) {
+        return
+      }
+
+      highlightedFullFile.value = highlighted
+    } finally {
+      if (!invalidated && runVersion === fullFileHighlightRunVersion) {
+        isLoadingFullFile.value = false
+      }
+    }
   },
   { immediate: true }
 )
@@ -409,8 +436,16 @@ watch(
 // Highlight diff lines - uses full file context when available
 watch(
   () => [props.hunks, props.filePath, highlightedFullFile.value] as const,
-  async () => {
+  async (_, __, onCleanup) => {
+    const runVersion = ++diffHighlightRunVersion
+    let invalidated = false
+    onCleanup(() => {
+      invalidated = true
+    })
+
     isLoading.value = true
+    highlightedLines.value = new Map()
+
     const lang = language.value
     const newHighlighted = new Map<string, string>()
     const fullFileLines = highlightedFullFile.value
@@ -418,66 +453,87 @@ watch(
     // Collect lines that need individual highlighting (removed lines from old file)
     const linesToHighlight: { key: string; content: string }[] = []
 
-    for (const item of displayItems.value) {
-      if (item.type === 'line' && item.pair) {
-        // Left side (old file) - removed lines need individual highlighting
-        if (item.pair.left.content && item.pair.left.type !== 'empty') {
-          const key = `${item.pair.id}-old`
-          // For context lines, we can use the new file's highlighting if line numbers match
-          if (item.pair.left.type === 'context' && item.pair.left.lineNum && fullFileLines.length > 0) {
-            // Context lines exist in both files at same content, use new file highlight
-            const lineIndex = item.pair.right.lineNum ? item.pair.right.lineNum - 1 : -1
-            if (lineIndex >= 0 && lineIndex < fullFileLines.length) {
-              newHighlighted.set(key, fullFileLines[lineIndex] || '')
+    try {
+      for (const item of displayItems.value) {
+        if (invalidated || runVersion !== diffHighlightRunVersion) {
+          return
+        }
+
+        if (item.type === 'line' && item.pair) {
+          // Left side (old file) - removed lines need individual highlighting
+          if (item.pair.left.content && item.pair.left.type !== 'empty') {
+            const key = `${item.pair.id}-old`
+            // For context lines, we can use the new file's highlighting if line numbers match
+            if (item.pair.left.type === 'context' && item.pair.left.lineNum && fullFileLines.length > 0) {
+              // Context lines exist in both files at same content, use new file highlight
+              const lineIndex = item.pair.right.lineNum ? item.pair.right.lineNum - 1 : -1
+              if (lineIndex >= 0 && lineIndex < fullFileLines.length) {
+                newHighlighted.set(key, fullFileLines[lineIndex] || '')
+              } else {
+                linesToHighlight.push({ key, content: item.pair.left.content })
+              }
             } else {
+              // Removed lines - must highlight individually
               linesToHighlight.push({ key, content: item.pair.left.content })
             }
-          } else {
-            // Removed lines - must highlight individually
-            linesToHighlight.push({ key, content: item.pair.left.content })
           }
-        }
 
-        // Right side (new file) - use full file highlighting when available
-        if (item.pair.right.content && item.pair.right.type !== 'empty') {
-          const key = `${item.pair.id}-new`
-          const lineNum = item.pair.right.lineNum
-          if (lineNum && fullFileLines.length > 0 && lineNum <= fullFileLines.length) {
-            // Use pre-highlighted line from full file
-            newHighlighted.set(key, fullFileLines[lineNum - 1] || '')
-          } else {
-            // Fallback to individual highlighting
-            linesToHighlight.push({ key, content: item.pair.right.content })
+          // Right side (new file) - use full file highlighting when available
+          if (item.pair.right.content && item.pair.right.type !== 'empty') {
+            const key = `${item.pair.id}-new`
+            const lineNum = item.pair.right.lineNum
+            if (lineNum && fullFileLines.length > 0 && lineNum <= fullFileLines.length) {
+              // Use pre-highlighted line from full file
+              newHighlighted.set(key, fullFileLines[lineNum - 1] || '')
+            } else {
+              // Fallback to individual highlighting
+              linesToHighlight.push({ key, content: item.pair.right.content })
+            }
           }
         }
       }
-    }
 
-    // Highlight remaining lines individually (removed lines)
-    const limitedLines = linesToHighlight.slice(0, MAX_DIFF_HIGHLIGHT_LINES)
-    const overflowLines = linesToHighlight.slice(MAX_DIFF_HIGHLIGHT_LINES)
+      // Highlight remaining lines individually (removed lines)
+      const limitedLines = linesToHighlight.slice(0, MAX_DIFF_HIGHLIGHT_LINES)
+      const overflowLines = linesToHighlight.slice(MAX_DIFF_HIGHLIGHT_LINES)
 
-    for (const { key, content } of overflowLines) {
-      newHighlighted.set(key, escapeHtml(content))
-    }
+      for (const { key, content } of overflowLines) {
+        newHighlighted.set(key, escapeHtml(content))
+      }
 
-    const batchSize = 50
-    for (let i = 0; i < limitedLines.length; i += batchSize) {
-      const batch = limitedLines.slice(i, i + batchSize)
-      const results = await Promise.all(
-        batch.map(async ({ key, content }) => {
-          const result = await highlightLine(content, lang)
-          return { key, result }
-        })
-      )
+      const batchSize = 50
+      for (let i = 0; i < limitedLines.length; i += batchSize) {
+        if (invalidated || runVersion !== diffHighlightRunVersion) {
+          return
+        }
 
-      for (const { key, result } of results) {
-        newHighlighted.set(key, result)
+        const batch = limitedLines.slice(i, i + batchSize)
+        const results = await Promise.all(
+          batch.map(async ({ key, content }) => {
+            const result = await highlightLine(content, lang)
+            return { key, result }
+          })
+        )
+
+        if (invalidated || runVersion !== diffHighlightRunVersion) {
+          return
+        }
+
+        for (const { key, result } of results) {
+          newHighlighted.set(key, result)
+        }
+      }
+
+      if (invalidated || runVersion !== diffHighlightRunVersion) {
+        return
+      }
+
+      highlightedLines.value = newHighlighted
+    } finally {
+      if (!invalidated && runVersion === diffHighlightRunVersion) {
+        isLoading.value = false
       }
     }
-
-    highlightedLines.value = newHighlighted
-    isLoading.value = false
   },
   { immediate: true }
 )

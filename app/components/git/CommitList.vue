@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { GitCommit as GitCommitIcon, Plus, Minus, FileText, FolderGit2, AlertCircle } from 'lucide-vue-next'
 import { Badge } from '~/components/ui/badge'
+import { createLatestRequestManager } from '~/lib/async-request'
 import type { GitCommit } from '~/types/git'
 import type { CommitRef } from '~/types/task'
 
@@ -54,11 +55,18 @@ const hasMultipleRepos = computed(() => {
   return repos.size > 1
 })
 
+const commitsRequestManager = createLatestRequestManager()
+
 // Fetch commit details when props change
 // Group commits by repo to make efficient API calls
 watch(
   () => ({ commits: props.commits, repoId: props.repoId }),
-  async ({ commits, repoId }) => {
+  async ({ commits, repoId }, _, onCleanup) => {
+    const ticket = commitsRequestManager.begin()
+    onCleanup(() => {
+      commitsRequestManager.clear(ticket)
+    })
+
     if (commits.length === 0 || !repoId) {
       commitDetails.value = new Map()
       failedCommits.value = new Set()
@@ -78,7 +86,10 @@ watch(
     // Fetch commits for each repo in parallel
     const results = await Promise.all(
       Array.from(commitsByRepo.entries()).map(async ([repoPath, shas]) => {
-        const result = await fetchCommits(repoId, shas, repoPath || undefined)
+        const result = await fetchCommits(repoId, shas, {
+          repoPath: repoPath || undefined,
+          signal: ticket.signal
+        })
         return {
           repoPath,
           requestedShas: [...shas],
@@ -118,11 +129,19 @@ watch(
       }
     }
 
+    if (!ticket.isCurrent()) {
+      return
+    }
+
     commitDetails.value = detailsMap
     failedCommits.value = failed
   },
   { immediate: true }
 )
+
+onUnmounted(() => {
+  commitsRequestManager.cancel()
+})
 
 // Format relative date
 function formatRelativeDate(isoDate: string): string {

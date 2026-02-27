@@ -8,6 +8,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '~/components/ui/tooltip'
+import { createLatestRequestManager, isAbortError } from '~/lib/async-request'
 import type { FileDiff, DiffHunk } from '~/types/git'
 
 const props = defineProps<{
@@ -36,6 +37,9 @@ const fileDiffError = ref<string | null>(null)
 // View mode: 'changes' shows only hunks, 'full' shows entire file with changes highlighted
 const viewMode = ref<'changes' | 'full'>('changes')
 
+const diffRequestManager = createLatestRequestManager()
+const fileRequestManager = createLatestRequestManager()
+
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error && typeof error === 'object') {
     const fetchError = error as {
@@ -56,17 +60,43 @@ function getErrorMessage(error: unknown, fallback: string): string {
 
 // Get the selected file's metadata
 const selectedFileDiff = computed(() => files.value.find(f => f.path === selectedFile.value))
+const diffViewerKey = computed(() => `${props.repoPath || ''}:${props.commitSha}:${selectedFile.value || ''}`)
 
-// Fetch file list on mount and when commitSha changes
-async function loadDiff() {
+function resetDiffState() {
   error.value = null
   files.value = []
   selectedFile.value = undefined
   hunks.value = []
   fileContent.value = null
+  fileDiffError.value = null
+}
+
+// Fetch file list on mount and when commitSha changes
+async function loadDiff() {
+  const requestRepoId = props.repoId
+  const requestCommitSha = props.commitSha
+  const requestRepoPath = props.repoPath
+
+  const ticket = diffRequestManager.begin()
+  fileRequestManager.cancel()
+  resetDiffState()
 
   try {
-    const result = await fetchDiff(props.repoId, props.commitSha, props.repoPath)
+    const result = await fetchDiff(requestRepoId, requestCommitSha, {
+      repoPath: requestRepoPath,
+      signal: ticket.signal,
+      suppressError: true
+    })
+
+    const isCurrentRequest = ticket.isCurrent()
+      && props.repoId === requestRepoId
+      && props.commitSha === requestCommitSha
+      && props.repoPath === requestRepoPath
+
+    if (!isCurrentRequest) {
+      return
+    }
+
     files.value = result
 
     // Auto-select first file
@@ -74,34 +104,88 @@ async function loadDiff() {
       selectedFile.value = result[0]!.path
     }
   } catch (loadError) {
+    if (isAbortError(loadError) || !ticket.isCurrent()) {
+      return
+    }
+
     error.value = getErrorMessage(loadError, 'Could not load commit diff.')
+  } finally {
+    diffRequestManager.clear(ticket)
   }
 }
 
 // Fetch file diff when selection changes
 async function loadFileDiff() {
-  if (!selectedFile.value) {
+  const selectedPath = selectedFile.value
+  if (!selectedPath) {
+    fileDiffError.value = null
     hunks.value = []
     fileContent.value = null
     return
   }
 
+  const requestRepoId = props.repoId
+  const requestCommitSha = props.commitSha
+  const requestRepoPath = props.repoPath
+  const requestMode = viewMode.value
+  const requestPath = selectedPath
+
+  const ticket = fileRequestManager.begin()
+
   fileDiffError.value = null
+  hunks.value = []
+  fileContent.value = null
+
+  const isCurrentRequest = () => {
+    return ticket.isCurrent()
+      && props.repoId === requestRepoId
+      && props.commitSha === requestCommitSha
+      && props.repoPath === requestRepoPath
+      && viewMode.value === requestMode
+      && selectedFile.value === requestPath
+  }
 
   try {
-    // Fetch hunks (always needed for highlighting changes)
-    const result = await fetchFileDiff(props.repoId, props.commitSha, selectedFile.value, props.repoPath)
-    hunks.value = result
+    const diffPromise = fetchFileDiff(requestRepoId, requestCommitSha, requestPath, {
+      repoPath: requestRepoPath,
+      signal: ticket.signal,
+      suppressError: true
+    })
 
-    // Fetch full file content if in full mode
-    if (viewMode.value === 'full') {
-      const content = await fetchFileContent(props.repoId, props.commitSha, selectedFile.value, props.repoPath)
+    if (requestMode === 'full') {
+      const [result, content] = await Promise.all([
+        diffPromise,
+        fetchFileContent(requestRepoId, requestCommitSha, requestPath, {
+          repoPath: requestRepoPath,
+          signal: ticket.signal,
+          suppressError: true
+        })
+      ])
+
+      if (!isCurrentRequest()) {
+        return
+      }
+
+      hunks.value = result
       fileContent.value = content
     } else {
+      const result = await diffPromise
+
+      if (!isCurrentRequest()) {
+        return
+      }
+
+      hunks.value = result
       fileContent.value = null
     }
   } catch (loadError) {
+    if (!isCurrentRequest() || isAbortError(loadError)) {
+      return
+    }
+
     fileDiffError.value = getErrorMessage(loadError, 'Could not load file diff.')
+  } finally {
+    fileRequestManager.clear(ticket)
   }
 }
 
@@ -110,19 +194,6 @@ function toggleViewMode() {
   viewMode.value = viewMode.value === 'changes' ? 'full' : 'changes'
 }
 
-// Reload file content when switching to full mode
-watch(viewMode, async (mode) => {
-  if (mode === 'full' && selectedFile.value && !fileContent.value) {
-    try {
-      const content = await fetchFileContent(props.repoId, props.commitSha, selectedFile.value, props.repoPath)
-      fileContent.value = content
-      fileDiffError.value = null
-    } catch (loadError) {
-      fileDiffError.value = getErrorMessage(loadError, 'Could not load file content.')
-    }
-  }
-})
-
 // Handle file selection from minimap
 function handleFileSelect(path: string) {
   selectedFile.value = path
@@ -130,23 +201,26 @@ function handleFileSelect(path: string) {
 
 // Retry loading
 function retry() {
-  loadDiff()
+  void loadDiff()
 }
 
 function retryFileDiff() {
-  loadFileDiff()
+  void loadFileDiff()
 }
 
-// Watch for selection changes
-watch(selectedFile, () => {
-  loadFileDiff()
-})
+// Watch for selected file or view mode changes
+watch(
+  () => [selectedFile.value, viewMode.value] as const,
+  () => {
+    void loadFileDiff()
+  }
+)
 
 // Watch for prop changes
 watch(
   () => [props.repoId, props.commitSha, props.repoPath] as const,
   () => {
-    loadDiff()
+    void loadDiff()
   },
   { immediate: true }
 )
@@ -270,6 +344,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  diffRequestManager.cancel()
+  fileRequestManager.cancel()
   document.removeEventListener('keydown', handleKeydown)
 })
 </script>
@@ -405,6 +481,7 @@ onUnmounted(() => {
         <ScrollArea v-else-if="selectedFile" class="h-0 flex-1 overflow-hidden">
           <div ref="diffViewerRef">
             <GitDiffViewer
+              :key="diffViewerKey"
               :hunks="hunks"
               :file-path="selectedFile"
               :binary="selectedFileDiff?.binary"
