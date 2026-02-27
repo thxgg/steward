@@ -10,6 +10,9 @@ type PrdStateRow = {
   tasks_json: string | null
   progress_json: string | null
   notes_md: string | null
+  tasks_updated_at?: string | null
+  progress_updated_at?: string | null
+  notes_updated_at?: string | null
   updated_at: string
 }
 
@@ -164,15 +167,31 @@ export async function upsertPrdState(repoId: string, slug: string, update: PrdSt
     : update.notes
 
   const updatedAt = new Date().toISOString()
+  const tasksUpdatedAt = updateTasks ? updatedAt : null
+  const progressUpdatedAt = updateProgress ? updatedAt : null
+  const notesUpdatedAt = updateNotes ? updatedAt : null
 
   await dbRun(
     `
-      INSERT INTO prd_states (repo_id, slug, tasks_json, progress_json, notes_md, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO prd_states (
+        repo_id,
+        slug,
+        tasks_json,
+        progress_json,
+        notes_md,
+        tasks_updated_at,
+        progress_updated_at,
+        notes_updated_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(repo_id, slug) DO UPDATE SET
         tasks_json = CASE WHEN ? THEN excluded.tasks_json ELSE prd_states.tasks_json END,
         progress_json = CASE WHEN ? THEN excluded.progress_json ELSE prd_states.progress_json END,
         notes_md = CASE WHEN ? THEN excluded.notes_md ELSE prd_states.notes_md END,
+        tasks_updated_at = CASE WHEN ? THEN excluded.tasks_updated_at ELSE prd_states.tasks_updated_at END,
+        progress_updated_at = CASE WHEN ? THEN excluded.progress_updated_at ELSE prd_states.progress_updated_at END,
+        notes_updated_at = CASE WHEN ? THEN excluded.notes_updated_at ELSE prd_states.notes_updated_at END,
         updated_at = excluded.updated_at
     `,
     [
@@ -181,7 +200,13 @@ export async function upsertPrdState(repoId: string, slug: string, update: PrdSt
       tasksJson,
       progressJson,
       notesMd,
+      tasksUpdatedAt,
+      progressUpdatedAt,
+      notesUpdatedAt,
       updatedAt,
+      updateTasks ? 1 : 0,
+      updateProgress ? 1 : 0,
+      updateNotes ? 1 : 0,
       updateTasks ? 1 : 0,
       updateProgress ? 1 : 0,
       updateNotes ? 1 : 0

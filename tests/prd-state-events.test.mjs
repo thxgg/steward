@@ -257,3 +257,129 @@ test('state polling emits cross-process events for db-only updates', async () =>
     await rm(tempRoot, { recursive: true, force: true })
   }
 })
+
+test('upsertPrdState updates only changed field clocks', async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), 'steward-test-'))
+  const previousDbPath = process.env.PRD_STATE_DB_PATH
+  process.env.PRD_STATE_DB_PATH = join(tempRoot, 'state.db')
+
+  try {
+    const { addRepo } = await import('../dist/server/utils/repos.js')
+    const { upsertPrdState } = await import('../dist/server/utils/prd-state.js')
+    const { dbGet } = await import('../dist/server/utils/db.js')
+
+    const repoPath = join(tempRoot, 'repo')
+    await mkdir(join(repoPath, 'docs', 'prd'), { recursive: true })
+
+    const repo = await addRepo(repoPath, 'Repo')
+    const slug = 'clock-prd'
+
+    await upsertPrdState(repo.id, slug, {
+      tasks: {
+        prd: {
+          name: 'Clock PRD',
+          source: 'docs/prd/clock-prd.md',
+          createdAt: new Date().toISOString()
+        },
+        tasks: [
+          {
+            id: 'task-1',
+            category: 'feature',
+            title: 'Initial task',
+            description: 'Initial task',
+            steps: ['step'],
+            passes: ['pass'],
+            dependencies: [],
+            priority: 'high',
+            status: 'pending'
+          }
+        ]
+      },
+      progress: {
+        prdName: 'Clock PRD',
+        totalTasks: 1,
+        completed: 0,
+        inProgress: 0,
+        blocked: 0,
+        startedAt: null,
+        lastUpdated: new Date().toISOString(),
+        patterns: [],
+        taskLogs: []
+      },
+      notes: 'first note'
+    })
+
+    const initial = await dbGet(
+      `
+        SELECT tasks_updated_at, progress_updated_at, notes_updated_at
+        FROM prd_states
+        WHERE repo_id = ? AND slug = ?
+      `,
+      [repo.id, slug]
+    )
+
+    assert.ok(initial)
+    assert.equal(typeof initial.tasks_updated_at, 'string')
+    assert.equal(typeof initial.progress_updated_at, 'string')
+    assert.equal(typeof initial.notes_updated_at, 'string')
+
+    await wait(25)
+
+    await upsertPrdState(repo.id, slug, {
+      notes: 'second note'
+    })
+
+    const afterNotes = await dbGet(
+      `
+        SELECT tasks_updated_at, progress_updated_at, notes_updated_at, notes_md
+        FROM prd_states
+        WHERE repo_id = ? AND slug = ?
+      `,
+      [repo.id, slug]
+    )
+
+    assert.ok(afterNotes)
+    assert.equal(afterNotes.tasks_updated_at, initial.tasks_updated_at)
+    assert.equal(afterNotes.progress_updated_at, initial.progress_updated_at)
+    assert.notEqual(afterNotes.notes_updated_at, initial.notes_updated_at)
+    assert.equal(afterNotes.notes_md, 'second note')
+
+    await wait(25)
+
+    await upsertPrdState(repo.id, slug, {
+      progress: {
+        prdName: 'Clock PRD',
+        totalTasks: 1,
+        completed: 1,
+        inProgress: 0,
+        blocked: 0,
+        startedAt: null,
+        lastUpdated: new Date().toISOString(),
+        patterns: [],
+        taskLogs: []
+      }
+    })
+
+    const afterProgress = await dbGet(
+      `
+        SELECT tasks_updated_at, progress_updated_at, notes_updated_at
+        FROM prd_states
+        WHERE repo_id = ? AND slug = ?
+      `,
+      [repo.id, slug]
+    )
+
+    assert.ok(afterProgress)
+    assert.equal(afterProgress.tasks_updated_at, initial.tasks_updated_at)
+    assert.notEqual(afterProgress.progress_updated_at, initial.progress_updated_at)
+    assert.equal(afterProgress.notes_updated_at, afterNotes.notes_updated_at)
+  } finally {
+    if (previousDbPath === undefined) {
+      delete process.env.PRD_STATE_DB_PATH
+    } else {
+      process.env.PRD_STATE_DB_PATH = previousDbPath
+    }
+
+    await rm(tempRoot, { recursive: true, force: true })
+  }
+})

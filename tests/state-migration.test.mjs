@@ -134,13 +134,18 @@ test('one-time state migration rewrites legacy progress rows', async () => {
     assert.equal(status.failedRows, 0)
 
     const migratedRow1 = await dbGet(
-      'SELECT progress_json FROM prd_states WHERE repo_id = ? AND slug = ?',
+      'SELECT progress_json, progress_updated_at FROM prd_states WHERE repo_id = ? AND slug = ?',
       [repo.id, 'admin-portal-push-notifications-mvp']
     )
 
     const migratedRow2 = await dbGet(
-      'SELECT progress_json FROM prd_states WHERE repo_id = ? AND slug = ?',
+      'SELECT progress_json, progress_updated_at FROM prd_states WHERE repo_id = ? AND slug = ?',
       [repo.id, 'mobile-logs-relay-secrets-remediation']
+    )
+
+    const untouchedRow = await dbGet(
+      'SELECT progress_updated_at FROM prd_states WHERE repo_id = ? AND slug = ?',
+      [repo.id, 'bootstrap-schema-flyway-testcontainers-parity']
     )
 
     const canonical1 = JSON.parse(migratedRow1.progress_json)
@@ -149,6 +154,8 @@ test('one-time state migration rewrites legacy progress rows', async () => {
     assert.deepEqual(canonical1.patterns, [])
     assert.deepEqual(canonical1.taskLogs, [])
     assert.equal(Object.prototype.hasOwnProperty.call(canonical1, 'taskProgress'), false)
+    assert.equal(typeof migratedRow1.progress_updated_at, 'string')
+    assert.equal(migratedRow1.progress_updated_at.length > 0, true)
 
     assert.equal(canonical2.totalTasks, 14)
     assert.equal(canonical2.completed, 2)
@@ -160,6 +167,10 @@ test('one-time state migration rewrites legacy progress rows', async () => {
       description: 'Prefer helper reuse'
     }])
     assert.equal(Object.prototype.hasOwnProperty.call(canonical2, 'started'), false)
+    assert.equal(typeof migratedRow2.progress_updated_at, 'string')
+    assert.equal(migratedRow2.progress_updated_at.length > 0, true)
+
+    assert.equal(untouchedRow.progress_updated_at, null)
 
     const marker = await dbGet('SELECT value FROM app_meta WHERE key = ?', ['state-migration:progress-json-v2'])
     assert.ok(marker)

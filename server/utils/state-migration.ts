@@ -311,10 +311,10 @@ async function migrateProgressRows(): Promise<void> {
         await dbRun(
           `
             UPDATE prd_states
-            SET progress_json = ?, updated_at = ?
+            SET progress_json = ?, progress_updated_at = ?, updated_at = ?
             WHERE repo_id = ? AND slug = ?
           `,
-          [JSON.stringify(normalized), updatedAt, row.repo_id, row.slug]
+          [JSON.stringify(normalized), updatedAt, updatedAt, row.repo_id, row.slug]
         )
 
         status.migratedRows += 1
@@ -502,7 +502,7 @@ async function migrateCommitRepoRefs(): Promise<void> {
       await dbRun(
         `
           UPDATE prd_states
-          SET progress_json = ?, updated_at = ?
+          SET progress_json = ?, progress_updated_at = ?, updated_at = ?
           WHERE repo_id = ? AND slug = ?
         `,
         [
@@ -510,6 +510,7 @@ async function migrateCommitRepoRefs(): Promise<void> {
             ...progress,
             taskLogs: normalized.taskLogs
           }),
+          updatedAt,
           updatedAt,
           row.repo_id,
           row.slug
