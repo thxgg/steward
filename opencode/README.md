@@ -1,22 +1,13 @@
-# OpenCode Bundle
+# OpenCode Integration
 
-This directory contains the OpenCode commands, skills, and scripts used by Steward workflows.
+Steward now uses MCP-registered prompts as the canonical workflow interface.
 
-Included:
+Use the MCP prompt entries directly from your OpenCode client, for example:
 
-- Commands: `prd`, `prd-task`, `complete-next-task`, `commit`
-- Skills: `prd`, `prd-task`, `complete-next-task`, `commit`
-- Script: `scripts/prd-db.mjs`
+- `/steward:create_prd`
+- `/steward:break_into_tasks`
+- `/steward:complete_next_task`
 
-Excluded on purpose:
+Prompt prefix is based on your configured MCP server key.
 
-- `frontend-design`
-
-Install into local OpenCode config:
-
-```bash
-mkdir -p ~/.config/opencode
-cp -R opencode/commands ~/.config/opencode/
-cp -R opencode/skills ~/.config/opencode/
-cp -R opencode/scripts ~/.config/opencode/
-```
+This repository intentionally no longer ships separate OpenCode command/skill/script bundles for these workflows.

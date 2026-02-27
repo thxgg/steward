@@ -40,13 +40,15 @@ Example MCP client config:
 ```json
 {
   "mcpServers": {
-    "prd": {
+    "steward": {
       "command": "prd",
       "args": ["mcp"]
     }
   }
 }
 ```
+
+The MCP server key (`steward` above) determines slash prefix names in clients.
 
 ## Runtime Requirements
 
@@ -105,10 +107,19 @@ In-sandbox discovery helper:
 Steward also exposes MCP prompts so MCP clients can surface command-like workflows.
 
 - `create_prd(feature_request)`
-- `break_into_tasks(prd_slug)`
-- `complete_next_task(prd_slug)`
+- `break_into_tasks(prd_slug?)`
+- `complete_next_task(prd_slug?)`
 
-In OpenCode, these appear in slash-command autocomplete as MCP commands (for example `/prd:create_prd:mcp`) and insert as `/prd:create_prd` when selected.
+In OpenCode, these appear in slash-command autocomplete as MCP commands (for example `/steward:create_prd:mcp`) and insert as `/steward:create_prd` when selected.
+
+Notes:
+
+- `prd_slug` is optional for break/complete prompts and auto-resolves when omitted.
+- `complete_next_task` requires commit hygiene when task-related files changed:
+  - at least one commit is created
+  - one-line commit subject only
+  - no `Co-authored-by` footer/trailers
+  - no task-related dirty files left behind
 
 ## Available APIs
 

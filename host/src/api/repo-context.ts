@@ -1,4 +1,4 @@
-import { resolve } from 'node:path'
+import { isAbsolute, relative, resolve } from 'node:path'
 import type { RepoConfig } from '../../../app/types/repo.js'
 import { getRepoById, getRepos } from '../../../server/utils/repos.js'
 
@@ -17,6 +17,7 @@ type RepoLookupErrorCode =
 type RepoLookupErrorDetails = {
   repoId?: string
   repoPath?: string
+  cwd?: string
   knownRepos: RepoSummary[]
 }
 
@@ -43,6 +44,21 @@ function formatKnownRepos(knownRepos: RepoSummary[]): string {
   return knownRepos
     .map((repo) => `${repo.id} (${repo.name}) ${repo.path}`)
     .join('; ')
+}
+
+function isPathWithin(basePath: string, candidatePath: string): boolean {
+  const relativePath = relative(resolve(basePath), resolve(candidatePath))
+  return relativePath === '' || (!relativePath.startsWith('..') && !isAbsolute(relativePath))
+}
+
+function resolveRepoFromCwd(repos: RepoConfig[], cwd: string): RepoConfig | null {
+  const matches = repos.filter((repo) => isPathWithin(repo.path, cwd))
+  if (matches.length === 0) {
+    return null
+  }
+
+  matches.sort((left, right) => resolve(right.path).length - resolve(left.path).length)
+  return matches[0] ?? null
 }
 
 export async function requireRepo(repoId: string): Promise<RepoConfig> {
@@ -109,9 +125,15 @@ export async function requireCurrentRepo(): Promise<RepoConfig> {
     )
   }
 
+  const cwd = resolve(process.cwd())
+  const repoFromCwd = resolveRepoFromCwd(allRepos, cwd)
+  if (repoFromCwd) {
+    return repoFromCwd
+  }
+
   throw new RepoLookupError(
-    `Cannot resolve a current repository because ${knownRepos.length} repositories are registered. Use an explicit repoId or by-path API. Known repositories: ${formatKnownRepos(knownRepos)}`,
+    `Cannot resolve a current repository because ${knownRepos.length} repositories are registered and the working directory does not map to a registered repo. Use an explicit repoId or by-path API. CWD: ${cwd}. Known repositories: ${formatKnownRepos(knownRepos)}`,
     'AMBIGUOUS_REPO',
-    { knownRepos }
+    { cwd, knownRepos }
   )
 }

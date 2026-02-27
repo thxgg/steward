@@ -43,7 +43,10 @@ PRD task state is centralized in a local SQLite database:
 
 ## Commands
 
-- `/complete-next-task prd-viewer` - Complete the next task from the PRD
+- MCP prompts:
+  - `/steward:create_prd`
+  - `/steward:break_into_tasks` (slug optional)
+  - `/steward:complete_next_task` (slug optional)
 
 ## Release Process
 

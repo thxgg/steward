@@ -33,13 +33,15 @@ Add to your MCP client config:
 ```json
 {
   "mcpServers": {
-    "prd": {
+    "steward": {
       "command": "npx",
       "args": ["-y", "@thxgg/steward", "mcp"]
     }
   }
 }
 ```
+
+The MCP server key (`steward` above) controls the prompt prefix in slash commands.
 
 Steward MCP requires a Node runtime with built-in sqlite support (`node:sqlite`) for `repos`, `prds`, and `state` APIs.
 If you see `ERR_UNKNOWN_BUILTIN_MODULE: node:sqlite`, run with sqlite enabled:
@@ -89,10 +91,14 @@ Steward exposes one MCP tool: `execute`.
 It also exposes workflow prompts:
 
 - `create_prd(feature_request)`
-- `break_into_tasks(prd_slug)`
-- `complete_next_task(prd_slug)`
+- `break_into_tasks(prd_slug?)`
+- `complete_next_task(prd_slug?)`
 
-In OpenCode these are shown as MCP slash entries like `/prd:create_prd:mcp`.
+In OpenCode these are shown as MCP slash entries like `/steward:create_prd:mcp` and inserted as `/steward:create_prd`.
+
+- `prd_slug` is optional for break/complete prompts.
+- When omitted, Steward workflows auto-resolve the slug from repo state.
+- `complete_next_task` includes required commit hygiene (one-line commit message, no `Co-authored-by`, no task-related dirty changes left behind).
 
 ```js
 const repo = await repos.current()
@@ -175,13 +181,12 @@ npm run build
 | `PRD_STATE_HOME` | Base directory for DB (`state.db` inside) |
 | `XDG_DATA_HOME` | Fallback base path for default DB location |
 
-## OpenCode Bundle
+## OpenCode Integration
 
-This repo includes curated OpenCode assets under `opencode/`:
+Steward now uses MCP-registered prompts as the single workflow surface.
 
-- Commands: `prd`, `prd-task`, `complete-next-task`, `commit`
-- Skills: `prd`, `prd-task`, `complete-next-task`, `commit`
-- Script: `prd-db.mjs`
+- Use MCP prompts directly (for example `/steward:create_prd`, `/steward:break_into_tasks`, `/steward:complete_next_task`).
+- This repository no longer ships separate OpenCode command/skill bundles for PRD workflows.
 
 ## License
 
