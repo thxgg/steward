@@ -53,6 +53,8 @@ function createDefaultTerminalStatus(): TerminalBridgeStatus {
     renderer: 'libghostty',
     state: 'disabled',
     sessionId: null,
+    activeSessionId: null,
+    requiresReattach: false,
     rows: 24,
     cols: 80,
     scrollbackLimit: 1000,

@@ -26,6 +26,8 @@ function createDefaultTerminalStatus(): TerminalBridgeStatus {
     renderer: 'libghostty',
     state: 'disabled',
     sessionId: null,
+    activeSessionId: null,
+    requiresReattach: false,
     rows: 24,
     cols: 80,
     scrollbackLimit: 1000,
@@ -87,7 +89,7 @@ function toUiError(error: unknown): LauncherUiError {
 }
 
 export function useLauncherTerminal() {
-  const { hostMode, sessionStatus, terminalStatus: runtimeTerminalStatus } = useHostRuntime()
+  const { hostMode, terminalStatus: runtimeTerminalStatus } = useHostRuntime()
 
   const terminal = useState<TerminalBridgeStatus>('launcher-terminal-status', () => createDefaultTerminalStatus())
   const outputEvents = useState<TerminalOutputEvent[]>('launcher-terminal-output-events', () => [])
@@ -351,8 +353,8 @@ export function useLauncherTerminal() {
     }
   }
 
-  watch([isLauncherMode, () => sessionStatus.value.activeSessionId, () => runtimeTerminalStatus.value.state],
-    async ([mode, activeSessionId, runtimeState], [prevMode, prevSessionId, prevRuntimeState]) => {
+  watch([isLauncherMode, () => runtimeTerminalStatus.value.state],
+    async ([mode], [prevMode]) => {
       if (!mode) {
         stopPolling()
         terminal.value = createDefaultTerminalStatus()
@@ -363,11 +365,8 @@ export function useLauncherTerminal() {
 
       await syncState()
 
-      const sessionChanged = activeSessionId && prevSessionId && activeSessionId !== prevSessionId
-      const runtimeRecovered = runtimeState === 'attached' && prevRuntimeState !== 'attached'
-
-      if (sessionChanged || runtimeRecovered) {
-        await attach(terminal.value.rows, terminal.value.cols)
+      if (terminal.value.requiresReattach) {
+        stopPolling()
         return
       }
 

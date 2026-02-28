@@ -180,6 +180,10 @@ export interface TerminalBridgeStatus {
   state: TerminalBridgeState
   /** Session id currently bound to terminal */
   sessionId: string | null
+  /** Active session id from session bridge */
+  activeSessionId: string | null
+  /** Whether explicit user confirmation is required before rebind */
+  requiresReattach: boolean
   /** Terminal row count */
   rows: number
   /** Terminal column count */

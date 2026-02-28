@@ -104,6 +104,8 @@ export function createLauncherTerminalBridge(
 
   let state: TerminalBridgeStatus['state'] = 'disabled'
   let sessionId: string | null = null
+  let activeSessionId: string | null = null
+  let requiresReattach = false
   let message = 'libghostty terminal bridge is waiting for an active session.'
   const diagnostics: string[] = []
 
@@ -112,12 +114,16 @@ export function createLauncherTerminalBridge(
   let seq = 0
   let sessionCursor: string | null = null
   let buffer: TerminalBufferEvent[] = []
+  let wasAttachedBeforeUnavailable = false
+  let lastSessionSwitchSignature: string | null = null
 
   const getSnapshot = (): TerminalBridgeStatus => {
     return {
       renderer: 'libghostty',
       state,
       sessionId,
+      activeSessionId,
+      requiresReattach,
       rows,
       cols,
       scrollbackLimit,
@@ -159,23 +165,74 @@ export function createLauncherTerminalBridge(
 
   const resolveSessionBinding = (): SessionBridgeStatus => {
     const session = options.getSessionStatus()
+    activeSessionId = session.activeSessionId
 
-    if (session.state !== 'ready' || !session.activeSessionId) {
+    if (session.state !== 'ready' || !activeSessionId) {
+      const unavailableMessage = session.message || 'libghostty terminal bridge is unavailable because session bridge is not ready.'
+
+      if (state === 'attached') {
+        wasAttachedBeforeUnavailable = true
+      }
+
       state = session.state === 'degraded' ? 'degraded' : 'disabled'
-      sessionId = null
-      message = session.message || 'libghostty terminal bridge is unavailable because session bridge is not ready.'
+      message = unavailableMessage
       return session
     }
 
-    if (sessionId && sessionId !== session.activeSessionId) {
-      pushEvent('system', `Session changed from ${sessionId} to ${session.activeSessionId}. Rebinding terminal.`)
+    if (!sessionId) {
+      sessionId = activeSessionId
+
+      if (wasAttachedBeforeUnavailable) {
+        state = 'attached'
+        attachedAt = nowIso()
+        detachedAt = null
+        message = `libghostty terminal automatically reattached to session ${sessionId} after engine recovery.`
+        pushEvent('system', `Reattached terminal to ${sessionId} after engine recovery.`)
+      } else if (state === 'disabled' || state === 'degraded') {
+        state = 'detached'
+        message = `libghostty terminal is ready for session ${sessionId}.`
+      }
+
+      requiresReattach = false
+      lastSessionSwitchSignature = null
+      wasAttachedBeforeUnavailable = false
+      return session
     }
 
-    sessionId = session.activeSessionId
-    if (state === 'disabled' || state === 'degraded') {
-      state = 'detached'
-      message = `libghostty terminal is ready for session ${sessionId}.`
+    if (sessionId !== activeSessionId) {
+      const signature = `${sessionId}->${activeSessionId}`
+
+      if (!requiresReattach || lastSessionSwitchSignature !== signature) {
+        pushEvent(
+          'system',
+          `Session switched from ${sessionId} to ${activeSessionId}. Confirm terminal reattach before sending input.`
+        )
+      }
+
+      requiresReattach = true
+      state = 'degraded'
+      message = `Active session changed from ${sessionId} to ${activeSessionId}. Confirm terminal reattach before sending input.`
+      lastSessionSwitchSignature = signature
+      wasAttachedBeforeUnavailable = false
+      return session
     }
+
+    if ((state === 'disabled' || state === 'degraded') && !requiresReattach) {
+      if (wasAttachedBeforeUnavailable) {
+        state = 'attached'
+        attachedAt = nowIso()
+        detachedAt = null
+        message = `libghostty terminal automatically reattached to session ${sessionId} after engine recovery.`
+        pushEvent('system', `Reattached terminal to ${sessionId} after engine recovery.`)
+      } else {
+        state = 'detached'
+        message = `libghostty terminal is ready for session ${sessionId}.`
+      }
+    }
+
+    requiresReattach = false
+    lastSessionSwitchSignature = null
+    wasAttachedBeforeUnavailable = false
 
     return session
   }
@@ -205,21 +262,33 @@ export function createLauncherTerminalBridge(
     attach: async (attachOptions = {}) => {
       const session = resolveSessionBinding()
 
-      if (session.state !== 'ready' || !session.activeSessionId) {
+      if (session.state !== 'ready' || !activeSessionId) {
         pushDiagnostic(`Attach blocked: ${session.message}`)
         return {
           terminal: getSnapshot()
         }
       }
 
+      const previousSessionId = sessionId
+      sessionId = activeSessionId
+      requiresReattach = false
+      lastSessionSwitchSignature = null
+      wasAttachedBeforeUnavailable = false
+
       rows = normalizePositiveInt(attachOptions.rows, rows)
       cols = normalizePositiveInt(attachOptions.cols, cols)
       state = 'attached'
       attachedAt = nowIso()
       detachedAt = null
-      message = `libghostty terminal attached to session ${session.activeSessionId}.`
+      sessionCursor = null
 
-      pushEvent('system', `Attached terminal (${rows}x${cols}) to ${session.activeSessionId}.`)
+      if (previousSessionId && previousSessionId !== sessionId) {
+        pushEvent('system', `Confirmed terminal rebind from ${previousSessionId} to ${sessionId}.`)
+      }
+
+      message = `libghostty terminal attached to session ${sessionId}.`
+
+      pushEvent('system', `Attached terminal (${rows}x${cols}) to ${sessionId}.`)
 
       return {
         terminal: getSnapshot()
@@ -232,6 +301,8 @@ export function createLauncherTerminalBridge(
       if (state !== 'disabled') {
         state = 'detached'
       }
+
+      requiresReattach = false
 
       detachedAt = nowIso()
       message = previousSessionId
@@ -258,7 +329,15 @@ export function createLauncherTerminalBridge(
     sendInput: async (input: string) => {
       const session = resolveSessionBinding()
 
-      if (state !== 'attached' || !session.activeSessionId) {
+      if (requiresReattach || state !== 'attached' || !activeSessionId) {
+        const mismatchMessage = requiresReattach
+          ? 'Active session changed. Confirm terminal reattach before sending input.'
+          : 'Terminal input requires an attached terminal and ready session bridge.'
+
+        throw new Error(mismatchMessage)
+      }
+
+      if (sessionId !== activeSessionId) {
         throw new Error('Terminal input requires an attached terminal and ready session bridge.')
       }
 
@@ -278,6 +357,15 @@ export function createLauncherTerminalBridge(
         content: normalizedInput
       })
 
+      if (result.sessionId !== sessionId) {
+        requiresReattach = true
+        state = 'degraded'
+        message = `Session mismatch detected: terminal bound to ${sessionId}, bridge responded with ${result.sessionId}. Confirm terminal reattach.`
+        pushDiagnostic(message)
+        pushEvent('stderr', message)
+        throw new Error(message)
+      }
+
       if (!result.accepted) {
         pushDiagnostic(`Terminal input rejected for session ${result.sessionId}.`)
       }
@@ -291,6 +379,20 @@ export function createLauncherTerminalBridge(
 
     fetchOutput: async (cursor) => {
       resolveSessionBinding()
+
+      if (requiresReattach) {
+        const minSeq = parseCursor(cursor)
+        const events = buffer
+          .filter((entry) => entry.seq > minSeq)
+          .map((entry) => entry.event)
+        const lastEvent = events[events.length - 1]
+
+        return {
+          terminal: getSnapshot(),
+          events,
+          cursor: lastEvent?.id || cursor || null
+        }
+      }
 
       try {
         await hydrateSessionOutput()

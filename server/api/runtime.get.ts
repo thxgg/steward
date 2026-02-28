@@ -86,6 +86,8 @@ const DEFAULT_TERMINAL_STATUS: TerminalBridgeStatus = {
   renderer: 'libghostty',
   state: 'disabled',
   sessionId: null,
+  activeSessionId: null,
+  requiresReattach: false,
   rows: 24,
   cols: 80,
   scrollbackLimit: 1000,
@@ -279,6 +281,12 @@ function parseTerminalStatus(value: unknown): TerminalBridgeStatus {
   const sessionId = typeof value.sessionId === 'string' && value.sessionId.trim().length > 0
     ? value.sessionId.trim()
     : null
+  const activeSessionId = typeof value.activeSessionId === 'string' && value.activeSessionId.trim().length > 0
+    ? value.activeSessionId.trim()
+    : null
+  const requiresReattach = typeof value.requiresReattach === 'boolean'
+    ? value.requiresReattach
+    : false
   const rows = typeof value.rows === 'number' && Number.isFinite(value.rows) && value.rows > 0
     ? Math.floor(value.rows)
     : DEFAULT_TERMINAL_STATUS.rows
@@ -305,6 +313,8 @@ function parseTerminalStatus(value: unknown): TerminalBridgeStatus {
     renderer: 'libghostty',
     state,
     sessionId,
+    activeSessionId,
+    requiresReattach,
     rows,
     cols,
     scrollbackLimit,

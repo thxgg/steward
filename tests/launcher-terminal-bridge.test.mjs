@@ -83,7 +83,7 @@ test('terminal bridge supports attach, input, output, resize, and detach baselin
   assert.ok(detached.terminal.message.includes('detached'))
 })
 
-test('terminal bridge rebinds session after active session changes', async () => {
+test('terminal bridge requires explicit reattach after active session changes', async () => {
   const { createLauncherTerminalBridge } = await import('../dist/host/src/launcher/terminal-bridge.js')
 
   const sessionStatus = createReadySessionStatus('sess-1')
@@ -113,7 +113,62 @@ test('terminal bridge rebinds session after active session changes', async () =>
   sessionStatus.lastResolvedAt = new Date().toISOString()
 
   const output = await bridge.fetchOutput()
-  assert.equal(output.terminal.sessionId, 'sess-2')
-  assert.equal(output.terminal.state, 'attached')
-  assert.ok(output.events.some((event) => event.text.includes('Session changed')))
+  assert.equal(output.terminal.sessionId, 'sess-1')
+  assert.equal(output.terminal.activeSessionId, 'sess-2')
+  assert.equal(output.terminal.state, 'degraded')
+  assert.equal(output.terminal.requiresReattach, true)
+  assert.ok(output.events.some((event) => event.text.includes('Session switched')))
+
+  await assert.rejects(async () => {
+    await bridge.sendInput('pwd')
+  }, /Confirm terminal reattach/)
+
+  const reattached = await bridge.attach()
+  assert.equal(reattached.terminal.sessionId, 'sess-2')
+  assert.equal(reattached.terminal.state, 'attached')
+  assert.equal(reattached.terminal.requiresReattach, false)
+})
+
+test('terminal bridge automatically reattaches after temporary session unavailability', async () => {
+  const { createLauncherTerminalBridge } = await import('../dist/host/src/launcher/terminal-bridge.js')
+
+  const sessionStatus = createReadySessionStatus('sess-1')
+
+  const bridge = createLauncherTerminalBridge({
+    getSessionStatus: () => sessionStatus,
+    sendSessionMessage: async () => {
+      return {
+        sessionId: sessionStatus.activeSessionId,
+        accepted: true,
+        requestId: null
+      }
+    },
+    fetchSessionEvents: async () => {
+      return {
+        sessionId: sessionStatus.activeSessionId,
+        events: [],
+        cursor: null
+      }
+    }
+  })
+
+  await bridge.attach()
+  assert.equal(bridge.getStatus().state, 'attached')
+
+  sessionStatus.state = 'degraded'
+  sessionStatus.activeSessionId = null
+  sessionStatus.message = 'session bridge unavailable'
+
+  const unavailable = await bridge.fetchOutput()
+  assert.equal(unavailable.terminal.state, 'degraded')
+
+  sessionStatus.state = 'ready'
+  sessionStatus.activeSessionId = 'sess-1'
+  sessionStatus.message = 'session ready'
+
+  const recovered = await bridge.fetchOutput(unavailable.cursor)
+  assert.equal(recovered.terminal.state, 'attached')
+  assert.equal(recovered.terminal.sessionId, 'sess-1')
+  assert.equal(recovered.terminal.requiresReattach, false)
+  assert.ok(recovered.events.some((event) => event.text.includes('Reattached terminal')))
 })

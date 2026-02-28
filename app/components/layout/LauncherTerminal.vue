@@ -61,6 +61,14 @@ const runtimeErrorMessage = computed(() => {
   return `${runtime.value.lastError.kind} (${runtime.value.lastError.code}): ${runtime.value.lastError.message}`
 })
 
+const attachLabel = computed(() => {
+  if (isAttached.value) {
+    return 'Detach'
+  }
+
+  return terminal.value.requiresReattach ? 'Confirm Reattach' : 'Attach'
+})
+
 watch(
   () => [terminal.value.rows, terminal.value.cols] as const,
   ([rows, cols]) => {
@@ -138,7 +146,7 @@ async function handleCopyOutput() {
             <Loader2 v-if="runtime.connecting" class="mr-1.5 size-3.5 animate-spin" />
             <Unplug v-else-if="isAttached" class="mr-1.5 size-3.5" />
             <Plug v-else class="mr-1.5 size-3.5" />
-            {{ isAttached ? 'Detach' : 'Attach' }}
+            {{ attachLabel }}
           </Button>
 
           <Button
@@ -165,7 +173,14 @@ async function handleCopyOutput() {
       </div>
 
       <p v-if="terminal.sessionId" class="text-xs text-muted-foreground">
-        Session: {{ terminal.sessionId }} | Size: {{ terminal.rows }}x{{ terminal.cols }} | Scrollback: {{ terminal.scrollbackLimit }} lines
+        Session: {{ terminal.sessionId }}
+        <span v-if="terminal.activeSessionId"> | Active: {{ terminal.activeSessionId }}</span>
+        | Size: {{ terminal.rows }}x{{ terminal.cols }}
+        | Scrollback: {{ terminal.scrollbackLimit }} lines
+      </p>
+
+      <p v-if="terminal.requiresReattach" class="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+        Active session changed. Confirm reattach before sending terminal input so commands stay in the same session as workflow actions.
       </p>
 
       <p class="text-xs text-muted-foreground">{{ terminal.message }}</p>
