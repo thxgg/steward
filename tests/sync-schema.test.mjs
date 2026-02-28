@@ -90,6 +90,16 @@ test('validateSyncBundle returns path-aware error for malformed payload', () => 
   assert.match(result.error, /repos\.0\.repoSyncKey/)
 })
 
+test('validateSyncBundle rejects unsupported format versions with field path', () => {
+  const bundle = createValidBundle()
+  bundle.formatVersion = 2
+
+  const result = validateSyncBundle(bundle)
+  assert.equal(result.success, false)
+  assert.ok(result.error)
+  assert.match(result.error, /formatVersion/)
+})
+
 test('hashCanonicalValue is stable across object key ordering differences', () => {
   const first = {
     slug: 'example',
@@ -129,4 +139,54 @@ test('createSyncFieldHashes hashes each populated field and preserves nulls', ()
   assert.equal(typeof hashes.progressHash, 'string')
   assert.equal(hashes.notesHash, null)
   assert.equal(hashes.tasksHash === hashes.progressHash, false)
+})
+
+test('createSyncFieldHashes is deterministic for reordered nested objects', () => {
+  const first = createSyncFieldHashes({
+    tasks: {
+      prd: {
+        name: 'Sync PRD',
+        source: 'docs/prd/sync-prd.md',
+        createdAt: '2026-02-27T00:00:00.000Z'
+      },
+      tasks: [{ id: 'task-1', priority: 'high' }]
+    },
+    progress: {
+      prdName: 'Sync PRD',
+      totalTasks: 1,
+      completed: 0,
+      inProgress: 0,
+      blocked: 0,
+      startedAt: null,
+      lastUpdated: '2026-02-27T00:00:00.000Z',
+      patterns: [],
+      taskLogs: []
+    },
+    notes: 'same notes'
+  })
+
+  const second = createSyncFieldHashes({
+    tasks: {
+      tasks: [{ priority: 'high', id: 'task-1' }],
+      prd: {
+        createdAt: '2026-02-27T00:00:00.000Z',
+        source: 'docs/prd/sync-prd.md',
+        name: 'Sync PRD'
+      }
+    },
+    progress: {
+      taskLogs: [],
+      patterns: [],
+      lastUpdated: '2026-02-27T00:00:00.000Z',
+      startedAt: null,
+      blocked: 0,
+      inProgress: 0,
+      completed: 0,
+      totalTasks: 1,
+      prdName: 'Sync PRD'
+    },
+    notes: 'same notes'
+  })
+
+  assert.deepEqual(second, first)
 })

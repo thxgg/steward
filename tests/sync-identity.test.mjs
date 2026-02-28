@@ -136,3 +136,35 @@ test('sync device id persists across process restarts', async () => {
     await rm(tempRoot, { recursive: true, force: true })
   }
 })
+
+test('calculateRepoFingerprint fallback is deterministic and changes with repo shape', async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), 'steward-sync-fingerprint-test-'))
+
+  try {
+    const repoPath = await createPrdRepo(tempRoot, 'repo-shape', ['alpha-prd', 'beta-prd'])
+    const { calculateRepoFingerprint } = await import('../dist/server/utils/sync-identity.js')
+
+    const repo = {
+      id: 'repo-shape-id',
+      name: 'Repo Shape',
+      path: repoPath,
+      addedAt: '2026-02-27T00:00:00.000Z',
+      gitRepos: []
+    }
+
+    const first = await calculateRepoFingerprint(repo)
+    const second = await calculateRepoFingerprint(repo)
+
+    assert.equal(first.fingerprintKind, 'repo-shape-v1')
+    assert.equal(second.fingerprintKind, 'repo-shape-v1')
+    assert.equal(first.fingerprint, second.fingerprint)
+
+    await writeFile(join(repoPath, 'docs', 'prd', 'gamma-prd.md'), '# gamma-prd\n')
+
+    const third = await calculateRepoFingerprint(repo)
+    assert.equal(third.fingerprintKind, 'repo-shape-v1')
+    assert.notEqual(third.fingerprint, first.fingerprint)
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true })
+  }
+})

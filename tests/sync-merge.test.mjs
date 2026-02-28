@@ -56,6 +56,10 @@ async function getRepoSyncMeta(repoId) {
   )
 }
 
+function makeSyncKey(label, repoId) {
+  return `rsk-${label}-${repoId.replaceAll('-', '').slice(0, 12)}`
+}
+
 test('planSyncMerge resolves mappings with override precedence and reports unresolved repos', async () => {
   const tempRoot = await mkdtemp(join(tmpdir(), 'steward-sync-merge-map-test-'))
   const previousDbPath = process.env.PRD_STATE_DB_PATH
@@ -68,8 +72,11 @@ test('planSyncMerge resolves mappings with override precedence and reports unres
     const repoB = await addRepo(repoBPath, 'Repo B')
 
     const updatedAt = '2026-02-27T00:00:00.000Z'
-    await setRepoSyncKey(repoA.id, 'rsk-local-a', updatedAt)
-    await setRepoSyncKey(repoB.id, 'rsk-local-b', updatedAt)
+    const repoASyncKey = makeSyncKey('local-a', repoA.id)
+    const repoBSyncKey = makeSyncKey('local-b', repoB.id)
+
+    await setRepoSyncKey(repoA.id, repoASyncKey, updatedAt)
+    await setRepoSyncKey(repoB.id, repoBSyncKey, updatedAt)
 
     const repoAMeta = await getRepoSyncMeta(repoA.id)
     const repoBMeta = await getRepoSyncMeta(repoB.id)
@@ -94,7 +101,7 @@ test('planSyncMerge resolves mappings with override precedence and reports unres
           fingerprintKind: repoBMeta.fingerprint_kind
         },
         {
-          repoSyncKey: 'rsk-local-a',
+          repoSyncKey: repoASyncKey,
           name: 'Incoming Sync Key',
           pathHint: 'sync-key',
           fingerprint: repoAMeta.fingerprint,
@@ -110,7 +117,7 @@ test('planSyncMerge resolves mappings with override precedence and reports unres
       ],
       states: [
         { repoSyncKey: 'incoming-override', slug: 'state-override', tasks: null, progress: null, notes: null, clocks: emptyClocks(), hashes: emptyHashes() },
-        { repoSyncKey: 'rsk-local-a', slug: 'state-sync', tasks: null, progress: null, notes: null, clocks: emptyClocks(), hashes: emptyHashes() },
+        { repoSyncKey: repoASyncKey, slug: 'state-sync', tasks: null, progress: null, notes: null, clocks: emptyClocks(), hashes: emptyHashes() },
         { repoSyncKey: 'incoming-fingerprint', slug: 'state-fingerprint', tasks: null, progress: null, notes: null, clocks: emptyClocks(), hashes: emptyHashes() },
         { repoSyncKey: 'incoming-orphan', slug: 'state-orphan', tasks: null, progress: null, notes: null, clocks: emptyClocks(), hashes: emptyHashes() }
       ],
@@ -128,8 +135,8 @@ test('planSyncMerge resolves mappings with override precedence and reports unres
     assert.equal(mappingByKey.get('incoming-override')?.source, 'map')
     assert.equal(mappingByKey.get('incoming-override')?.localRepoId, repoA.id)
 
-    assert.equal(mappingByKey.get('rsk-local-a')?.source, 'sync_key')
-    assert.equal(mappingByKey.get('rsk-local-a')?.localRepoId, repoA.id)
+    assert.equal(mappingByKey.get(repoASyncKey)?.source, 'sync_key')
+    assert.equal(mappingByKey.get(repoASyncKey)?.localRepoId, repoA.id)
 
     assert.equal(mappingByKey.get('incoming-fingerprint')?.source, 'fingerprint')
     assert.equal(mappingByKey.get('incoming-fingerprint')?.localRepoId, repoB.id)
@@ -359,6 +366,96 @@ test('planSyncMerge computes deterministic field-level decisions without mutatin
     )
 
     assert.deepEqual(afterRow, beforeRow)
+  } finally {
+    if (previousDbPath === undefined) {
+      delete process.env.PRD_STATE_DB_PATH
+    } else {
+      process.env.PRD_STATE_DB_PATH = previousDbPath
+    }
+
+    await rm(tempRoot, { recursive: true, force: true })
+  }
+})
+
+test('planSyncMerge supports --map targets by repo id and local sync key', async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), 'steward-sync-merge-map-target-test-'))
+  const previousDbPath = process.env.PRD_STATE_DB_PATH
+  process.env.PRD_STATE_DB_PATH = join(tempRoot, 'state.db')
+
+  try {
+    const repoAPath = await createRepoFixture(tempRoot, 'repo-map-a', 'map-a-prd')
+    const repoBPath = await createRepoFixture(tempRoot, 'repo-map-b', 'map-b-prd')
+    const repoA = await addRepo(repoAPath, 'Repo Map A')
+    const repoB = await addRepo(repoBPath, 'Repo Map B')
+
+    const updatedAt = '2026-02-27T00:00:00.000Z'
+    const repoASyncKey = makeSyncKey('map-target-a', repoA.id)
+    const repoBSyncKey = makeSyncKey('map-target-b', repoB.id)
+
+    await setRepoSyncKey(repoA.id, repoASyncKey, updatedAt)
+    await setRepoSyncKey(repoB.id, repoBSyncKey, updatedAt)
+
+    const bundle = {
+      type: 'steward-sync-bundle',
+      formatVersion: 1,
+      bundleId: 'bundle-map-targets',
+      createdAt: updatedAt,
+      sourceDeviceId: 'device-001',
+      stewardVersion: '0.1.24',
+      repos: [
+        {
+          repoSyncKey: 'incoming-map-id',
+          name: 'Incoming Map Id',
+          pathHint: 'incoming-id',
+          fingerprint: 'unmatched-fingerprint-a',
+          fingerprintKind: 'git-remotes-v1'
+        },
+        {
+          repoSyncKey: 'incoming-map-sync',
+          name: 'Incoming Map Sync Key',
+          pathHint: 'incoming-sync',
+          fingerprint: 'unmatched-fingerprint-b',
+          fingerprintKind: 'git-remotes-v1'
+        },
+        {
+          repoSyncKey: 'incoming-map-invalid',
+          name: 'Incoming Invalid Mapping',
+          pathHint: 'incoming-invalid',
+          fingerprint: 'unmatched-fingerprint-c',
+          fingerprintKind: 'git-remotes-v1'
+        }
+      ],
+      states: [
+        { repoSyncKey: 'incoming-map-id', slug: 'state-map-id', tasks: null, progress: null, notes: null, clocks: emptyClocks(), hashes: emptyHashes() },
+        { repoSyncKey: 'incoming-map-sync', slug: 'state-map-sync', tasks: null, progress: null, notes: null, clocks: emptyClocks(), hashes: emptyHashes() },
+        { repoSyncKey: 'incoming-map-invalid', slug: 'state-map-invalid', tasks: null, progress: null, notes: null, clocks: emptyClocks(), hashes: emptyHashes() }
+      ],
+      archives: []
+    }
+
+    const plan = await planSyncMerge(bundle, {
+      repoMap: {
+        'incoming-map-id': repoB.id,
+        'incoming-map-sync': repoASyncKey,
+        'incoming-map-invalid': '/tmp/non-existent-sync-repo'
+      }
+    })
+
+    const mappingByKey = new Map(plan.mappings.map((mapping) => [mapping.incomingRepoSyncKey, mapping]))
+
+    assert.equal(mappingByKey.get('incoming-map-id')?.source, 'map')
+    assert.equal(mappingByKey.get('incoming-map-id')?.localRepoId, repoB.id)
+
+    assert.equal(mappingByKey.get('incoming-map-sync')?.source, 'map')
+    assert.equal(mappingByKey.get('incoming-map-sync')?.localRepoId, repoA.id)
+
+    assert.equal(mappingByKey.get('incoming-map-invalid')?.source, 'unresolved')
+    assert.equal(mappingByKey.get('incoming-map-invalid')?.reason, 'map_target_not_found')
+
+    assert.equal(plan.summary.repos.mapped, 2)
+    assert.equal(plan.summary.repos.unresolved, 1)
+    assert.equal(plan.summary.states.insert, 2)
+    assert.equal(plan.summary.states.unresolved, 1)
   } finally {
     if (previousDbPath === undefined) {
       delete process.env.PRD_STATE_DB_PATH
