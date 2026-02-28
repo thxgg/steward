@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, Wrench } from 'lucide-vue-next'
 const {
   hostMode,
   hostContext,
+  engineStatus,
   unavailableCapabilities,
   warnings,
   launcherState
@@ -27,6 +28,14 @@ const contextLabel = computed(() => {
 
   return `Workspace ${context.repoName} is active at PRD ${context.prdSlug}.`
 })
+
+const engineLabel = computed(() => {
+  const engine = engineStatus.value
+  const mode = engine.reused ? 'reused endpoint' : (engine.owned ? 'managed process' : 'unmanaged')
+  const endpoint = engine.endpoint ? ` at ${engine.endpoint}` : ''
+
+  return `${engine.state} (${mode})${endpoint}`
+})
 </script>
 
 <template>
@@ -44,6 +53,17 @@ const contextLabel = computed(() => {
           <p class="font-medium">Desktop launcher mode</p>
           <p class="text-muted-foreground">{{ contextLabel }}</p>
         </div>
+      </div>
+
+      <p class="text-xs text-muted-foreground">
+        OpenCode engine: {{ engineLabel }}. {{ engineStatus.message }}
+      </p>
+
+      <div v-if="engineStatus.diagnostics.length > 0" class="space-y-1">
+        <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Engine diagnostics</p>
+        <ul class="space-y-1 text-xs text-muted-foreground">
+          <li v-for="diagnostic in engineStatus.diagnostics" :key="diagnostic">{{ diagnostic }}</li>
+        </ul>
       </div>
 
       <div v-if="unavailableCapabilities.length > 0" class="space-y-1.5">

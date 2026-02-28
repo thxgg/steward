@@ -5,6 +5,8 @@ import type {
   HostCapabilityId,
   LauncherHostState,
   LauncherResolvedContext,
+  OpenCodeEngineState,
+  OpenCodeEngineStatus,
   RuntimeHostState
 } from '~~/app/types/launcher'
 
@@ -20,9 +22,27 @@ const VALID_CAPABILITY_IDS = new Set<HostCapabilityId>([
   'terminalEmbedding'
 ])
 
+const VALID_ENGINE_STATES = new Set<OpenCodeEngineState>([
+  'starting',
+  'healthy',
+  'degraded',
+  'stopped'
+])
+
 const DEFAULT_HOST_CONTRACT: HostBoundaryContract = {
   host: [],
   ui: []
+}
+
+const DEFAULT_ENGINE_STATUS: OpenCodeEngineStatus = {
+  state: 'stopped',
+  endpoint: null,
+  reused: false,
+  owned: false,
+  pid: null,
+  checkedAt: new Date(0).toISOString(),
+  message: 'OpenCode lifecycle status is unavailable in this runtime.',
+  diagnostics: []
 }
 
 function parseJsonPayload(rawValue: string | undefined): unknown {
@@ -124,6 +144,40 @@ function parseContract(value: unknown): HostBoundaryContract {
   }
 }
 
+function parseEngineStatus(value: unknown): OpenCodeEngineStatus {
+  if (!isRecord(value)) {
+    return DEFAULT_ENGINE_STATUS
+  }
+
+  const state = typeof value.state === 'string' && VALID_ENGINE_STATES.has(value.state as OpenCodeEngineState)
+    ? value.state as OpenCodeEngineState
+    : DEFAULT_ENGINE_STATUS.state
+  const endpoint = typeof value.endpoint === 'string' && value.endpoint.trim().length > 0
+    ? value.endpoint.trim()
+    : null
+  const reused = typeof value.reused === 'boolean' ? value.reused : false
+  const owned = typeof value.owned === 'boolean' ? value.owned : false
+  const pid = typeof value.pid === 'number' && Number.isFinite(value.pid) ? value.pid : null
+  const checkedAt = typeof value.checkedAt === 'string' && value.checkedAt.trim().length > 0
+    ? value.checkedAt.trim()
+    : new Date().toISOString()
+  const message = typeof value.message === 'string' && value.message.trim().length > 0
+    ? value.message.trim()
+    : DEFAULT_ENGINE_STATUS.message
+  const diagnostics = toStringArray(value.diagnostics)
+
+  return {
+    state,
+    endpoint,
+    reused,
+    owned,
+    pid,
+    checkedAt,
+    message,
+    diagnostics
+  }
+}
+
 function parseLauncherPayload(value: unknown): LauncherHostState | null {
   if (!isRecord(value)) {
     return null
@@ -136,10 +190,12 @@ function parseLauncherPayload(value: unknown): LauncherHostState | null {
 
   const warnings = toStringArray(value.warnings)
   const context = parseContext(value.context)
+  const engine = parseEngineStatus(value.engine)
   const contract = parseContract(value.contract)
 
   return {
     context,
+    engine,
     capabilities,
     warnings,
     contract

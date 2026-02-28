@@ -1,4 +1,11 @@
-import type { RuntimeInfo, RuntimeHostState, LauncherHostState, LauncherResolvedContext, HostCapabilityFlag } from '~/types/launcher'
+import type {
+  RuntimeInfo,
+  RuntimeHostState,
+  LauncherHostState,
+  LauncherResolvedContext,
+  HostCapabilityFlag,
+  OpenCodeEngineStatus
+} from '~/types/launcher'
 
 function createDefaultHostState(): RuntimeHostState {
   return {
@@ -10,6 +17,19 @@ function createDefaultHostState(): RuntimeHostState {
 function createDefaultRuntimeInfo(): RuntimeInfo {
   return {
     host: createDefaultHostState()
+  }
+}
+
+function createDefaultEngineStatus(): OpenCodeEngineStatus {
+  return {
+    state: 'stopped',
+    endpoint: null,
+    reused: false,
+    owned: false,
+    pid: null,
+    checkedAt: new Date(0).toISOString(),
+    message: 'OpenCode lifecycle manager is not active in this runtime mode.',
+    diagnostics: []
   }
 }
 
@@ -32,6 +52,7 @@ export function useHostRuntime() {
   })
 
   const hostContext = computed<LauncherResolvedContext | null>(() => launcherState.value?.context || null)
+  const engineStatus = computed<OpenCodeEngineStatus>(() => launcherState.value?.engine || createDefaultEngineStatus())
   const capabilities = computed<HostCapabilityFlag[]>(() => launcherState.value?.capabilities || [])
   const unavailableCapabilities = computed<HostCapabilityFlag[]>(() => {
     return capabilities.value.filter((capability) => !capability.available)
@@ -44,6 +65,7 @@ export function useHostRuntime() {
     hostMode,
     launcherState,
     hostContext,
+    engineStatus,
     capabilities,
     unavailableCapabilities,
     warnings,

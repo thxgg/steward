@@ -208,18 +208,23 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
       console.log(`[steward] ${line}`)
     }
 
-    const exitCode = await runUi(
-      {
-        preview: options.preview,
-        port: options.port,
-        host: options.host
-      },
-      bootstrap.runtime
-    )
+    try {
+      const exitCode = await runUi(
+        {
+          preview: options.preview,
+          port: options.port,
+          host: options.host
+        },
+        bootstrap.runtime
+      )
 
-    if (exitCode !== 0) {
-      process.exitCode = exitCode
+      if (exitCode !== 0) {
+        process.exitCode = exitCode
+      }
+    } finally {
+      await bootstrap.shutdown()
     }
+
     return
   }
 

@@ -79,17 +79,25 @@ test('launcher bootstrap resolves actionable PRD context and exposes capability 
     assert.equal(autoResolved.prdSlug, 'alpha')
     assert.equal(autoResolved.prdSource, 'actionable')
 
-    const bootstrap = await bootstrapLauncher({ repoHint: repo.id, prdSlug: 'beta' })
+    const bootstrap = await bootstrapLauncher({
+      repoHint: repo.id,
+      prdSlug: 'beta',
+      manageEngine: false
+    })
     assert.equal(bootstrap.runtime.mode, 'launcher')
     assert.ok(bootstrap.runtime.launcher)
     assert.equal(bootstrap.runtime.launcher.context?.prdSlug, 'beta')
     assert.equal(bootstrap.runtime.launcher.context?.prdSource, 'explicit')
+    assert.equal(bootstrap.runtime.launcher.engine.state, 'stopped')
+    assert.match(bootstrap.runtime.launcher.engine.message, /not started/i)
 
     const capabilities = bootstrap.runtime.launcher.capabilities
     const workspaceCapability = capabilities.find((capability) => capability.id === 'workspaceContext')
     assert.ok(workspaceCapability)
     assert.equal(workspaceCapability.available, true)
     assert.ok(capabilities.some((capability) => capability.available === false))
+
+    await bootstrap.shutdown()
   } finally {
     if (previousDbPath === undefined) {
       delete process.env.PRD_STATE_DB_PATH

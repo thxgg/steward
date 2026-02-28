@@ -15,6 +15,33 @@ export type HostCapabilityId =
   | 'terminalEmbedding'
 
 /**
+ * OpenCode engine lifecycle state
+ */
+export type OpenCodeEngineState = 'starting' | 'healthy' | 'degraded' | 'stopped'
+
+/**
+ * Lifecycle and health status for OpenCode engine runtime
+ */
+export interface OpenCodeEngineStatus {
+  /** Current lifecycle state */
+  state: OpenCodeEngineState
+  /** Engine endpoint currently targeted by launcher */
+  endpoint: string | null
+  /** Whether this launch reused an existing endpoint */
+  reused: boolean
+  /** Whether launcher currently owns a spawned engine process */
+  owned: boolean
+  /** PID of owned process when available */
+  pid: number | null
+  /** Last health/status check timestamp */
+  checkedAt: string
+  /** Human-readable lifecycle status summary */
+  message: string
+  /** Diagnostic breadcrumbs for degraded behavior */
+  diagnostics: string[]
+}
+
+/**
  * One capability flag from host -> UI handshake
  */
 export interface HostCapabilityFlag {
@@ -67,6 +94,8 @@ export interface HostBoundaryContract {
 export interface LauncherHostState {
   /** Resolved repo/PRD context for this launch */
   context: LauncherResolvedContext | null
+  /** OpenCode engine lifecycle status */
+  engine: OpenCodeEngineStatus
   /** Capability availability surfaced by host */
   capabilities: HostCapabilityFlag[]
   /** Non-fatal bootstrap warnings */

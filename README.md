@@ -67,6 +67,14 @@ prd sync merge ./steward-sync.json --apply --map rsk_source=/Users/you/Projects/
 ```
 
 `prd launcher` bootstraps desktop-host context first (repo + PRD resolution), then starts the UI with host capability handshake data exposed at `/api/runtime`.
+Launcher lifecycle defaults to trying a configured endpoint first, then spawning a managed `opencode serve` process when needed.
+
+Launcher runtime tuning env vars (optional):
+
+- `STEWARD_OPENCODE_URL` (preferred existing endpoint to reuse)
+- `STEWARD_OPENCODE_LOCAL_URL` (managed local endpoint, default `http://127.0.0.1:4096`)
+- `STEWARD_OPENCODE_COMMAND` / `STEWARD_OPENCODE_ARGS` (managed spawn command, defaults to `opencode serve`)
+- `STEWARD_OPENCODE_STARTUP_TIMEOUT_MS`, `STEWARD_OPENCODE_HEALTH_POLL_INTERVAL_MS`, `STEWARD_OPENCODE_FETCH_TIMEOUT_MS`, `STEWARD_OPENCODE_SHUTDOWN_GRACE_MS`
 
 ### Sync Bundles (Cross-Device)
 

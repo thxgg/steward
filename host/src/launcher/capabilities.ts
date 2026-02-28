@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import type { HostCapabilityFlag } from '../../../app/types/launcher.js'
+import type { HostCapabilityFlag, OpenCodeEngineStatus } from '../../../app/types/launcher.js'
 
 function commandAvailable(command: string, args: string[] = ['--version']): boolean {
   try {
@@ -13,8 +13,57 @@ function commandAvailable(command: string, args: string[] = ['--version']): bool
   }
 }
 
-export function detectLauncherCapabilities(): HostCapabilityFlag[] {
+function describeEngineLifecycle(engine: OpenCodeEngineStatus): {
+  available: boolean
+  detail: string
+  action?: string
+} {
+  if (engine.state === 'healthy') {
+    if (engine.reused) {
+      return {
+        available: true,
+        detail: engine.endpoint
+          ? `Reusing healthy OpenCode endpoint at ${engine.endpoint}.`
+          : 'Reusing healthy OpenCode endpoint.'
+      }
+    }
+
+    return {
+      available: true,
+      detail: engine.endpoint
+        ? `Managed OpenCode engine is healthy at ${engine.endpoint}.`
+        : 'Managed OpenCode engine is healthy.'
+    }
+  }
+
+  if (engine.state === 'starting') {
+    return {
+      available: false,
+      detail: engine.message,
+      action: 'Wait for startup polling to finish before retrying lifecycle-dependent actions.'
+    }
+  }
+
+  if (engine.state === 'degraded') {
+    return {
+      available: false,
+      detail: engine.message,
+      action: engine.diagnostics[0]
+        ? `Review diagnostics: ${engine.diagnostics[0]}`
+        : 'Check OpenCode command/endpoint settings and retry launcher startup.'
+    }
+  }
+
+  return {
+    available: false,
+    detail: engine.message,
+    action: 'Restart launcher mode to initialize OpenCode lifecycle management.'
+  }
+}
+
+export function detectLauncherCapabilities(engine: OpenCodeEngineStatus): HostCapabilityFlag[] {
   const hasOpenCodeCli = commandAvailable('opencode')
+  const engineLifecycle = describeEngineLifecycle(engine)
 
   return [
     {
@@ -37,9 +86,9 @@ export function detectLauncherCapabilities(): HostCapabilityFlag[] {
     {
       id: 'engineLifecycle',
       label: 'Engine lifecycle manager',
-      available: false,
-      detail: 'Managed OpenCode start/health/stop lifecycle is not wired yet.',
-      action: 'Use an already running OpenCode instance until lifecycle management lands.'
+      available: engineLifecycle.available,
+      detail: engineLifecycle.detail,
+      action: engineLifecycle.action
     },
     {
       id: 'sessionBridge',
