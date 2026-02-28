@@ -74,8 +74,13 @@ Launcher runtime tuning env vars (optional):
 
 - `STEWARD_OPENCODE_URL` (preferred existing endpoint to reuse)
 - `STEWARD_OPENCODE_LOCAL_URL` (managed local endpoint, default `http://127.0.0.1:4096`)
+- `STEWARD_OPENCODE_ALLOW_REMOTE` (set `1`/`true` to allow network-visible endpoint usage)
+- `STEWARD_OPENCODE_AUTH_TOKEN` (explicit auth token for endpoint/session bridge access)
+- `OPENCODE_AUTH_TOKEN` / `OPENCODE_API_KEY` (fallback auth token env vars)
 - `STEWARD_OPENCODE_COMMAND` / `STEWARD_OPENCODE_ARGS` (managed spawn command, defaults to `opencode serve`)
 - `STEWARD_OPENCODE_STARTUP_TIMEOUT_MS`, `STEWARD_OPENCODE_HEALTH_POLL_INTERVAL_MS`, `STEWARD_OPENCODE_FETCH_TIMEOUT_MS`, `STEWARD_OPENCODE_SHUTDOWN_GRACE_MS`
+
+Launcher architecture, security posture, workflow behavior, and recovery steps are documented in `docs/LAUNCHER_RUNBOOK.md`.
 
 ### Sync Bundles (Cross-Device)
 
