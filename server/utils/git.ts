@@ -220,13 +220,15 @@ export async function getCommitInfo(repoPath: string, sha: string): Promise<GitC
   }
 
   // Get commit details
-  const format = '%H%n%h%n%s%n%an%n%aI'
+  const format = '%H%n%P%n%h%n%s%n%an%n%aI'
   const output = await execGit(repoPath, ['show', sha, '--format=' + format, '--no-patch'])
   const lines = output.trim().split('\n')
 
-  if (lines.length < 5) {
+  if (lines.length < 6) {
     throw new Error(`Failed to parse commit info for ${sha}`)
   }
+
+  const parentSha = lines[1]?.trim().split(' ').filter(Boolean)[0]
 
   // Get stats
   const statsOutput = await execGit(repoPath, ['show', sha, '--format=', '--numstat'])
@@ -249,10 +251,11 @@ export async function getCommitInfo(repoPath: string, sha: string): Promise<GitC
 
   return {
     sha: lines[0]!,
-    shortSha: lines[1]!,
-    message: lines[2]!,
-    author: lines[3]!,
-    date: lines[4]!,
+    parentSha: parentSha || undefined,
+    shortSha: lines[2]!,
+    message: lines[3]!,
+    author: lines[4]!,
+    date: lines[5]!,
     filesChanged,
     additions,
     deletions,

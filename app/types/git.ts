@@ -4,6 +4,8 @@
 export interface GitCommit {
   /** Full commit SHA */
   sha: string
+  /** First parent commit SHA (undefined for root commits) */
+  parentSha?: string
   /** Short commit SHA (7 characters) */
   shortSha: string
   /** Commit message (first line) */

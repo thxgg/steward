@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { AlertCircle, RefreshCw, Loader2, Keyboard, FileCode, FileDiff as FileDiffIcon } from 'lucide-vue-next'
+import { AlertCircle, RefreshCw, Loader2, Keyboard } from 'lucide-vue-next'
 import { ScrollArea } from '~/components/ui/scroll-area'
 import { Button } from '~/components/ui/button'
+import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import {
   Tooltip,
   TooltipContent,
@@ -24,13 +25,16 @@ const emit = defineEmits<{
   close: []
 }>()
 
-const { fetchDiff, fetchFileDiff, fetchFileContent, isLoadingDiff, isLoadingFileDiff, isLoadingFileContent } = useGit()
+const { fetchCommits, fetchDiff, fetchFileDiff, fetchFileContent, isLoadingDiff, isLoadingFileDiff, isLoadingFileContent } = useGit()
+const VIEW_MODE_STORAGE_KEY = 'steward-git-view-mode'
 
 // State
 const files = ref<FileDiff[]>([])
 const selectedFile = ref<string | undefined>()
 const hunks = ref<DiffHunk[]>([])
 const fileContent = ref<string | null>(null)
+const oldFileContent = ref<string | null>(null)
+const parentCommitSha = ref<string | null>(null)
 const error = ref<string | null>(null)
 const fileDiffError = ref<string | null>(null)
 
@@ -60,6 +64,19 @@ function getErrorMessage(error: unknown, fallback: string): string {
 
 // Get the selected file's metadata
 const selectedFileDiff = computed(() => files.value.find(f => f.path === selectedFile.value))
+const canUseFullFileMode = computed(() => {
+  const file = selectedFileDiff.value
+  if (!file) {
+    return true
+  }
+
+  if (file.binary) {
+    return false
+  }
+
+  return file.status !== 'deleted'
+})
+
 const diffViewerKey = computed(() => `${props.repoPath || ''}:${props.commitSha}:${selectedFile.value || ''}`)
 
 function resetDiffState() {
@@ -68,6 +85,8 @@ function resetDiffState() {
   selectedFile.value = undefined
   hunks.value = []
   fileContent.value = null
+  oldFileContent.value = null
+  parentCommitSha.value = null
   fileDiffError.value = null
 }
 
@@ -82,11 +101,18 @@ async function loadDiff() {
   resetDiffState()
 
   try {
-    const result = await fetchDiff(requestRepoId, requestCommitSha, {
-      repoPath: requestRepoPath,
-      signal: ticket.signal,
-      suppressError: true
-    })
+    const [result, commitsResult] = await Promise.all([
+      fetchDiff(requestRepoId, requestCommitSha, {
+        repoPath: requestRepoPath,
+        signal: ticket.signal,
+        suppressError: true
+      }),
+      fetchCommits(requestRepoId, [requestCommitSha], {
+        repoPath: requestRepoPath,
+        signal: ticket.signal,
+        suppressError: true,
+      })
+    ])
 
     const isCurrentRequest = ticket.isCurrent()
       && props.repoId === requestRepoId
@@ -98,6 +124,7 @@ async function loadDiff() {
     }
 
     files.value = result
+    parentCommitSha.value = commitsResult.commits[0]?.parentSha || null
 
     // Auto-select first file
     if (result.length > 0) {
@@ -129,12 +156,16 @@ async function loadFileDiff() {
   const requestRepoPath = props.repoPath
   const requestMode = viewMode.value
   const requestPath = selectedPath
+  const requestParentCommitSha = parentCommitSha.value
+  const requestFileStatus = selectedFileDiff.value?.status
+  const requestOldPath = selectedFileDiff.value?.oldPath
 
   const ticket = fileRequestManager.begin()
 
   fileDiffError.value = null
   hunks.value = []
   fileContent.value = null
+  oldFileContent.value = null
 
   const isCurrentRequest = () => {
     return ticket.isCurrent()
@@ -143,6 +174,7 @@ async function loadFileDiff() {
       && props.repoPath === requestRepoPath
       && viewMode.value === requestMode
       && selectedFile.value === requestPath
+      && parentCommitSha.value === requestParentCommitSha
   }
 
   try {
@@ -153,13 +185,38 @@ async function loadFileDiff() {
     })
 
     if (requestMode === 'full') {
-      const [result, content] = await Promise.all([
+      const oldContentPromise = (() => {
+        if (requestFileStatus === 'added') {
+          return Promise.resolve('')
+        }
+
+        if (!requestParentCommitSha) {
+          return Promise.resolve(null)
+        }
+
+        const oldFilePath = requestOldPath || requestPath
+
+        return fetchFileContent(requestRepoId, requestParentCommitSha, oldFilePath, {
+          repoPath: requestRepoPath,
+          signal: ticket.signal,
+          suppressError: true,
+        }).catch((fetchError) => {
+          if (isAbortError(fetchError)) {
+            throw fetchError
+          }
+
+          return null
+        })
+      })()
+
+      const [result, content, oldContent] = await Promise.all([
         diffPromise,
         fetchFileContent(requestRepoId, requestCommitSha, requestPath, {
           repoPath: requestRepoPath,
           signal: ticket.signal,
           suppressError: true
-        })
+        }),
+        oldContentPromise,
       ])
 
       if (!isCurrentRequest()) {
@@ -168,6 +225,7 @@ async function loadFileDiff() {
 
       hunks.value = result
       fileContent.value = content
+      oldFileContent.value = oldContent
     } else {
       const result = await diffPromise
 
@@ -177,6 +235,7 @@ async function loadFileDiff() {
 
       hunks.value = result
       fileContent.value = null
+      oldFileContent.value = null
     }
   } catch (loadError) {
     if (!isCurrentRequest() || isAbortError(loadError)) {
@@ -189,9 +248,28 @@ async function loadFileDiff() {
   }
 }
 
-// Toggle view mode
-function toggleViewMode() {
-  viewMode.value = viewMode.value === 'changes' ? 'full' : 'changes'
+function setViewMode(nextMode: string | number | undefined) {
+  if (nextMode !== 'changes' && nextMode !== 'full') {
+    return
+  }
+
+  if (nextMode === 'full' && !canUseFullFileMode.value) {
+    viewMode.value = 'changes'
+    return
+  }
+
+  viewMode.value = nextMode
+}
+
+function restoreViewModePreference() {
+  if (!import.meta.client) {
+    return
+  }
+
+  const stored = localStorage.getItem(VIEW_MODE_STORAGE_KEY)
+  if (stored === 'changes' || stored === 'full') {
+    viewMode.value = stored
+  }
 }
 
 // Handle file selection from minimap
@@ -214,6 +292,16 @@ watch(
   () => {
     void loadFileDiff()
   }
+)
+
+watch(
+  () => canUseFullFileMode.value,
+  (canUseFullView) => {
+    if (!canUseFullView && viewMode.value === 'full') {
+      viewMode.value = 'changes'
+    }
+  },
+  { immediate: true }
 )
 
 // Watch for prop changes
@@ -254,7 +342,19 @@ function navigateFile(direction: 'next' | 'prev') {
 function jumpToHunk(direction: 'next' | 'prev') {
   if (!diffViewerRef.value) return
 
-  const separators = diffViewerRef.value.querySelectorAll('.diff-separator')
+  const regularSeparators = Array.from(diffViewerRef.value.querySelectorAll('.diff-separator'))
+  const shadowSeparators: Element[] = []
+
+  const diffsContainers = diffViewerRef.value.querySelectorAll('diffs-container')
+  for (const container of diffsContainers) {
+    if (container instanceof HTMLElement && container.shadowRoot) {
+      shadowSeparators.push(...Array.from(container.shadowRoot.querySelectorAll('[data-separator]')))
+    }
+  }
+
+  const separators = [...regularSeparators, ...shadowSeparators]
+    .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)
+
   if (separators.length === 0) return
 
   const container = diffViewerRef.value.closest('.overflow-y-auto, [data-radix-scroll-area-viewport]')
@@ -340,7 +440,16 @@ function handleKeydown(event: KeyboardEvent) {
 
 // Set up keyboard listeners when mounted
 onMounted(() => {
+  restoreViewModePreference()
   document.addEventListener('keydown', handleKeydown)
+})
+
+watch(viewMode, (mode) => {
+  if (!import.meta.client) {
+    return
+  }
+
+  localStorage.setItem(VIEW_MODE_STORAGE_KEY, mode)
 })
 
 onUnmounted(() => {
@@ -435,25 +544,26 @@ onUnmounted(() => {
           <span v-if="selectedFileDiff?.binary" class="rounded bg-yellow-500/10 px-1.5 py-0.5 text-xs text-yellow-600 dark:text-yellow-400">
             binary
           </span>
-          <!-- View mode toggle -->
-          <TooltipProvider v-if="!selectedFileDiff?.binary">
-            <Tooltip>
-              <TooltipTrigger as-child>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  class="h-7 shrink-0 gap-1.5 text-xs"
-                  @click="toggleViewMode"
-                >
-                  <component :is="viewMode === 'changes' ? FileDiffIcon : FileCode" class="size-3.5" />
-                  {{ viewMode === 'changes' ? 'Changes' : 'Full file' }}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {{ viewMode === 'changes' ? 'Show full file with changes' : 'Show changes only' }}
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <Tabs
+            v-if="!selectedFileDiff?.binary"
+            :model-value="viewMode"
+            class="shrink-0 gap-0"
+            @update:model-value="setViewMode"
+          >
+            <TabsList class="h-7 p-[2px]">
+              <TabsTrigger value="changes" class="h-[calc(100%-1px)] px-2 text-xs">
+                Changes
+              </TabsTrigger>
+              <TabsTrigger
+                value="full"
+                class="h-[calc(100%-1px)] px-2 text-xs"
+                :disabled="!canUseFullFileMode"
+                :title="selectedFileDiff?.status === 'deleted' ? 'Full file view is unavailable for deleted files.' : undefined"
+              >
+                Full file
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
 
         <!-- File diff loading -->
@@ -485,8 +595,10 @@ onUnmounted(() => {
               :hunks="hunks"
               :file-path="selectedFile"
               :binary="selectedFileDiff?.binary"
+              :file-status="selectedFileDiff?.status"
               :old-path="selectedFileDiff?.oldPath"
               :file-content="fileContent"
+              :old-file-content="oldFileContent"
               :show-full-file="viewMode === 'full'"
               :is-loading-content="isLoadingFileContent"
             />
