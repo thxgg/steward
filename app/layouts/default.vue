@@ -203,6 +203,7 @@ useFileWatch((event) => {
 
       <!-- Main content -->
       <main class="flex-1 overflow-auto">
+        <LayoutLauncherBanner />
         <slot />
       </main>
     </div>

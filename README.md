@@ -57,6 +57,7 @@ Note: `execute` runs in a VM sandbox by design, so globals like `process` are in
 ```bash
 prd ui
 prd ui --port 3100 --host 127.0.0.1
+prd launcher --repo <repo-id-or-path> --prd <slug>
 prd mcp
 prd sync export ./steward-sync.json
 prd sync inspect ./steward-sync.json
@@ -64,6 +65,8 @@ prd sync merge ./steward-sync.json
 prd sync merge ./steward-sync.json --apply
 prd sync merge ./steward-sync.json --apply --map rsk_source=/Users/you/Projects/repo
 ```
+
+`prd launcher` bootstraps desktop-host context first (repo + PRD resolution), then starts the UI with host capability handshake data exposed at `/api/runtime`.
 
 ### Sync Bundles (Cross-Device)
 

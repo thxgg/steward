@@ -4,8 +4,9 @@ import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 
 const router = useRouter()
-const { repos, currentRepo, currentRepoId, addRepo, status: reposStatus } = useRepos()
+const { repos, currentRepo, currentRepoId, addRepo, selectRepo, status: reposStatus } = useRepos()
 const { prds, prdsStatus } = usePrd()
+const { hostMode, hostContext } = useHostRuntime()
 const { showSuccess } = useToast()
 
 // Onboarding state
@@ -95,13 +96,44 @@ const showPrdList = computed(() => {
   return currentRepoId.value && prds.value && prds.value.length > 0
 })
 
+const launcherPrdSlug = computed(() => {
+  if (hostMode.value !== 'launcher') {
+    return null
+  }
+
+  return hostContext.value?.prdSlug || null
+})
+
+watch(
+  [hostMode, hostContext, reposStatus, repos],
+  ([mode, context, status, repoList]) => {
+    if (mode !== 'launcher' || !context || status === 'pending') {
+      return
+    }
+
+    const hasResolvedRepo = (repoList || []).some((repo) => repo.id === context.repoId)
+    if (!hasResolvedRepo) {
+      return
+    }
+
+    if (currentRepoId.value !== context.repoId) {
+      selectRepo(context.repoId)
+    }
+  },
+  { immediate: true }
+)
+
 // Auto-navigate to first PRD when repo is selected and has documents
 watch(
-  [currentRepoId, prds, prdsStatus],
-  ([repoId, prdList, status]) => {
-    const firstPrd = prdList?.[0]
-    if (repoId && status === 'success' && firstPrd) {
-      router.push(`/${repoId}/${firstPrd.slug}`)
+  [currentRepoId, prds, prdsStatus, launcherPrdSlug],
+  ([repoId, prdList, status, resolvedLauncherPrd]) => {
+    if (!repoId || status !== 'success') {
+      return
+    }
+
+    const targetSlug = resolvedLauncherPrd || prdList?.[0]?.slug
+    if (targetSlug) {
+      router.push(`/${repoId}/${targetSlug}`)
     }
   },
   { immediate: true }

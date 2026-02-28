@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import type { LauncherHostState, RuntimeHostState } from '../../app/types/launcher.js'
 
 export interface UiOptions {
   preview: boolean
@@ -37,7 +38,23 @@ function findPackageRoot(startDir: string): string {
 
 const packageRoot = findPackageRoot(dirname(fileURLToPath(import.meta.url)))
 
-export async function runUi(options: UiOptions): Promise<number> {
+const DEFAULT_RUNTIME_HOST_STATE: RuntimeHostState = {
+  mode: 'web',
+  launcher: null
+}
+
+function serializeLauncherPayload(payload: LauncherHostState): string {
+  try {
+    return JSON.stringify(payload)
+  } catch {
+    throw new Error('Failed to serialize launcher runtime payload')
+  }
+}
+
+export async function runUi(
+  options: UiOptions,
+  runtimeHostState: RuntimeHostState = DEFAULT_RUNTIME_HOST_STATE
+): Promise<number> {
   const serverEntrypoint = join(packageRoot, '.output', 'server', 'index.mjs')
   if (!existsSync(serverEntrypoint)) {
     throw new Error(
@@ -51,6 +68,14 @@ export async function runUi(options: UiOptions): Promise<number> {
 
   const args = [serverEntrypoint]
   const env = { ...process.env }
+  env.STEWARD_RUNTIME_MODE = runtimeHostState.mode
+
+  if (runtimeHostState.mode === 'launcher' && runtimeHostState.launcher) {
+    env.STEWARD_LAUNCHER_PAYLOAD_JSON = serializeLauncherPayload(runtimeHostState.launcher)
+  } else {
+    delete env.STEWARD_LAUNCHER_PAYLOAD_JSON
+  }
+
   const hostFromEnv = env.NITRO_HOST || env.HOST
   const requestedHost = (options.host || hostFromEnv || DEFAULT_UI_HOST).trim()
 
