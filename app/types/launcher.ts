@@ -64,6 +64,84 @@ export interface OpenCodeEngineStatus {
 }
 
 /**
+ * Active-session selection source
+ */
+export type SessionSelectionSource = 'explicit' | 'persisted' | 'created' | 'none'
+
+/**
+ * Session bridge lifecycle state
+ */
+export type SessionBridgeState = 'ready' | 'degraded' | 'disabled'
+
+/**
+ * Active OpenCode session bridge status
+ */
+export interface SessionBridgeStatus {
+  /** Session bridge readiness state */
+  state: SessionBridgeState
+  /** Active OpenCode session identifier */
+  activeSessionId: string | null
+  /** How active session was selected */
+  source: SessionSelectionSource
+  /** Deterministic workspace key used for persistence */
+  workspaceKey: string
+  /** Endpoint used for bridge traffic */
+  endpoint: string | null
+  /** Last session resolution timestamp */
+  lastResolvedAt: string
+  /** Human-readable status summary */
+  message: string
+  /** Diagnostic breadcrumbs for degraded behavior */
+  diagnostics: string[]
+}
+
+/**
+ * Session-bridge outbound message payload
+ */
+export interface SessionBridgeMessageInput {
+  /** Message role */
+  role: 'user' | 'assistant' | 'system'
+  /** Message content */
+  content: string
+}
+
+/**
+ * Result returned when sending a bridge message
+ */
+export interface SessionBridgeMessageResult {
+  /** Active session used by bridge */
+  sessionId: string
+  /** Whether endpoint accepted message */
+  accepted: boolean
+  /** Optional request identifier from bridge transport */
+  requestId: string | null
+}
+
+/**
+ * Event payload returned from session bridge
+ */
+export interface SessionBridgeEvent {
+  /** Event id from OpenCode stream */
+  id: string
+  /** Event type/category */
+  type: string
+  /** Opaque event payload */
+  payload?: unknown
+}
+
+/**
+ * Result returned when polling bridge events
+ */
+export interface SessionBridgeEventsResult {
+  /** Active session used by bridge */
+  sessionId: string
+  /** Event batch */
+  events: SessionBridgeEvent[]
+  /** Cursor for subsequent polling */
+  cursor: string | null
+}
+
+/**
  * One capability flag from host -> UI handshake
  */
 export interface HostCapabilityFlag {
@@ -118,6 +196,8 @@ export interface LauncherHostState {
   context: LauncherResolvedContext | null
   /** OpenCode engine lifecycle status */
   engine: OpenCodeEngineStatus
+  /** Active OpenCode session bridge status */
+  session: SessionBridgeStatus
   /** Capability availability surfaced by host */
   capabilities: HostCapabilityFlag[]
   /** Non-fatal bootstrap warnings */

@@ -1,12 +1,22 @@
 import { randomUUID } from 'node:crypto'
 import { createServer } from 'node:http'
-import type { LauncherControlAction, RuntimeHostState } from '../../../app/types/launcher.js'
+import type {
+  LauncherControlAction,
+  RuntimeHostState,
+  SessionBridgeEventsResult,
+  SessionBridgeMessageInput,
+  SessionBridgeMessageResult,
+  SessionBridgeStatus
+} from '../../../app/types/launcher.js'
 
 type ControlErrorKind = 'process' | 'auth' | 'network'
 
 interface LauncherControlServerOptions {
   getState: () => RuntimeHostState
   runAction: (action: LauncherControlAction) => Promise<RuntimeHostState>
+  getSessionState?: () => SessionBridgeStatus
+  sendSessionMessage?: (input: SessionBridgeMessageInput) => Promise<SessionBridgeMessageResult>
+  fetchSessionEvents?: (cursor?: string | null) => Promise<SessionBridgeEventsResult>
 }
 
 interface LauncherControlServerResponse<T> {
@@ -17,6 +27,11 @@ interface LauncherControlServerResponse<T> {
     code: string
     message: string
   }
+}
+
+type SessionActionBody = {
+  role?: unknown
+  content?: unknown
 }
 
 export interface LauncherControlServerHandle {
@@ -37,6 +52,26 @@ function writeJson<T>(
 
 function isLauncherControlAction(value: unknown): value is LauncherControlAction {
   return value === 'retry' || value === 'reconnect' || value === 'restart'
+}
+
+function parseSessionMessageInput(value: unknown): SessionBridgeMessageInput | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+
+  const body = value as SessionActionBody
+  if (body.role !== 'user' && body.role !== 'assistant' && body.role !== 'system') {
+    return null
+  }
+
+  if (typeof body.content !== 'string' || body.content.trim().length === 0) {
+    return null
+  }
+
+  return {
+    role: body.role,
+    content: body.content
+  }
 }
 
 async function readJsonBody(request: import('node:http').IncomingMessage): Promise<unknown> {
@@ -127,6 +162,110 @@ export async function startLauncherControlServer(
           error: {
             kind: 'process',
             code: 'LAUNCHER_CONTROL_ACTION_FAILED',
+            message
+          }
+        })
+      }
+
+      return
+    }
+
+    if (method === 'GET' && requestUrl.pathname === '/session') {
+      if (!options.getSessionState) {
+        writeJson(response, 503, {
+          ok: false,
+          error: {
+            kind: 'process',
+            code: 'LAUNCHER_SESSION_BRIDGE_DISABLED',
+            message: 'Session bridge is not configured for this launcher runtime.'
+          }
+        })
+        return
+      }
+
+      writeJson(response, 200, {
+        ok: true,
+        result: options.getSessionState()
+      })
+      return
+    }
+
+    if (method === 'POST' && requestUrl.pathname === '/session/message') {
+      if (!options.sendSessionMessage) {
+        writeJson(response, 503, {
+          ok: false,
+          error: {
+            kind: 'process',
+            code: 'LAUNCHER_SESSION_BRIDGE_DISABLED',
+            message: 'Session bridge is not configured for this launcher runtime.'
+          }
+        })
+        return
+      }
+
+      try {
+        const body = await readJsonBody(request)
+        const input = parseSessionMessageInput(body)
+
+        if (!input) {
+          writeJson(response, 400, {
+            ok: false,
+            error: {
+              kind: 'process',
+              code: 'LAUNCHER_SESSION_INVALID_INPUT',
+              message: 'Session message requires role and content.'
+            }
+          })
+          return
+        }
+
+        const result = await options.sendSessionMessage(input)
+        writeJson(response, 200, {
+          ok: true,
+          result
+        })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        writeJson(response, 500, {
+          ok: false,
+          error: {
+            kind: 'process',
+            code: 'LAUNCHER_SESSION_MESSAGE_FAILED',
+            message
+          }
+        })
+      }
+
+      return
+    }
+
+    if (method === 'GET' && requestUrl.pathname === '/session/events') {
+      if (!options.fetchSessionEvents) {
+        writeJson(response, 503, {
+          ok: false,
+          error: {
+            kind: 'process',
+            code: 'LAUNCHER_SESSION_BRIDGE_DISABLED',
+            message: 'Session bridge is not configured for this launcher runtime.'
+          }
+        })
+        return
+      }
+
+      try {
+        const cursor = requestUrl.searchParams.get('cursor')
+        const result = await options.fetchSessionEvents(cursor)
+        writeJson(response, 200, {
+          ok: true,
+          result
+        })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        writeJson(response, 500, {
+          ok: false,
+          error: {
+            kind: 'process',
+            code: 'LAUNCHER_SESSION_EVENTS_FAILED',
             message
           }
         })

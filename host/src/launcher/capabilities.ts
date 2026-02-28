@@ -1,5 +1,9 @@
 import { spawnSync } from 'node:child_process'
-import type { HostCapabilityFlag, OpenCodeEngineStatus } from '../../../app/types/launcher.js'
+import type {
+  HostCapabilityFlag,
+  OpenCodeEngineStatus,
+  SessionBridgeStatus
+} from '../../../app/types/launcher.js'
 
 function commandAvailable(command: string, args: string[] = ['--version']): boolean {
   try {
@@ -61,9 +65,44 @@ function describeEngineLifecycle(engine: OpenCodeEngineStatus): {
   }
 }
 
-export function detectLauncherCapabilities(engine: OpenCodeEngineStatus): HostCapabilityFlag[] {
+function describeSessionBridge(session: SessionBridgeStatus): {
+  available: boolean
+  detail: string
+  action?: string
+} {
+  if (session.state === 'ready') {
+    return {
+      available: true,
+      detail: session.activeSessionId
+        ? `Active session ${session.activeSessionId} (${session.source}) is bound for workspace routing.`
+        : session.message
+    }
+  }
+
+  if (session.state === 'degraded') {
+    return {
+      available: false,
+      detail: session.message,
+      action: session.diagnostics[0]
+        ? `Review session diagnostics: ${session.diagnostics[0]}`
+        : 'Retry session bridge resolution after engine reconnect.'
+    }
+  }
+
+  return {
+    available: false,
+    detail: session.message,
+    action: 'Start launcher mode with an active OpenCode engine to initialize session bridge routing.'
+  }
+}
+
+export function detectLauncherCapabilities(
+  engine: OpenCodeEngineStatus,
+  session: SessionBridgeStatus
+): HostCapabilityFlag[] {
   const hasOpenCodeCli = commandAvailable('opencode')
   const engineLifecycle = describeEngineLifecycle(engine)
+  const sessionBridge = describeSessionBridge(session)
 
   return [
     {
@@ -93,9 +132,9 @@ export function detectLauncherCapabilities(engine: OpenCodeEngineStatus): HostCa
     {
       id: 'sessionBridge',
       label: 'Active session bridge',
-      available: false,
-      detail: 'Session identity routing between host services and UI is not wired yet.',
-      action: 'Avoid assuming terminal and workflow actions target a shared session until session bridge is added.'
+      available: sessionBridge.available,
+      detail: sessionBridge.detail,
+      action: sessionBridge.action
     },
     {
       id: 'workflowActions',

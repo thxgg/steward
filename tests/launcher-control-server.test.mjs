@@ -18,6 +18,16 @@ test('launcher control server serves state and actions with token auth', async (
         message: 'initial',
         diagnostics: []
       },
+      session: {
+        state: 'ready',
+        activeSessionId: 'sess-1',
+        source: 'persisted',
+        workspaceKey: 'repo::endpoint',
+        endpoint: 'http://127.0.0.1:4096',
+        lastResolvedAt: new Date().toISOString(),
+        message: 'session bridge ready',
+        diagnostics: []
+      },
       capabilities: [],
       warnings: [],
       contract: { host: [], ui: [] }
@@ -41,6 +51,27 @@ test('launcher control server serves state and actions with token auth', async (
       }
 
       return state
+    },
+    getSessionState: () => state.launcher.session,
+    sendSessionMessage: async (input) => {
+      return {
+        sessionId: state.launcher.session.activeSessionId,
+        accepted: true,
+        requestId: `${input.role}-request`
+      }
+    },
+    fetchSessionEvents: async () => {
+      return {
+        sessionId: state.launcher.session.activeSessionId,
+        events: [
+          {
+            id: 'evt-1',
+            type: 'message',
+            payload: { ok: true }
+          }
+        ],
+        cursor: 'cursor-1'
+      }
     }
   })
 
@@ -81,6 +112,39 @@ test('launcher control server serves state and actions with token auth', async (
     assert.equal(actionBody.ok, true)
     assert.equal(actionBody.result.launcher.engine.state, 'healthy')
     assert.match(actionBody.result.launcher.engine.message, /retry/)
+
+    const sessionStateResponse = await fetch(`${server.url}/session`, {
+      headers: {
+        'x-steward-launcher-token': server.token
+      }
+    })
+    assert.equal(sessionStateResponse.status, 200)
+    const sessionStateBody = await sessionStateResponse.json()
+    assert.equal(sessionStateBody.ok, true)
+    assert.equal(sessionStateBody.result.activeSessionId, 'sess-1')
+
+    const sessionMessageResponse = await fetch(`${server.url}/session/message`, {
+      method: 'POST',
+      headers: {
+        'x-steward-launcher-token': server.token,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({ role: 'user', content: 'hello' })
+    })
+    assert.equal(sessionMessageResponse.status, 200)
+    const sessionMessageBody = await sessionMessageResponse.json()
+    assert.equal(sessionMessageBody.ok, true)
+    assert.equal(sessionMessageBody.result.sessionId, 'sess-1')
+
+    const sessionEventsResponse = await fetch(`${server.url}/session/events`, {
+      headers: {
+        'x-steward-launcher-token': server.token
+      }
+    })
+    assert.equal(sessionEventsResponse.status, 200)
+    const sessionEventsBody = await sessionEventsResponse.json()
+    assert.equal(sessionEventsBody.ok, true)
+    assert.equal(sessionEventsBody.result.events.length, 1)
   } finally {
     await server.close()
   }

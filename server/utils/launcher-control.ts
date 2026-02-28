@@ -2,7 +2,11 @@ import type {
   LauncherControlAction,
   LauncherUiError,
   LauncherUiErrorKind,
-  RuntimeHostState
+  RuntimeHostState,
+  SessionBridgeEventsResult,
+  SessionBridgeMessageInput,
+  SessionBridgeMessageResult,
+  SessionBridgeStatus
 } from '../../app/types/launcher.js'
 
 type ControlResponse<T> = {
@@ -124,6 +128,43 @@ export async function invokeLauncherAction(action: LauncherControlAction): Promi
     return await controlRequest<RuntimeHostState>('/action', {
       method: 'POST',
       body: JSON.stringify({ action })
+    })
+  } catch (error) {
+    throw normalizeError(error)
+  }
+}
+
+export async function fetchLauncherSessionState(): Promise<SessionBridgeStatus> {
+  try {
+    return await controlRequest<SessionBridgeStatus>('/session', {
+      method: 'GET'
+    })
+  } catch (error) {
+    throw normalizeError(error)
+  }
+}
+
+export async function invokeLauncherSessionMessage(
+  input: SessionBridgeMessageInput
+): Promise<SessionBridgeMessageResult> {
+  try {
+    return await controlRequest<SessionBridgeMessageResult>('/session/message', {
+      method: 'POST',
+      body: JSON.stringify(input)
+    })
+  } catch (error) {
+    throw normalizeError(error)
+  }
+}
+
+export async function fetchLauncherSessionEvents(cursor?: string | null): Promise<SessionBridgeEventsResult> {
+  const query = cursor && cursor.trim().length > 0
+    ? `?cursor=${encodeURIComponent(cursor.trim())}`
+    : ''
+
+  try {
+    return await controlRequest<SessionBridgeEventsResult>(`/session/events${query}`, {
+      method: 'GET'
     })
   } catch (error) {
     throw normalizeError(error)

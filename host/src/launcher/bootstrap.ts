@@ -2,6 +2,10 @@ import type {
   LauncherControlAction,
   LauncherHostState,
   OpenCodeEngineStatus,
+  SessionBridgeEventsResult,
+  SessionBridgeMessageInput,
+  SessionBridgeMessageResult,
+  SessionBridgeStatus,
   RuntimeHostState
 } from '../../../app/types/launcher.js'
 import { detectLauncherCapabilities } from './capabilities.js'
@@ -14,12 +18,14 @@ import {
   type OpenCodeEngineLifecycleOptions
 } from './engine-lifecycle.js'
 import { startLauncherControlServer, type LauncherControlServerHandle } from './control-server.js'
+import { startSessionBridge } from './session-bridge.js'
 
 const DEFAULT_ENGINE_ARGS = ['serve']
 
 export interface LauncherBootstrapOptions extends ResolveLauncherContextOptions {
   manageEngine?: boolean
   engine?: Omit<OpenCodeEngineLifecycleOptions, 'cwd'>
+  sessionId?: string
 }
 
 export interface LauncherBootstrapResult {
@@ -97,18 +103,24 @@ function buildWarnings(payload: LauncherHostState): string[] {
     warnings.push(payload.engine.message)
   }
 
+  if (payload.session.state === 'degraded') {
+    warnings.push(payload.session.message)
+  }
+
   return [...new Set(warnings)]
 }
 
 function buildLauncherPayload(
   context: LauncherHostState['context'],
-  engine: OpenCodeEngineStatus
+  engine: OpenCodeEngineStatus,
+  session: SessionBridgeStatus
 ): LauncherHostState {
-  const capabilities = detectLauncherCapabilities(engine)
+  const capabilities = detectLauncherCapabilities(engine, session)
 
   const payload: LauncherHostState = {
     context,
     engine,
+    session,
     capabilities,
     warnings: [],
     contract: HOST_BOUNDARY_CONTRACT
@@ -128,13 +140,62 @@ export async function bootstrapLauncher(
   let currentEngineStatus: OpenCodeEngineStatus = createDisabledEngineStatus(
     'OpenCode lifecycle manager was not started for this launcher bootstrap.'
   )
+  let currentSessionStatus: SessionBridgeStatus = {
+    state: 'disabled',
+    activeSessionId: null,
+    source: 'none',
+    workspaceKey: `${context.repoId}::unbound`,
+    endpoint: null,
+    lastResolvedAt: new Date(0).toISOString(),
+    message: 'Session bridge is waiting for an active OpenCode engine endpoint.',
+    diagnostics: []
+  }
+
+  let sendSessionMessage: ((input: SessionBridgeMessageInput) => Promise<SessionBridgeMessageResult>) | null = null
+  let fetchSessionEvents: ((cursor?: string | null) => Promise<SessionBridgeEventsResult>) | null = null
 
   const engineOptions = resolveEngineOptions(context.repoPath, options.engine)
+
+  const resolveSessionBridge = async (): Promise<void> => {
+    if (currentEngineStatus.state !== 'healthy' || !currentEngineStatus.endpoint) {
+      currentSessionStatus = {
+        state: 'disabled',
+        activeSessionId: null,
+        source: 'none',
+        workspaceKey: `${context.repoId}::unbound`,
+        endpoint: currentEngineStatus.endpoint,
+        lastResolvedAt: new Date().toISOString(),
+        message: 'Session bridge is waiting for an active OpenCode engine endpoint.',
+        diagnostics: []
+      }
+      sendSessionMessage = null
+      fetchSessionEvents = null
+      return
+    }
+
+    const explicitSessionId = options.sessionId?.trim()
+      || process.env.STEWARD_OPENCODE_SESSION_ID?.trim()
+      || null
+
+    const sessionBridge = await startSessionBridge({
+      endpoint: currentEngineStatus.endpoint,
+      repoId: context.repoId,
+      repoPath: context.repoPath,
+      explicitSessionId,
+      fetchTimeoutMs: engineOptions.fetchTimeoutMs
+    })
+
+    currentSessionStatus = sessionBridge.getStatus()
+    sendSessionMessage = sessionBridge.sendMessage
+    fetchSessionEvents = sessionBridge.fetchEvents
+  }
 
   if (shouldManageEngine) {
     engineHandle = await startOpenCodeEngineLifecycle(engineOptions)
     currentEngineStatus = engineHandle.getStatus()
   }
+
+  await resolveSessionBridge()
 
   const getRuntimeState = (): RuntimeHostState => {
     if (engineHandle) {
@@ -143,7 +204,7 @@ export async function bootstrapLauncher(
 
     return {
       mode: 'launcher',
-      launcher: buildLauncherPayload(context, currentEngineStatus)
+      launcher: buildLauncherPayload(context, currentEngineStatus, currentSessionStatus)
     }
   }
 
@@ -167,6 +228,7 @@ export async function bootstrapLauncher(
 
     engineHandle = await startOpenCodeEngineLifecycle(engineOptions)
     currentEngineStatus = engineHandle.getStatus()
+    await resolveSessionBridge()
     return getRuntimeState()
   }
 
@@ -186,7 +248,22 @@ export async function bootstrapLauncher(
 
   const controlServer: LauncherControlServerHandle = await startLauncherControlServer({
     getState: getRuntimeState,
-    runAction
+    runAction,
+    getSessionState: () => currentSessionStatus,
+    sendSessionMessage: async (input) => {
+      if (!sendSessionMessage) {
+        throw new Error('Session bridge transport is not available')
+      }
+
+      return await sendSessionMessage(input)
+    },
+    fetchSessionEvents: async (cursor) => {
+      if (!fetchSessionEvents) {
+        throw new Error('Session bridge transport is not available')
+      }
+
+      return await fetchSessionEvents(cursor)
+    }
   })
 
   const initialRuntimeState = getRuntimeState()
@@ -197,6 +274,7 @@ export async function bootstrapLauncher(
     `Launcher context resolved: repo=${context.repoName} (${context.repoId})`,
     `Launcher PRD context: ${context.prdSlug || '<none>'} (${context.prdSource})`,
     `OpenCode engine state: ${currentEngineStatus.state}${currentEngineStatus.endpoint ? ` (${currentEngineStatus.endpoint})` : ''}`,
+    `Session bridge state: ${currentSessionStatus.state}${currentSessionStatus.activeSessionId ? ` (${currentSessionStatus.activeSessionId})` : ''}`,
     `Launcher capabilities: ${capabilities.length - unavailableCount}/${capabilities.length} available`,
     `Launcher control endpoint: ${controlServer.url}`
   ]

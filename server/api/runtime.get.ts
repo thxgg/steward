@@ -7,6 +7,9 @@ import type {
   LauncherResolvedContext,
   OpenCodeEngineState,
   OpenCodeEngineStatus,
+  SessionBridgeState,
+  SessionBridgeStatus,
+  SessionSelectionSource,
   RuntimeHostState
 } from '~~/app/types/launcher'
 import { fetchLauncherRuntimeState, toLauncherUiError } from '~~/server/utils/launcher-control'
@@ -30,6 +33,19 @@ const VALID_ENGINE_STATES = new Set<OpenCodeEngineState>([
   'stopped'
 ])
 
+const VALID_SESSION_BRIDGE_STATES = new Set<SessionBridgeState>([
+  'ready',
+  'degraded',
+  'disabled'
+])
+
+const VALID_SESSION_SOURCES = new Set<SessionSelectionSource>([
+  'explicit',
+  'persisted',
+  'created',
+  'none'
+])
+
 const DEFAULT_HOST_CONTRACT: HostBoundaryContract = {
   host: [],
   ui: []
@@ -43,6 +59,17 @@ const DEFAULT_ENGINE_STATUS: OpenCodeEngineStatus = {
   pid: null,
   checkedAt: new Date(0).toISOString(),
   message: 'OpenCode lifecycle status is unavailable in this runtime.',
+  diagnostics: []
+}
+
+const DEFAULT_SESSION_STATUS: SessionBridgeStatus = {
+  state: 'disabled',
+  activeSessionId: null,
+  source: 'none',
+  workspaceKey: 'unbound',
+  endpoint: null,
+  lastResolvedAt: new Date(0).toISOString(),
+  message: 'Session bridge status is unavailable in this runtime.',
   diagnostics: []
 }
 
@@ -179,6 +206,46 @@ function parseEngineStatus(value: unknown): OpenCodeEngineStatus {
   }
 }
 
+function parseSessionStatus(value: unknown): SessionBridgeStatus {
+  if (!isRecord(value)) {
+    return DEFAULT_SESSION_STATUS
+  }
+
+  const state = typeof value.state === 'string' && VALID_SESSION_BRIDGE_STATES.has(value.state as SessionBridgeState)
+    ? value.state as SessionBridgeState
+    : DEFAULT_SESSION_STATUS.state
+  const activeSessionId = typeof value.activeSessionId === 'string' && value.activeSessionId.trim().length > 0
+    ? value.activeSessionId.trim()
+    : null
+  const source = typeof value.source === 'string' && VALID_SESSION_SOURCES.has(value.source as SessionSelectionSource)
+    ? value.source as SessionSelectionSource
+    : DEFAULT_SESSION_STATUS.source
+  const workspaceKey = typeof value.workspaceKey === 'string' && value.workspaceKey.trim().length > 0
+    ? value.workspaceKey.trim()
+    : DEFAULT_SESSION_STATUS.workspaceKey
+  const endpoint = typeof value.endpoint === 'string' && value.endpoint.trim().length > 0
+    ? value.endpoint.trim()
+    : null
+  const lastResolvedAt = typeof value.lastResolvedAt === 'string' && value.lastResolvedAt.trim().length > 0
+    ? value.lastResolvedAt.trim()
+    : new Date().toISOString()
+  const message = typeof value.message === 'string' && value.message.trim().length > 0
+    ? value.message.trim()
+    : DEFAULT_SESSION_STATUS.message
+  const diagnostics = toStringArray(value.diagnostics)
+
+  return {
+    state,
+    activeSessionId,
+    source,
+    workspaceKey,
+    endpoint,
+    lastResolvedAt,
+    message,
+    diagnostics
+  }
+}
+
 function parseLauncherPayload(value: unknown): LauncherHostState | null {
   if (!isRecord(value)) {
     return null
@@ -192,11 +259,13 @@ function parseLauncherPayload(value: unknown): LauncherHostState | null {
   const warnings = toStringArray(value.warnings)
   const context = parseContext(value.context)
   const engine = parseEngineStatus(value.engine)
+  const session = parseSessionStatus(value.session)
   const contract = parseContract(value.contract)
 
   return {
     context,
     engine,
+    session,
     capabilities,
     warnings,
     contract
@@ -217,6 +286,13 @@ function withControlWarning(
         message: warningMessage,
         diagnostics: []
       },
+      session: {
+        ...DEFAULT_SESSION_STATUS,
+        state: 'degraded',
+        lastResolvedAt: new Date().toISOString(),
+        message: warningMessage,
+        diagnostics: []
+      },
       capabilities: [],
       warnings: [warningMessage],
       contract: DEFAULT_HOST_CONTRACT
@@ -232,6 +308,14 @@ function withControlWarning(
           ...launcherPayload.engine,
           state: 'degraded',
           checkedAt: new Date().toISOString(),
+          message: warningMessage
+        },
+    session: launcherPayload.session.state === 'degraded'
+      ? launcherPayload.session
+      : {
+          ...launcherPayload.session,
+          state: 'degraded',
+          lastResolvedAt: new Date().toISOString(),
           message: warningMessage
         }
   }

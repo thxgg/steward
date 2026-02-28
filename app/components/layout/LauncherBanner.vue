@@ -47,6 +47,19 @@ const engineLabel = computed(() => {
   return `${status.value.state} (${mode})${endpoint}`
 })
 
+const sessionLabel = computed(() => {
+  const session = launcherState.value?.session
+  if (!session) {
+    return 'Session bridge: unavailable'
+  }
+
+  const active = session.activeSessionId
+    ? `active=${session.activeSessionId}`
+    : 'active=<none>'
+
+  return `Session bridge: ${session.state} (${active}, source=${session.source})`
+})
+
 const errorLabel = computed(() => {
   if (!lastError.value) {
     return null
@@ -95,6 +108,8 @@ async function handleRestart() {
       <p class="text-xs text-muted-foreground">
         OpenCode engine: {{ engineLabel }}. {{ status.message }}
       </p>
+
+      <p class="text-xs text-muted-foreground">{{ sessionLabel }}</p>
 
       <p class="text-xs text-muted-foreground">
         Connection: {{ connection.state }}
