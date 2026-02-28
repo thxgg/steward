@@ -12,7 +12,7 @@ const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const entryPath = resolve(packageRoot, 'dist', 'host', 'src', 'index.js')
 
 function requiresSqliteRuntime(command) {
-  return command === 'mcp' || command === 'ui'
+  return command === 'mcp' || command === 'ui' || command === 'sync'
 }
 
 function isSqliteRuntimeError(error) {

@@ -1,4 +1,5 @@
 import { runMcpServer } from './mcp.js'
+import { runSync } from './sync.js'
 import { runUi } from './ui.js'
 
 type UiCliOptions = {
@@ -12,10 +13,12 @@ function printUsage(): void {
 
 Usage:
   prd ui [--preview] [--port <port>] [--host <host>]
+  prd sync <subcommand> [options]
   prd mcp
 
 Commands:
   ui         Launch the prebuilt PRD web UI server
+  sync       Export/inspect/merge sync bundles
   mcp        Start MCP server over stdio (codemode)
 
 Options:
@@ -104,6 +107,14 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
 
     const options = parseUiArgs(rest)
     const exitCode = await runUi(options)
+    if (exitCode !== 0) {
+      process.exitCode = exitCode
+    }
+    return
+  }
+
+  if (command === 'sync') {
+    const exitCode = await runSync(rest)
     if (exitCode !== 0) {
       process.exitCode = exitCode
     }
