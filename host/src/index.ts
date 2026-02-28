@@ -215,7 +215,8 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
           port: options.port,
           host: options.host
         },
-        bootstrap.runtime
+        bootstrap.runtime,
+        bootstrap.control
       )
 
       if (exitCode !== 0) {

@@ -68,6 +68,7 @@ prd sync merge ./steward-sync.json --apply --map rsk_source=/Users/you/Projects/
 
 `prd launcher` bootstraps desktop-host context first (repo + PRD resolution), then starts the UI with host capability handshake data exposed at `/api/runtime`.
 Launcher lifecycle defaults to trying a configured endpoint first, then spawning a managed `opencode serve` process when needed.
+Launcher mode also exposes in-UI lifecycle controls (`retry`, `reconnect`, `restart`) with normalized `process`/`auth`/`network` error payloads.
 
 Launcher runtime tuning env vars (optional):
 

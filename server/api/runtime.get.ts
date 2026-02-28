@@ -9,6 +9,7 @@ import type {
   OpenCodeEngineStatus,
   RuntimeHostState
 } from '~~/app/types/launcher'
+import { fetchLauncherRuntimeState, toLauncherUiError } from '~~/server/utils/launcher-control'
 
 const SERVER_INSTANCE_ID = randomUUID()
 const SERVER_STARTED_AT = new Date().toISOString()
@@ -202,7 +203,41 @@ function parseLauncherPayload(value: unknown): LauncherHostState | null {
   }
 }
 
-function resolveHostRuntimeState(): RuntimeHostState {
+function withControlWarning(
+  launcherPayload: LauncherHostState | null,
+  warningMessage: string
+): LauncherHostState {
+  if (!launcherPayload) {
+    return {
+      context: null,
+      engine: {
+        ...DEFAULT_ENGINE_STATUS,
+        state: 'degraded',
+        checkedAt: new Date().toISOString(),
+        message: warningMessage,
+        diagnostics: []
+      },
+      capabilities: [],
+      warnings: [warningMessage],
+      contract: DEFAULT_HOST_CONTRACT
+    }
+  }
+
+  return {
+    ...launcherPayload,
+    warnings: [...new Set([...launcherPayload.warnings, warningMessage])],
+    engine: launcherPayload.engine.state === 'degraded'
+      ? launcherPayload.engine
+      : {
+          ...launcherPayload.engine,
+          state: 'degraded',
+          checkedAt: new Date().toISOString(),
+          message: warningMessage
+        }
+  }
+}
+
+async function resolveHostRuntimeState(): Promise<RuntimeHostState> {
   const runtimeMode = process.env.STEWARD_RUNTIME_MODE === 'launcher' ? 'launcher' : 'web'
 
   if (runtimeMode !== 'launcher') {
@@ -212,15 +247,22 @@ function resolveHostRuntimeState(): RuntimeHostState {
     }
   }
 
-  const launcherPayload = parseLauncherPayload(parseJsonPayload(process.env.STEWARD_LAUNCHER_PAYLOAD_JSON))
+  const fallbackLauncherPayload = parseLauncherPayload(parseJsonPayload(process.env.STEWARD_LAUNCHER_PAYLOAD_JSON))
 
-  return {
-    mode: 'launcher',
-    launcher: launcherPayload
+  try {
+    return await fetchLauncherRuntimeState()
+  } catch (error) {
+    const normalized = toLauncherUiError(error)
+    const warning = `Launcher control unavailable (${normalized.code}): ${normalized.message}`
+
+    return {
+      mode: 'launcher',
+      launcher: withControlWarning(fallbackLauncherPayload, warning)
+    }
   }
 }
 
-export default defineEventHandler((event) => {
+export default defineEventHandler(async (event) => {
   const runtimeConfig = useRuntimeConfig(event)
 
   setHeader(event, 'Cache-Control', 'no-store, no-cache, must-revalidate')
@@ -229,6 +271,6 @@ export default defineEventHandler((event) => {
     buildId: runtimeConfig.app.buildId,
     instanceId: SERVER_INSTANCE_ID,
     startedAt: SERVER_STARTED_AT,
-    host: resolveHostRuntimeState()
+    host: await resolveHostRuntimeState()
   }
 })

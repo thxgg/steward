@@ -10,6 +10,11 @@ export interface UiOptions {
   host?: string
 }
 
+export interface LauncherUiControlOptions {
+  url: string
+  token: string
+}
+
 const DEFAULT_UI_HOST = '127.0.0.1'
 
 function isLoopbackHost(host: string): boolean {
@@ -53,7 +58,8 @@ function serializeLauncherPayload(payload: LauncherHostState): string {
 
 export async function runUi(
   options: UiOptions,
-  runtimeHostState: RuntimeHostState = DEFAULT_RUNTIME_HOST_STATE
+  runtimeHostState: RuntimeHostState = DEFAULT_RUNTIME_HOST_STATE,
+  launcherControl?: LauncherUiControlOptions
 ): Promise<number> {
   const serverEntrypoint = join(packageRoot, '.output', 'server', 'index.mjs')
   if (!existsSync(serverEntrypoint)) {
@@ -74,6 +80,14 @@ export async function runUi(
     env.STEWARD_LAUNCHER_PAYLOAD_JSON = serializeLauncherPayload(runtimeHostState.launcher)
   } else {
     delete env.STEWARD_LAUNCHER_PAYLOAD_JSON
+  }
+
+  if (launcherControl) {
+    env.STEWARD_LAUNCHER_CONTROL_URL = launcherControl.url
+    env.STEWARD_LAUNCHER_CONTROL_TOKEN = launcherControl.token
+  } else {
+    delete env.STEWARD_LAUNCHER_CONTROL_URL
+    delete env.STEWARD_LAUNCHER_CONTROL_TOKEN
   }
 
   const hostFromEnv = env.NITRO_HOST || env.HOST

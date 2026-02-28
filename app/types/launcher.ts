@@ -4,6 +4,28 @@
 export type HostRuntimeMode = 'web' | 'launcher'
 
 /**
+ * Supported launcher control actions
+ */
+export type LauncherControlAction = 'retry' | 'reconnect' | 'restart'
+
+/**
+ * Launcher error classification surfaced to UI
+ */
+export type LauncherUiErrorKind = 'process' | 'auth' | 'network'
+
+/**
+ * Normalized launcher UI error payload
+ */
+export interface LauncherUiError {
+  /** Error class used for UX treatment */
+  kind: LauncherUiErrorKind
+  /** Stable error code for programmatic handling */
+  code: string
+  /** User-facing error summary */
+  message: string
+}
+
+/**
  * Host capability identifiers surfaced to the UI
  */
 export type HostCapabilityId =

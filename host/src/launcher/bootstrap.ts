@@ -1,4 +1,5 @@
 import type {
+  LauncherControlAction,
   LauncherHostState,
   OpenCodeEngineStatus,
   RuntimeHostState
@@ -12,6 +13,7 @@ import {
   type OpenCodeEngineLifecycleHandle,
   type OpenCodeEngineLifecycleOptions
 } from './engine-lifecycle.js'
+import { startLauncherControlServer, type LauncherControlServerHandle } from './control-server.js'
 
 const DEFAULT_ENGINE_ARGS = ['serve']
 
@@ -23,6 +25,10 @@ export interface LauncherBootstrapOptions extends ResolveLauncherContextOptions 
 export interface LauncherBootstrapResult {
   runtime: RuntimeHostState
   logLines: string[]
+  control: {
+    url: string
+    token: string
+  }
   shutdown: () => Promise<void>
 }
 
@@ -94,6 +100,24 @@ function buildWarnings(payload: LauncherHostState): string[] {
   return [...new Set(warnings)]
 }
 
+function buildLauncherPayload(
+  context: LauncherHostState['context'],
+  engine: OpenCodeEngineStatus
+): LauncherHostState {
+  const capabilities = detectLauncherCapabilities(engine)
+
+  const payload: LauncherHostState = {
+    context,
+    engine,
+    capabilities,
+    warnings: [],
+    contract: HOST_BOUNDARY_CONTRACT
+  }
+
+  payload.warnings = buildWarnings(payload)
+  return payload
+}
+
 export async function bootstrapLauncher(
   options: LauncherBootstrapOptions = {}
 ): Promise<LauncherBootstrapResult> {
@@ -101,48 +125,99 @@ export async function bootstrapLauncher(
   const shouldManageEngine = options.manageEngine !== false
 
   let engineHandle: OpenCodeEngineLifecycleHandle | null = null
-  let engineStatus: OpenCodeEngineStatus = createDisabledEngineStatus(
+  let currentEngineStatus: OpenCodeEngineStatus = createDisabledEngineStatus(
     'OpenCode lifecycle manager was not started for this launcher bootstrap.'
   )
 
+  const engineOptions = resolveEngineOptions(context.repoPath, options.engine)
+
   if (shouldManageEngine) {
-    engineHandle = await startOpenCodeEngineLifecycle(resolveEngineOptions(context.repoPath, options.engine))
-    engineStatus = engineHandle.getStatus()
+    engineHandle = await startOpenCodeEngineLifecycle(engineOptions)
+    currentEngineStatus = engineHandle.getStatus()
   }
 
-  const capabilities = detectLauncherCapabilities(engineStatus)
+  const getRuntimeState = (): RuntimeHostState => {
+    if (engineHandle) {
+      currentEngineStatus = engineHandle.getStatus()
+    }
 
-  const launcherPayload: LauncherHostState = {
-    context,
-    engine: engineStatus,
-    capabilities,
-    warnings: [],
-    contract: HOST_BOUNDARY_CONTRACT
+    return {
+      mode: 'launcher',
+      launcher: buildLauncherPayload(context, currentEngineStatus)
+    }
   }
 
-  launcherPayload.warnings = buildWarnings(launcherPayload)
+  let actionInFlight: Promise<RuntimeHostState> | null = null
 
+  const restartEngine = async (action: LauncherControlAction): Promise<RuntimeHostState> => {
+    if (!shouldManageEngine) {
+      throw new Error('Launcher engine lifecycle is disabled for this session.')
+    }
+
+    if (action === 'retry') {
+      const snapshot = getRuntimeState()
+      if (snapshot.launcher?.engine.state === 'healthy') {
+        return snapshot
+      }
+    }
+
+    if (engineHandle) {
+      currentEngineStatus = await engineHandle.stop(`launcher action: ${action}`)
+    }
+
+    engineHandle = await startOpenCodeEngineLifecycle(engineOptions)
+    currentEngineStatus = engineHandle.getStatus()
+    return getRuntimeState()
+  }
+
+  const runAction = async (action: LauncherControlAction): Promise<RuntimeHostState> => {
+    if (actionInFlight) {
+      return await actionInFlight
+    }
+
+    actionInFlight = (async () => {
+      return await restartEngine(action)
+    })().finally(() => {
+      actionInFlight = null
+    })
+
+    return await actionInFlight
+  }
+
+  const controlServer: LauncherControlServerHandle = await startLauncherControlServer({
+    getState: getRuntimeState,
+    runAction
+  })
+
+  const initialRuntimeState = getRuntimeState()
+  const capabilities = initialRuntimeState.launcher?.capabilities || []
   const unavailableCount = capabilities.filter((capability) => !capability.available).length
 
   const logLines = [
     `Launcher context resolved: repo=${context.repoName} (${context.repoId})`,
     `Launcher PRD context: ${context.prdSlug || '<none>'} (${context.prdSource})`,
-    `OpenCode engine state: ${engineStatus.state}${engineStatus.endpoint ? ` (${engineStatus.endpoint})` : ''}`,
-    `Launcher capabilities: ${capabilities.length - unavailableCount}/${capabilities.length} available`
+    `OpenCode engine state: ${currentEngineStatus.state}${currentEngineStatus.endpoint ? ` (${currentEngineStatus.endpoint})` : ''}`,
+    `Launcher capabilities: ${capabilities.length - unavailableCount}/${capabilities.length} available`,
+    `Launcher control endpoint: ${controlServer.url}`
   ]
 
   return {
-    runtime: {
-      mode: 'launcher',
-      launcher: launcherPayload
-    },
+    runtime: initialRuntimeState,
     logLines,
+    control: {
+      url: controlServer.url,
+      token: controlServer.token
+    },
     shutdown: async () => {
-      if (!engineHandle) {
-        return
-      }
+      try {
+        await controlServer.close()
+      } finally {
+        if (!engineHandle) {
+          return
+        }
 
-      await engineHandle.stop('launcher ui exit')
+        currentEngineStatus = await engineHandle.stop('launcher ui exit')
+      }
     }
   }
 }

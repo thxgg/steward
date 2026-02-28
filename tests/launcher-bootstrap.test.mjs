@@ -84,12 +84,26 @@ test('launcher bootstrap resolves actionable PRD context and exposes capability 
       prdSlug: 'beta',
       manageEngine: false
     })
+
     assert.equal(bootstrap.runtime.mode, 'launcher')
     assert.ok(bootstrap.runtime.launcher)
+    assert.ok(bootstrap.control.url.startsWith('http://127.0.0.1:'))
+    assert.ok(typeof bootstrap.control.token === 'string' && bootstrap.control.token.length > 0)
+
     assert.equal(bootstrap.runtime.launcher.context?.prdSlug, 'beta')
     assert.equal(bootstrap.runtime.launcher.context?.prdSource, 'explicit')
     assert.equal(bootstrap.runtime.launcher.engine.state, 'stopped')
     assert.match(bootstrap.runtime.launcher.engine.message, /not started/i)
+
+    const controlStateResponse = await fetch(`${bootstrap.control.url}/state`, {
+      headers: {
+        'x-steward-launcher-token': bootstrap.control.token
+      }
+    })
+    assert.equal(controlStateResponse.status, 200)
+    const controlStateBody = await controlStateResponse.json()
+    assert.equal(controlStateBody.ok, true)
+    assert.equal(controlStateBody.result.mode, 'launcher')
 
     const capabilities = bootstrap.runtime.launcher.capabilities
     const workspaceCapability = capabilities.find((capability) => capability.id === 'workspaceContext')
