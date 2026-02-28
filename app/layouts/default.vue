@@ -202,9 +202,12 @@ useFileWatch((event) => {
       </ClientOnly>
 
       <!-- Main content -->
-      <main class="flex-1 overflow-auto">
+      <main class="flex flex-1 flex-col overflow-auto">
         <LayoutLauncherBanner />
-        <slot />
+        <div class="flex-1">
+          <slot />
+        </div>
+        <LayoutLauncherTerminal />
       </main>
     </div>
   </div>

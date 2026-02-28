@@ -6,7 +6,13 @@ import type {
   SessionBridgeEventsResult,
   SessionBridgeMessageInput,
   SessionBridgeMessageResult,
-  SessionBridgeStatus
+  SessionBridgeStatus,
+  TerminalAttachResult,
+  TerminalBridgeStatus,
+  TerminalDetachResult,
+  TerminalInputResult,
+  TerminalOutputResult,
+  TerminalResizeResult
 } from '../../app/types/launcher.js'
 
 type ControlResponse<T> = {
@@ -164,6 +170,74 @@ export async function fetchLauncherSessionEvents(cursor?: string | null): Promis
 
   try {
     return await controlRequest<SessionBridgeEventsResult>(`/session/events${query}`, {
+      method: 'GET'
+    })
+  } catch (error) {
+    throw normalizeError(error)
+  }
+}
+
+export async function fetchLauncherTerminalState(): Promise<TerminalBridgeStatus> {
+  try {
+    return await controlRequest<TerminalBridgeStatus>('/terminal/state', {
+      method: 'GET'
+    })
+  } catch (error) {
+    throw normalizeError(error)
+  }
+}
+
+export async function invokeLauncherTerminalAttach(options: { rows?: number; cols?: number } = {}): Promise<TerminalAttachResult> {
+  try {
+    return await controlRequest<TerminalAttachResult>('/terminal/attach', {
+      method: 'POST',
+      body: JSON.stringify(options)
+    })
+  } catch (error) {
+    throw normalizeError(error)
+  }
+}
+
+export async function invokeLauncherTerminalDetach(reason?: string): Promise<TerminalDetachResult> {
+  try {
+    return await controlRequest<TerminalDetachResult>('/terminal/detach', {
+      method: 'POST',
+      body: JSON.stringify({ reason })
+    })
+  } catch (error) {
+    throw normalizeError(error)
+  }
+}
+
+export async function invokeLauncherTerminalInput(input: string): Promise<TerminalInputResult> {
+  try {
+    return await controlRequest<TerminalInputResult>('/terminal/input', {
+      method: 'POST',
+      body: JSON.stringify({ input })
+    })
+  } catch (error) {
+    throw normalizeError(error)
+  }
+}
+
+export async function invokeLauncherTerminalResize(rows: number, cols: number): Promise<TerminalResizeResult> {
+  try {
+    return await controlRequest<TerminalResizeResult>('/terminal/resize', {
+      method: 'POST',
+      body: JSON.stringify({ rows, cols })
+    })
+  } catch (error) {
+    throw normalizeError(error)
+  }
+}
+
+export async function fetchLauncherTerminalOutput(cursor?: string | null): Promise<TerminalOutputResult> {
+  const query = cursor && cursor.trim().length > 0
+    ? `?cursor=${encodeURIComponent(cursor.trim())}`
+    : ''
+
+  try {
+    return await controlRequest<TerminalOutputResult>(`/terminal/output${query}`, {
       method: 'GET'
     })
   } catch (error) {

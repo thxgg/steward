@@ -2,7 +2,8 @@ import { spawnSync } from 'node:child_process'
 import type {
   HostCapabilityFlag,
   OpenCodeEngineStatus,
-  SessionBridgeStatus
+  SessionBridgeStatus,
+  TerminalBridgeStatus
 } from '../../../app/types/launcher.js'
 
 function commandAvailable(command: string, args: string[] = ['--version']): boolean {
@@ -123,14 +124,53 @@ function describeWorkflowActions(session: SessionBridgeStatus): {
   }
 }
 
+function describeTerminalEmbedding(terminal: TerminalBridgeStatus): {
+  available: boolean
+  detail: string
+  action?: string
+} {
+  if (terminal.state === 'attached') {
+    return {
+      available: true,
+      detail: `libghostty terminal is attached at ${terminal.rows}x${terminal.cols}.`
+    }
+  }
+
+  if (terminal.state === 'detached') {
+    return {
+      available: true,
+      detail: `libghostty terminal is available (${terminal.rows}x${terminal.cols}) and currently detached.`,
+      action: 'Attach terminal to start interactive session I/O.'
+    }
+  }
+
+  if (terminal.state === 'degraded') {
+    return {
+      available: false,
+      detail: terminal.message,
+      action: terminal.diagnostics[0]
+        ? `Review terminal diagnostics: ${terminal.diagnostics[0]}`
+        : 'Reconnect engine/session bridge and reattach terminal.'
+    }
+  }
+
+  return {
+    available: false,
+    detail: terminal.message,
+    action: 'libghostty terminal has no fallback renderer; wait for terminal bridge readiness.'
+  }
+}
+
 export function detectLauncherCapabilities(
   engine: OpenCodeEngineStatus,
-  session: SessionBridgeStatus
+  session: SessionBridgeStatus,
+  terminal: TerminalBridgeStatus
 ): HostCapabilityFlag[] {
   const hasOpenCodeCli = commandAvailable('opencode')
   const engineLifecycle = describeEngineLifecycle(engine)
   const sessionBridge = describeSessionBridge(session)
   const workflowActions = describeWorkflowActions(session)
+  const terminalEmbedding = describeTerminalEmbedding(terminal)
 
   return [
     {
@@ -174,9 +214,9 @@ export function detectLauncherCapabilities(
     {
       id: 'terminalEmbedding',
       label: 'libghostty terminal embedding',
-      available: false,
-      detail: 'Terminal embedding via libghostty is not wired yet.',
-      action: 'Use an external terminal attached to your OpenCode session until terminal integration is implemented.'
+      available: terminalEmbedding.available,
+      detail: terminalEmbedding.detail,
+      action: terminalEmbedding.action
     }
   ]
 }

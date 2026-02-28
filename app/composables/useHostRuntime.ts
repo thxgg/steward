@@ -4,7 +4,9 @@ import type {
   LauncherHostState,
   LauncherResolvedContext,
   HostCapabilityFlag,
-  OpenCodeEngineStatus
+  OpenCodeEngineStatus,
+  SessionBridgeStatus,
+  TerminalBridgeStatus
 } from '~/types/launcher'
 
 function createDefaultHostState(): RuntimeHostState {
@@ -33,6 +35,34 @@ function createDefaultEngineStatus(): OpenCodeEngineStatus {
   }
 }
 
+function createDefaultSessionStatus(): SessionBridgeStatus {
+  return {
+    state: 'disabled',
+    activeSessionId: null,
+    source: 'none',
+    workspaceKey: 'unbound',
+    endpoint: null,
+    lastResolvedAt: new Date(0).toISOString(),
+    message: 'Session bridge is not active in this runtime mode.',
+    diagnostics: []
+  }
+}
+
+function createDefaultTerminalStatus(): TerminalBridgeStatus {
+  return {
+    renderer: 'libghostty',
+    state: 'disabled',
+    sessionId: null,
+    rows: 24,
+    cols: 80,
+    scrollbackLimit: 1000,
+    attachedAt: null,
+    detachedAt: null,
+    message: 'libghostty terminal bridge is not active in this runtime mode.',
+    diagnostics: []
+  }
+}
+
 export function useHostRuntime() {
   const { data, status, error, refresh } = useFetch<RuntimeInfo>('/api/runtime', {
     key: 'host-runtime',
@@ -53,6 +83,8 @@ export function useHostRuntime() {
 
   const hostContext = computed<LauncherResolvedContext | null>(() => launcherState.value?.context || null)
   const engineStatus = computed<OpenCodeEngineStatus>(() => launcherState.value?.engine || createDefaultEngineStatus())
+  const sessionStatus = computed<SessionBridgeStatus>(() => launcherState.value?.session || createDefaultSessionStatus())
+  const terminalStatus = computed<TerminalBridgeStatus>(() => launcherState.value?.terminal || createDefaultTerminalStatus())
   const capabilities = computed<HostCapabilityFlag[]>(() => launcherState.value?.capabilities || [])
   const unavailableCapabilities = computed<HostCapabilityFlag[]>(() => {
     return capabilities.value.filter((capability) => !capability.available)
@@ -66,6 +98,8 @@ export function useHostRuntime() {
     launcherState,
     hostContext,
     engineStatus,
+    sessionStatus,
+    terminalStatus,
     capabilities,
     unavailableCapabilities,
     warnings,

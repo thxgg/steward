@@ -10,6 +10,8 @@ import type {
   SessionBridgeState,
   SessionBridgeStatus,
   SessionSelectionSource,
+  TerminalBridgeState,
+  TerminalBridgeStatus,
   RuntimeHostState
 } from '~~/app/types/launcher'
 import { fetchLauncherRuntimeState, toLauncherUiError } from '~~/server/utils/launcher-control'
@@ -46,6 +48,13 @@ const VALID_SESSION_SOURCES = new Set<SessionSelectionSource>([
   'none'
 ])
 
+const VALID_TERMINAL_STATES = new Set<TerminalBridgeState>([
+  'attached',
+  'detached',
+  'degraded',
+  'disabled'
+])
+
 const DEFAULT_HOST_CONTRACT: HostBoundaryContract = {
   host: [],
   ui: []
@@ -70,6 +79,19 @@ const DEFAULT_SESSION_STATUS: SessionBridgeStatus = {
   endpoint: null,
   lastResolvedAt: new Date(0).toISOString(),
   message: 'Session bridge status is unavailable in this runtime.',
+  diagnostics: []
+}
+
+const DEFAULT_TERMINAL_STATUS: TerminalBridgeStatus = {
+  renderer: 'libghostty',
+  state: 'disabled',
+  sessionId: null,
+  rows: 24,
+  cols: 80,
+  scrollbackLimit: 1000,
+  attachedAt: null,
+  detachedAt: null,
+  message: 'libghostty terminal status is unavailable in this runtime.',
   diagnostics: []
 }
 
@@ -246,6 +268,53 @@ function parseSessionStatus(value: unknown): SessionBridgeStatus {
   }
 }
 
+function parseTerminalStatus(value: unknown): TerminalBridgeStatus {
+  if (!isRecord(value)) {
+    return DEFAULT_TERMINAL_STATUS
+  }
+
+  const state = typeof value.state === 'string' && VALID_TERMINAL_STATES.has(value.state as TerminalBridgeState)
+    ? value.state as TerminalBridgeState
+    : DEFAULT_TERMINAL_STATUS.state
+  const sessionId = typeof value.sessionId === 'string' && value.sessionId.trim().length > 0
+    ? value.sessionId.trim()
+    : null
+  const rows = typeof value.rows === 'number' && Number.isFinite(value.rows) && value.rows > 0
+    ? Math.floor(value.rows)
+    : DEFAULT_TERMINAL_STATUS.rows
+  const cols = typeof value.cols === 'number' && Number.isFinite(value.cols) && value.cols > 0
+    ? Math.floor(value.cols)
+    : DEFAULT_TERMINAL_STATUS.cols
+  const scrollbackLimit = typeof value.scrollbackLimit === 'number'
+    && Number.isFinite(value.scrollbackLimit)
+    && value.scrollbackLimit > 0
+    ? Math.floor(value.scrollbackLimit)
+    : DEFAULT_TERMINAL_STATUS.scrollbackLimit
+  const attachedAt = typeof value.attachedAt === 'string' && value.attachedAt.trim().length > 0
+    ? value.attachedAt.trim()
+    : null
+  const detachedAt = typeof value.detachedAt === 'string' && value.detachedAt.trim().length > 0
+    ? value.detachedAt.trim()
+    : null
+  const message = typeof value.message === 'string' && value.message.trim().length > 0
+    ? value.message.trim()
+    : DEFAULT_TERMINAL_STATUS.message
+  const diagnostics = toStringArray(value.diagnostics)
+
+  return {
+    renderer: 'libghostty',
+    state,
+    sessionId,
+    rows,
+    cols,
+    scrollbackLimit,
+    attachedAt,
+    detachedAt,
+    message,
+    diagnostics
+  }
+}
+
 function parseLauncherPayload(value: unknown): LauncherHostState | null {
   if (!isRecord(value)) {
     return null
@@ -260,12 +329,14 @@ function parseLauncherPayload(value: unknown): LauncherHostState | null {
   const context = parseContext(value.context)
   const engine = parseEngineStatus(value.engine)
   const session = parseSessionStatus(value.session)
+  const terminal = parseTerminalStatus(value.terminal)
   const contract = parseContract(value.contract)
 
   return {
     context,
     engine,
     session,
+    terminal,
     capabilities,
     warnings,
     contract
@@ -293,6 +364,12 @@ function withControlWarning(
         message: warningMessage,
         diagnostics: []
       },
+      terminal: {
+        ...DEFAULT_TERMINAL_STATUS,
+        state: 'degraded',
+        message: warningMessage,
+        diagnostics: []
+      },
       capabilities: [],
       warnings: [warningMessage],
       contract: DEFAULT_HOST_CONTRACT
@@ -316,6 +393,13 @@ function withControlWarning(
           ...launcherPayload.session,
           state: 'degraded',
           lastResolvedAt: new Date().toISOString(),
+          message: warningMessage
+        },
+    terminal: launcherPayload.terminal.state === 'degraded'
+      ? launcherPayload.terminal
+      : {
+          ...launcherPayload.terminal,
+          state: 'degraded',
           message: warningMessage
         }
   }

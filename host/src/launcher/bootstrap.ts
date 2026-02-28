@@ -6,6 +6,12 @@ import type {
   SessionBridgeMessageInput,
   SessionBridgeMessageResult,
   SessionBridgeStatus,
+  TerminalAttachResult,
+  TerminalBridgeStatus,
+  TerminalDetachResult,
+  TerminalInputResult,
+  TerminalOutputResult,
+  TerminalResizeResult,
   RuntimeHostState
 } from '../../../app/types/launcher.js'
 import { detectLauncherCapabilities } from './capabilities.js'
@@ -19,6 +25,7 @@ import {
 } from './engine-lifecycle.js'
 import { startLauncherControlServer, type LauncherControlServerHandle } from './control-server.js'
 import { startSessionBridge } from './session-bridge.js'
+import { createLauncherTerminalBridge, type LauncherTerminalBridgeHandle } from './terminal-bridge.js'
 
 const DEFAULT_ENGINE_ARGS = ['serve']
 
@@ -107,20 +114,26 @@ function buildWarnings(payload: LauncherHostState): string[] {
     warnings.push(payload.session.message)
   }
 
+  if (payload.terminal.state === 'degraded') {
+    warnings.push(payload.terminal.message)
+  }
+
   return [...new Set(warnings)]
 }
 
 function buildLauncherPayload(
   context: LauncherHostState['context'],
   engine: OpenCodeEngineStatus,
-  session: SessionBridgeStatus
+  session: SessionBridgeStatus,
+  terminal: TerminalBridgeStatus
 ): LauncherHostState {
-  const capabilities = detectLauncherCapabilities(engine, session)
+  const capabilities = detectLauncherCapabilities(engine, session, terminal)
 
   const payload: LauncherHostState = {
     context,
     engine,
     session,
+    terminal,
     capabilities,
     warnings: [],
     contract: HOST_BOUNDARY_CONTRACT
@@ -150,9 +163,22 @@ export async function bootstrapLauncher(
     message: 'Session bridge is waiting for an active OpenCode engine endpoint.',
     diagnostics: []
   }
+  let currentTerminalStatus: TerminalBridgeStatus = {
+    renderer: 'libghostty',
+    state: 'disabled',
+    sessionId: null,
+    rows: 24,
+    cols: 80,
+    scrollbackLimit: 1000,
+    attachedAt: null,
+    detachedAt: null,
+    message: 'libghostty terminal bridge is waiting for session routing.',
+    diagnostics: []
+  }
 
   let sendSessionMessage: ((input: SessionBridgeMessageInput) => Promise<SessionBridgeMessageResult>) | null = null
   let fetchSessionEvents: ((cursor?: string | null) => Promise<SessionBridgeEventsResult>) | null = null
+  let terminalBridge: LauncherTerminalBridgeHandle | null = null
 
   const engineOptions = resolveEngineOptions(context.repoPath, options.engine)
 
@@ -190,21 +216,68 @@ export async function bootstrapLauncher(
     fetchSessionEvents = sessionBridge.fetchEvents
   }
 
+  const resolveTerminalBridge = (): void => {
+    const previousRows = currentTerminalStatus.rows
+    const previousCols = currentTerminalStatus.cols
+    const previousScrollback = currentTerminalStatus.scrollbackLimit
+
+    terminalBridge = createLauncherTerminalBridge({
+      getSessionStatus: () => currentSessionStatus,
+      sendSessionMessage: async (input) => {
+        if (!sendSessionMessage) {
+          throw new Error('Session bridge transport is not available')
+        }
+
+        return await sendSessionMessage(input)
+      },
+      fetchSessionEvents: async (cursor) => {
+        if (!fetchSessionEvents) {
+          throw new Error('Session bridge transport is not available')
+        }
+
+        return await fetchSessionEvents(cursor)
+      },
+      rows: previousRows,
+      cols: previousCols,
+      scrollbackLimit: previousScrollback
+    })
+
+    currentTerminalStatus = terminalBridge.getStatus()
+  }
+
+  const attachTerminalBaseline = async (): Promise<void> => {
+    if (!terminalBridge) {
+      return
+    }
+
+    const result = await terminalBridge.attach({
+      rows: currentTerminalStatus.rows,
+      cols: currentTerminalStatus.cols
+    })
+    currentTerminalStatus = result.terminal
+  }
+
   if (shouldManageEngine) {
     engineHandle = await startOpenCodeEngineLifecycle(engineOptions)
     currentEngineStatus = engineHandle.getStatus()
   }
 
   await resolveSessionBridge()
+  resolveTerminalBridge()
+  await attachTerminalBaseline()
 
   const getRuntimeState = (): RuntimeHostState => {
     if (engineHandle) {
       currentEngineStatus = engineHandle.getStatus()
     }
 
+    if (terminalBridge) {
+      currentTerminalStatus = terminalBridge.getStatus()
+    }
+
     return {
       mode: 'launcher',
-      launcher: buildLauncherPayload(context, currentEngineStatus, currentSessionStatus)
+      launcher: buildLauncherPayload(context, currentEngineStatus, currentSessionStatus, currentTerminalStatus)
     }
   }
 
@@ -229,6 +302,8 @@ export async function bootstrapLauncher(
     engineHandle = await startOpenCodeEngineLifecycle(engineOptions)
     currentEngineStatus = engineHandle.getStatus()
     await resolveSessionBridge()
+    resolveTerminalBridge()
+    await attachTerminalBaseline()
     return getRuntimeState()
   }
 
@@ -263,6 +338,58 @@ export async function bootstrapLauncher(
       }
 
       return await fetchSessionEvents(cursor)
+    },
+    getTerminalState: () => {
+      if (terminalBridge) {
+        currentTerminalStatus = terminalBridge.getStatus()
+      }
+
+      return currentTerminalStatus
+    },
+    attachTerminal: async (attachOptions): Promise<TerminalAttachResult> => {
+      if (!terminalBridge) {
+        throw new Error('Terminal bridge is not available')
+      }
+
+      const result = await terminalBridge.attach(attachOptions)
+      currentTerminalStatus = result.terminal
+      return result
+    },
+    detachTerminal: async (reason): Promise<TerminalDetachResult> => {
+      if (!terminalBridge) {
+        throw new Error('Terminal bridge is not available')
+      }
+
+      const result = await terminalBridge.detach(reason)
+      currentTerminalStatus = result.terminal
+      return result
+    },
+    sendTerminalInput: async (input): Promise<TerminalInputResult> => {
+      if (!terminalBridge) {
+        throw new Error('Terminal bridge is not available')
+      }
+
+      const result = await terminalBridge.sendInput(input)
+      currentTerminalStatus = result.terminal
+      return result
+    },
+    resizeTerminal: async (rows, cols): Promise<TerminalResizeResult> => {
+      if (!terminalBridge) {
+        throw new Error('Terminal bridge is not available')
+      }
+
+      const result = await terminalBridge.resize(rows, cols)
+      currentTerminalStatus = result.terminal
+      return result
+    },
+    fetchTerminalOutput: async (cursor): Promise<TerminalOutputResult> => {
+      if (!terminalBridge) {
+        throw new Error('Terminal bridge is not available')
+      }
+
+      const result = await terminalBridge.fetchOutput(cursor)
+      currentTerminalStatus = result.terminal
+      return result
     }
   })
 
@@ -275,6 +402,7 @@ export async function bootstrapLauncher(
     `Launcher PRD context: ${context.prdSlug || '<none>'} (${context.prdSource})`,
     `OpenCode engine state: ${currentEngineStatus.state}${currentEngineStatus.endpoint ? ` (${currentEngineStatus.endpoint})` : ''}`,
     `Session bridge state: ${currentSessionStatus.state}${currentSessionStatus.activeSessionId ? ` (${currentSessionStatus.activeSessionId})` : ''}`,
+    `Terminal bridge state: ${currentTerminalStatus.state}${currentTerminalStatus.sessionId ? ` (${currentTerminalStatus.sessionId})` : ''}`,
     `Launcher capabilities: ${capabilities.length - unavailableCount}/${capabilities.length} available`,
     `Launcher control endpoint: ${controlServer.url}`
   ]

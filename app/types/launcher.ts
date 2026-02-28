@@ -142,6 +142,100 @@ export interface SessionBridgeEventsResult {
 }
 
 /**
+ * Terminal renderer selection for launcher mode
+ */
+export type TerminalRenderer = 'libghostty'
+
+/**
+ * Embedded terminal lifecycle state
+ */
+export type TerminalBridgeState = 'attached' | 'detached' | 'degraded' | 'disabled'
+
+/**
+ * Embedded terminal stream channel
+ */
+export type TerminalOutputChannel = 'stdout' | 'stderr' | 'system'
+
+/**
+ * Terminal output event returned by host bridge
+ */
+export interface TerminalOutputEvent {
+  /** Monotonic terminal event id */
+  id: string
+  /** Stream channel for this event */
+  channel: TerminalOutputChannel
+  /** Renderable output text */
+  text: string
+  /** Event timestamp */
+  timestamp: string
+}
+
+/**
+ * Current embedded terminal state from host bridge
+ */
+export interface TerminalBridgeStatus {
+  /** Renderer implementation */
+  renderer: TerminalRenderer
+  /** Current terminal bridge state */
+  state: TerminalBridgeState
+  /** Session id currently bound to terminal */
+  sessionId: string | null
+  /** Terminal row count */
+  rows: number
+  /** Terminal column count */
+  cols: number
+  /** Maximum retained scrollback lines */
+  scrollbackLimit: number
+  /** Last attach timestamp */
+  attachedAt: string | null
+  /** Last detach timestamp */
+  detachedAt: string | null
+  /** Human-readable terminal status summary */
+  message: string
+  /** Diagnostics for degraded/disabled terminal bridge */
+  diagnostics: string[]
+}
+
+/**
+ * Terminal attach response payload
+ */
+export interface TerminalAttachResult {
+  terminal: TerminalBridgeStatus
+}
+
+/**
+ * Terminal detach response payload
+ */
+export interface TerminalDetachResult {
+  terminal: TerminalBridgeStatus
+}
+
+/**
+ * Terminal input dispatch result
+ */
+export interface TerminalInputResult {
+  terminal: TerminalBridgeStatus
+  accepted: boolean
+  requestId: string | null
+}
+
+/**
+ * Terminal resize result payload
+ */
+export interface TerminalResizeResult {
+  terminal: TerminalBridgeStatus
+}
+
+/**
+ * Terminal output polling result payload
+ */
+export interface TerminalOutputResult {
+  terminal: TerminalBridgeStatus
+  events: TerminalOutputEvent[]
+  cursor: string | null
+}
+
+/**
  * One capability flag from host -> UI handshake
  */
 export interface HostCapabilityFlag {
@@ -198,6 +292,8 @@ export interface LauncherHostState {
   engine: OpenCodeEngineStatus
   /** Active OpenCode session bridge status */
   session: SessionBridgeStatus
+  /** Embedded terminal bridge status */
+  terminal: TerminalBridgeStatus
   /** Capability availability surfaced by host */
   capabilities: HostCapabilityFlag[]
   /** Non-fatal bootstrap warnings */
