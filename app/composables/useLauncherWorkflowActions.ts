@@ -5,8 +5,13 @@ import type {
   SessionBridgeEventsResult,
   SessionBridgeMessageResult
 } from '~/types/launcher'
+import {
+  buildWorkflowCommand,
+  canDispatchWorkflowAction,
+  type WorkflowActionKind
+} from '~/lib/launcher-workflow'
 
-export type WorkflowActionKind = 'break_into_tasks' | 'complete_next_task'
+export type { WorkflowActionKind } from '~/lib/launcher-workflow'
 
 type WorkflowStatus = 'idle' | 'running' | 'success' | 'error'
 
@@ -31,16 +36,6 @@ function createInitialState(): WorkflowRunState {
     requestId: null,
     updatedAt: null
   }
-}
-
-function buildWorkflowCommand(action: WorkflowActionKind, prdSlug: string): string {
-  const normalizedSlug = prdSlug.trim()
-
-  if (action === 'break_into_tasks') {
-    return `/steward:break_into_tasks ${normalizedSlug}`
-  }
-
-  return `/steward:complete_next_task ${normalizedSlug}`
 }
 
 function normalizeErrorKind(value: unknown): LauncherUiErrorKind {
@@ -171,7 +166,7 @@ export function useLauncherWorkflowActions() {
       return
     }
 
-    if (inFlightAction.value) {
+    if (!canDispatchWorkflowAction(inFlightAction.value)) {
       return
     }
 

@@ -217,7 +217,12 @@ export function createLauncherTerminalBridge(
       return session
     }
 
-    if ((state === 'disabled' || state === 'degraded') && !requiresReattach) {
+    if (requiresReattach) {
+      wasAttachedBeforeUnavailable = false
+      return session
+    }
+
+    if (state === 'disabled' || state === 'degraded') {
       if (wasAttachedBeforeUnavailable) {
         state = 'attached'
         attachedAt = nowIso()

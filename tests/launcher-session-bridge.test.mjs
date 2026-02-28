@@ -40,6 +40,7 @@ async function withSessionBridgeServer() {
   const state = {
     sessions: [],
     created: 0,
+    messages: [],
     messagePaths: [],
     eventPaths: []
   }
@@ -71,6 +72,7 @@ async function withSessionBridgeServer() {
     if (request.method === 'POST' && requestUrl.pathname.startsWith('/api/sessions/') && requestUrl.pathname.endsWith('/messages')) {
       state.messagePaths.push(requestUrl.pathname)
       const body = await parseJsonBody(request)
+      state.messages.push(body)
 
       response.statusCode = 200
       response.setHeader('content-type', 'application/json')
@@ -180,6 +182,7 @@ test('session bridge routes message and event traffic to active session identity
 
   try {
     const { startSessionBridge } = await import('../dist/host/src/launcher/session-bridge.js')
+    const { buildWorkflowCommand } = await import('../dist/app/lib/launcher-workflow.js')
 
     const bridge = await startSessionBridge({
       endpoint: server.endpoint,
@@ -194,18 +197,33 @@ test('session bridge routes message and event traffic to active session identity
     assert.equal(status.source, 'explicit')
     assert.equal(server.state.created, 0)
 
+    const breakCommand = buildWorkflowCommand('break_into_tasks', 'demo-prd')
+    const completeCommand = buildWorkflowCommand('complete_next_task', 'demo-prd')
+
     const messageResult = await bridge.sendMessage({
       role: 'user',
-      content: 'hello world'
+      content: breakCommand
     })
     assert.equal(messageResult.accepted, true)
     assert.equal(messageResult.sessionId, status.activeSessionId)
+
+    const secondMessageResult = await bridge.sendMessage({
+      role: 'user',
+      content: completeCommand
+    })
+    assert.equal(secondMessageResult.accepted, true)
+    assert.equal(secondMessageResult.sessionId, status.activeSessionId)
 
     const eventsResult = await bridge.fetchEvents('cursor-0')
     assert.equal(eventsResult.sessionId, status.activeSessionId)
     assert.equal(eventsResult.events.length, 1)
     assert.equal(eventsResult.cursor, 'cursor-next')
 
+    assert.equal(server.state.messages.length, 2)
+    assert.deepEqual(server.state.messages.map((entry) => entry.content), [
+      breakCommand,
+      completeCommand
+    ])
     assert.ok(server.state.messagePaths.every((path) => path.includes(status.activeSessionId)))
     assert.ok(server.state.eventPaths.every((path) => path.includes(status.activeSessionId)))
   } finally {

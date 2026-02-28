@@ -192,6 +192,68 @@ test('engine lifecycle falls back to managed process and stops owned child on sh
   }
 })
 
+test('engine lifecycle reports degraded when managed process misses startup timeout', async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), 'steward-engine-timeout-'))
+
+  const fakeEnginePath = join(tempRoot, 'fake-opencode-timeout.mjs')
+  await writeFile(
+    fakeEnginePath,
+    [
+      "import { createServer } from 'node:http'",
+      '',
+      'const args = process.argv.slice(2)',
+      "const portIndex = args.indexOf('--port')",
+      'const port = portIndex >= 0 ? Number(args[portIndex + 1]) : 4096',
+      "const host = '127.0.0.1'",
+      '',
+      'const server = createServer((_req, res) => {',
+      '  res.statusCode = 503',
+      "  res.end('not-ready')",
+      '})',
+      '',
+      'const stop = () => {',
+      '  server.close(() => process.exit(0))',
+      '  setTimeout(() => process.exit(0), 200).unref()',
+      '}',
+      '',
+      "process.on('SIGTERM', stop)",
+      "process.on('SIGINT', stop)",
+      '',
+      'server.listen(port, host)',
+      'setInterval(() => {}, 1000)'
+    ].join('\n'),
+    'utf-8'
+  )
+
+  let lifecycle = null
+
+  try {
+    const { startOpenCodeEngineLifecycle } = await import('../dist/host/src/launcher/engine-lifecycle.js')
+
+    lifecycle = await startOpenCodeEngineLifecycle({
+      cwd: tempRoot,
+      localEndpoint: 'http://127.0.0.1:4296',
+      command: process.execPath,
+      args: [fakeEnginePath, 'serve', '--port', '4296'],
+      startupTimeoutMs: 500,
+      healthPollIntervalMs: 100,
+      fetchTimeoutMs: 100
+    })
+
+    const status = lifecycle.getStatus()
+    assert.equal(status.state, 'degraded')
+    assert.equal(status.owned, false)
+    assert.equal(status.endpoint, 'http://127.0.0.1:4296')
+    assert.ok(status.diagnostics.some((entry) => entry.includes('did not become healthy')))
+  } finally {
+    if (lifecycle) {
+      await lifecycle.stop('test cleanup')
+    }
+
+    await rm(tempRoot, { recursive: true, force: true })
+  }
+})
+
 test('engine lifecycle reuses healthy local endpoint to avoid duplicate engine spawn', async () => {
   const tempRoot = await mkdtemp(join(tmpdir(), 'steward-engine-local-reuse-'))
 

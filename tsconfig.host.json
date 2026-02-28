@@ -23,6 +23,7 @@
     "server/utils/sync-schema.ts",
     "server/utils/task-graph.ts",
     "app/lib/async-request.ts",
+    "app/lib/launcher-workflow.ts",
     "app/types/**/*.ts"
   ]
 }

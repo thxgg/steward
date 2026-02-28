@@ -172,3 +172,45 @@ test('terminal bridge automatically reattaches after temporary session unavailab
   assert.equal(recovered.terminal.requiresReattach, false)
   assert.ok(recovered.events.some((event) => event.text.includes('Reattached terminal')))
 })
+
+test('terminal bridge blocks repeated input after bridge session mismatch until reattach', async () => {
+  const { createLauncherTerminalBridge } = await import('../dist/host/src/launcher/terminal-bridge.js')
+
+  const sessionStatus = createReadySessionStatus('sess-1')
+  let sendCallCount = 0
+
+  const bridge = createLauncherTerminalBridge({
+    getSessionStatus: () => sessionStatus,
+    sendSessionMessage: async () => {
+      sendCallCount += 1
+      return {
+        sessionId: 'sess-2',
+        accepted: true,
+        requestId: 'request-mismatch'
+      }
+    },
+    fetchSessionEvents: async () => {
+      return {
+        sessionId: sessionStatus.activeSessionId,
+        events: [],
+        cursor: null
+      }
+    }
+  })
+
+  await bridge.attach()
+
+  await assert.rejects(async () => {
+    await bridge.sendInput('echo one')
+  }, /Session mismatch detected/)
+  assert.equal(sendCallCount, 1)
+
+  await assert.rejects(async () => {
+    await bridge.sendInput('echo two')
+  }, /Confirm terminal reattach/)
+  assert.equal(sendCallCount, 1)
+
+  const status = bridge.getStatus()
+  assert.equal(status.state, 'degraded')
+  assert.equal(status.requiresReattach, true)
+})
