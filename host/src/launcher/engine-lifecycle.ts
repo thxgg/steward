@@ -1,4 +1,5 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { once } from 'node:events'
 import { setTimeout as delay } from 'node:timers/promises'
 import type { OpenCodeEngineStatus } from '../../../app/types/launcher.js'
@@ -43,12 +44,39 @@ function resolveConnectionMode(endpoint: string | null, owned: boolean): 'shared
   return 'external'
 }
 
+function resolveBindingMode(endpoint: string | null): 'localhost' | 'network' | 'unavailable' {
+  if (!endpoint) {
+    return 'unavailable'
+  }
+
+  return isLocalhostEndpoint(endpoint) ? 'localhost' : 'network'
+}
+
+function normalizeAuthToken(value: string | null | undefined): string | null {
+  const trimmed = value?.trim()
+  return trimmed && trimmed.length > 0 ? trimmed : null
+}
+
+function resolveProvidedAuthToken(optionToken: string | null | undefined): string | null {
+  const direct = normalizeAuthToken(optionToken)
+  if (direct) {
+    return direct
+  }
+
+  return normalizeAuthToken(process.env.STEWARD_OPENCODE_AUTH_TOKEN)
+    || normalizeAuthToken(process.env.OPENCODE_AUTH_TOKEN)
+    || normalizeAuthToken(process.env.OPENCODE_API_KEY)
+    || null
+}
+
 export interface OpenCodeEngineLifecycleOptions {
   cwd: string
   configuredEndpoint?: string | null
   localEndpoint?: string
   command?: string
   args?: string[]
+  authToken?: string | null
+  allowRemote?: boolean
   startupTimeoutMs?: number
   healthPollIntervalMs?: number
   fetchTimeoutMs?: number
@@ -57,6 +85,7 @@ export interface OpenCodeEngineLifecycleOptions {
 
 export interface OpenCodeEngineLifecycleHandle {
   getStatus(): OpenCodeEngineStatus
+  getAuthToken(): string | null
   stop(reason?: string): Promise<OpenCodeEngineStatus>
 }
 
@@ -100,7 +129,11 @@ function buildProbeUrls(endpoint: string): string[] {
   })
 }
 
-async function probeEndpoint(endpoint: string, fetchTimeoutMs: number): Promise<ProbeResult> {
+async function probeEndpoint(
+  endpoint: string,
+  fetchTimeoutMs: number,
+  authToken?: string | null
+): Promise<ProbeResult> {
   const urls = buildProbeUrls(endpoint)
   let lastFailure = `No successful response from ${endpoint}`
 
@@ -115,7 +148,8 @@ async function probeEndpoint(endpoint: string, fetchTimeoutMs: number): Promise<
         method: 'GET',
         signal: controller.signal,
         headers: {
-          accept: 'application/json, text/plain, */*'
+          accept: 'application/json, text/plain, */*',
+          ...(authToken ? { authorization: `Bearer ${authToken}` } : {})
         }
       })
 
@@ -202,7 +236,12 @@ function toSafePositiveInt(value: number | undefined, fallbackValue: number): nu
   return Math.floor(value)
 }
 
-function createStoppedStatus(message: string, endpoint: string | null, diagnostics: string[] = []): OpenCodeEngineStatus {
+function createStoppedStatus(
+  message: string,
+  endpoint: string | null,
+  diagnostics: string[] = [],
+  authMode: OpenCodeEngineStatus['authMode'] = 'none'
+): OpenCodeEngineStatus {
   const owned = false
 
   return {
@@ -213,6 +252,8 @@ function createStoppedStatus(message: string, endpoint: string | null, diagnosti
     pid: null,
     instanceKey: toInstanceKey(endpoint),
     connectionMode: resolveConnectionMode(endpoint, owned),
+    bindingMode: resolveBindingMode(endpoint),
+    authMode,
     checkedAt: new Date().toISOString(),
     message,
     diagnostics
@@ -233,16 +274,26 @@ export async function startOpenCodeEngineLifecycle(
   const args = Array.isArray(options.args) && options.args.length > 0
     ? options.args
     : ['serve']
+  const allowRemote = options.allowRemote === true
+
+  const providedAuthToken = resolveProvidedAuthToken(options.authToken)
+  let activeAuthToken: string | null = providedAuthToken
+  let authMode: OpenCodeEngineStatus['authMode'] = providedAuthToken ? 'provided' : 'none'
+
+  const selectedEndpoint = configuredEndpoint || localEndpoint
+  const selectedBindingMode = resolveBindingMode(selectedEndpoint)
 
   let managedProcess: ChildProcess | null = null
   let status: OpenCodeEngineStatus = {
     state: 'starting',
-    endpoint: configuredEndpoint || localEndpoint,
+    endpoint: selectedEndpoint,
     reused: false,
     owned: false,
     pid: null,
-    instanceKey: toInstanceKey(configuredEndpoint || localEndpoint),
-    connectionMode: resolveConnectionMode(configuredEndpoint || localEndpoint, false),
+    instanceKey: toInstanceKey(selectedEndpoint),
+    connectionMode: resolveConnectionMode(selectedEndpoint, false),
+    bindingMode: selectedBindingMode,
+    authMode,
     checkedAt: new Date().toISOString(),
     message: 'Starting OpenCode engine lifecycle manager.',
     diagnostics: []
@@ -288,7 +339,7 @@ export async function startOpenCodeEngineLifecycle(
 
         pollInFlight = true
         try {
-          const probe = await probeEndpoint(endpoint, fetchTimeoutMs)
+          const probe = await probeEndpoint(endpoint, fetchTimeoutMs, activeAuthToken)
           if (probe.healthy) {
             if (status.state !== 'healthy') {
               updateStatus({
@@ -342,7 +393,12 @@ export async function startOpenCodeEngineLifecycle(
 
       managedProcess = null
 
-      status = createStoppedStatus(`OpenCode lifecycle manager stopped (${reason}).`, status.endpoint, status.diagnostics)
+      status = createStoppedStatus(
+        `OpenCode lifecycle manager stopped (${reason}).`,
+        status.endpoint,
+        status.diagnostics,
+        status.authMode
+      )
       return cloneStatus(status)
     })()
 
@@ -351,79 +407,133 @@ export async function startOpenCodeEngineLifecycle(
 
   process.on('exit', forceKillOnExit)
 
-  if (configuredEndpoint) {
-    const configuredProbe = await probeEndpoint(configuredEndpoint, fetchTimeoutMs)
-    if (configuredProbe.healthy) {
-      updateStatus({
-        state: 'healthy',
-        endpoint: configuredEndpoint,
-        reused: true,
-        owned: false,
-        pid: null,
-        instanceKey: toInstanceKey(configuredEndpoint),
-        connectionMode: resolveConnectionMode(configuredEndpoint, false),
-        message: `Reusing healthy OpenCode endpoint at ${configuredEndpoint}.`,
-        diagnostics: []
-      })
-      startBackgroundHealthPoll(configuredEndpoint)
-
-      return {
-        getStatus: () => cloneStatus(status),
-        stop
-      }
+  const lifecycleHandle = (): OpenCodeEngineLifecycleHandle => {
+    return {
+      getStatus: () => cloneStatus(status),
+      getAuthToken: () => activeAuthToken,
+      stop
     }
+  }
 
-    appendDiagnostic(`Configured endpoint ${configuredEndpoint} is unavailable: ${configuredProbe.detail}`)
+  const configuredBindingMode = resolveBindingMode(configuredEndpoint)
+  if (configuredEndpoint) {
+    if (configuredBindingMode === 'network' && !allowRemote) {
+      appendDiagnostic(
+        `Configured endpoint ${configuredEndpoint} is network-visible. Set STEWARD_OPENCODE_ALLOW_REMOTE=1 to opt in.`
+      )
+    } else if (configuredBindingMode === 'network' && !activeAuthToken) {
+      appendDiagnostic(
+        `Configured endpoint ${configuredEndpoint} requires an auth token (set STEWARD_OPENCODE_AUTH_TOKEN).`
+      )
+    } else {
+      const configuredProbe = await probeEndpoint(configuredEndpoint, fetchTimeoutMs, activeAuthToken)
+      if (configuredProbe.healthy) {
+        updateStatus({
+          state: 'healthy',
+          endpoint: configuredEndpoint,
+          reused: true,
+          owned: false,
+          pid: null,
+          instanceKey: toInstanceKey(configuredEndpoint),
+          connectionMode: resolveConnectionMode(configuredEndpoint, false),
+          bindingMode: configuredBindingMode,
+          authMode,
+          message: `Reusing healthy OpenCode endpoint at ${configuredEndpoint}.`,
+          diagnostics: []
+        })
+        startBackgroundHealthPoll(configuredEndpoint)
+
+        return lifecycleHandle()
+      }
+
+      appendDiagnostic(`Configured endpoint ${configuredEndpoint} is unavailable: ${configuredProbe.detail}`)
+    }
   } else if (options.configuredEndpoint) {
     appendDiagnostic(`Configured endpoint is invalid: ${options.configuredEndpoint}`)
   }
 
-  const localProbe = await probeEndpoint(localEndpoint, fetchTimeoutMs)
-  if (localProbe.healthy) {
+  const localBindingMode = resolveBindingMode(localEndpoint)
+  if (localBindingMode === 'network' && !allowRemote) {
+    appendDiagnostic(
+      `Managed local endpoint ${localEndpoint} is network-visible. Set STEWARD_OPENCODE_ALLOW_REMOTE=1 to opt in.`
+    )
+  } else if (localBindingMode === 'network' && !activeAuthToken) {
+    appendDiagnostic(
+      `Local endpoint ${localEndpoint} is network-visible and requires auth before reuse. A managed process token will be generated if spawn is needed.`
+    )
+  } else {
+    const localProbe = await probeEndpoint(localEndpoint, fetchTimeoutMs, activeAuthToken)
+    if (localProbe.healthy) {
+      updateStatus({
+        state: 'healthy',
+        endpoint: localEndpoint,
+        reused: true,
+        owned: false,
+        pid: null,
+        instanceKey: toInstanceKey(localEndpoint),
+        connectionMode: resolveConnectionMode(localEndpoint, false),
+        bindingMode: localBindingMode,
+        authMode,
+        message: `Reusing healthy local OpenCode endpoint at ${localEndpoint} to keep a single shared engine instance.`,
+        diagnostics: []
+      })
+      startBackgroundHealthPoll(localEndpoint)
+
+      return lifecycleHandle()
+    }
+
+    appendDiagnostic(`No reusable local endpoint at ${localEndpoint}: ${localProbe.detail}`)
+  }
+
+  if (localBindingMode === 'network' && !allowRemote) {
     updateStatus({
-      state: 'healthy',
+      state: 'degraded',
       endpoint: localEndpoint,
-      reused: true,
+      reused: false,
       owned: false,
       pid: null,
       instanceKey: toInstanceKey(localEndpoint),
       connectionMode: resolveConnectionMode(localEndpoint, false),
-      message: `Reusing healthy local OpenCode endpoint at ${localEndpoint} to keep a single shared engine instance.`,
-      diagnostics: []
+      bindingMode: localBindingMode,
+      authMode,
+      message: 'Managed engine start blocked: network-visible binding requires explicit opt-in (STEWARD_OPENCODE_ALLOW_REMOTE=1).'
     })
-    startBackgroundHealthPoll(localEndpoint)
 
-    return {
-      getStatus: () => cloneStatus(status),
-      stop
-    }
+    return lifecycleHandle()
   }
-
-  appendDiagnostic(`No reusable local endpoint at ${localEndpoint}: ${localProbe.detail}`)
 
   const commandCheck = commandExists(command)
   if (!commandCheck.available) {
+    const targetEndpoint = configuredEndpoint || localEndpoint
     updateStatus({
       state: 'degraded',
-      endpoint: configuredEndpoint || localEndpoint,
+      endpoint: targetEndpoint,
       reused: false,
       owned: false,
       pid: null,
-      instanceKey: toInstanceKey(configuredEndpoint || localEndpoint),
-      connectionMode: resolveConnectionMode(configuredEndpoint || localEndpoint, false),
+      instanceKey: toInstanceKey(targetEndpoint),
+      connectionMode: resolveConnectionMode(targetEndpoint, false),
+      bindingMode: resolveBindingMode(targetEndpoint),
+      authMode,
       message: 'OpenCode CLI is unavailable and no healthy configured endpoint could be reused.'
     })
     appendDiagnostic(commandCheck.detail)
 
-    return {
-      getStatus: () => cloneStatus(status),
-      stop
-    }
+    return lifecycleHandle()
+  }
+
+  if (!activeAuthToken) {
+    activeAuthToken = randomUUID()
+    authMode = 'generated'
   }
 
   managedProcess = spawn(command, args, {
     cwd: options.cwd,
-    env: process.env,
+    env: {
+      ...process.env,
+      STEWARD_OPENCODE_AUTH_TOKEN: activeAuthToken,
+      OPENCODE_AUTH_TOKEN: activeAuthToken
+    },
     stdio: 'ignore'
   })
 
@@ -441,6 +551,8 @@ export async function startOpenCodeEngineLifecycle(
     pid: managedProcess.pid || null,
     instanceKey: toInstanceKey(localEndpoint),
     connectionMode: resolveConnectionMode(localEndpoint, true),
+    bindingMode: localBindingMode,
+    authMode,
     message: `Starting managed OpenCode engine via ${command} ${args.join(' ')}.`
   })
 
@@ -460,7 +572,7 @@ export async function startOpenCodeEngineLifecycle(
       break
     }
 
-    const probe = await probeEndpoint(localEndpoint, fetchTimeoutMs)
+    const probe = await probeEndpoint(localEndpoint, fetchTimeoutMs, activeAuthToken)
     lastProbeDetail = probe.detail
 
     if (probe.healthy) {
@@ -472,15 +584,14 @@ export async function startOpenCodeEngineLifecycle(
         pid: managedProcess.pid || null,
         instanceKey: toInstanceKey(localEndpoint),
         connectionMode: resolveConnectionMode(localEndpoint, true),
+        bindingMode: localBindingMode,
+        authMode,
         message: `Managed OpenCode engine is healthy at ${localEndpoint}.`,
         diagnostics: []
       })
       startBackgroundHealthPoll(localEndpoint)
 
-      return {
-        getStatus: () => cloneStatus(status),
-        stop
-      }
+      return lifecycleHandle()
     }
 
     await delay(healthPollIntervalMs)
@@ -502,13 +613,12 @@ export async function startOpenCodeEngineLifecycle(
     pid: null,
     instanceKey: toInstanceKey(localEndpoint),
     connectionMode: resolveConnectionMode(localEndpoint, false),
+    bindingMode: localBindingMode,
+    authMode,
     message: `Managed OpenCode engine failed to reach healthy state within ${startupTimeoutMs}ms.`
   })
 
-  return {
-    getStatus: () => cloneStatus(status),
-    stop
-  }
+  return lifecycleHandle()
 }
 
 export function createDisabledEngineStatus(message: string): OpenCodeEngineStatus {

@@ -42,6 +42,16 @@ export type HostCapabilityId =
 export type OpenCodeEngineState = 'starting' | 'healthy' | 'degraded' | 'stopped'
 
 /**
+ * Security binding posture for engine endpoint exposure
+ */
+export type OpenCodeBindingMode = 'localhost' | 'network' | 'unavailable'
+
+/**
+ * Authentication posture for engine access
+ */
+export type OpenCodeAuthMode = 'generated' | 'provided' | 'none'
+
+/**
  * How launcher is connected to the active engine endpoint
  */
 export type OpenCodeConnectionMode = 'shared' | 'external' | 'unavailable'
@@ -64,6 +74,10 @@ export interface OpenCodeEngineStatus {
   instanceKey: string | null
   /** Connection strategy used for current engine endpoint */
   connectionMode: OpenCodeConnectionMode
+  /** Security binding mode for endpoint exposure */
+  bindingMode: OpenCodeBindingMode
+  /** Authentication mode currently configured for engine access */
+  authMode: OpenCodeAuthMode
   /** Last health/status check timestamp */
   checkedAt: string
   /** Human-readable lifecycle status summary */

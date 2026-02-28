@@ -55,6 +55,10 @@ const engineIdentityLabel = computed(() => {
   return `Engine identity: ${status.value.instanceKey}`
 })
 
+const engineSecurityLabel = computed(() => {
+  return `Engine security: binding=${status.value.bindingMode}, auth=${status.value.authMode}`
+})
+
 const sessionLabel = computed(() => {
   const session = launcherState.value?.session
   if (!session) {
@@ -118,6 +122,8 @@ async function handleRestart() {
       </p>
 
       <p class="text-xs text-muted-foreground">{{ engineIdentityLabel }}</p>
+
+      <p class="text-xs text-muted-foreground">{{ engineSecurityLabel }}</p>
 
       <p class="text-xs text-muted-foreground">{{ sessionLabel }}</p>
 

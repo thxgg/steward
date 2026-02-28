@@ -7,6 +7,8 @@ import type {
   LauncherResolvedContext,
   OpenCodeEngineState,
   OpenCodeConnectionMode,
+  OpenCodeBindingMode,
+  OpenCodeAuthMode,
   OpenCodeEngineStatus,
   SessionBridgeState,
   SessionBridgeStatus,
@@ -42,6 +44,18 @@ const VALID_CONNECTION_MODES = new Set<OpenCodeConnectionMode>([
   'unavailable'
 ])
 
+const VALID_BINDING_MODES = new Set<OpenCodeBindingMode>([
+  'localhost',
+  'network',
+  'unavailable'
+])
+
+const VALID_AUTH_MODES = new Set<OpenCodeAuthMode>([
+  'generated',
+  'provided',
+  'none'
+])
+
 const VALID_SESSION_BRIDGE_STATES = new Set<SessionBridgeState>([
   'ready',
   'degraded',
@@ -75,6 +89,8 @@ const DEFAULT_ENGINE_STATUS: OpenCodeEngineStatus = {
   pid: null,
   instanceKey: null,
   connectionMode: 'unavailable',
+  bindingMode: 'unavailable',
+  authMode: 'none',
   checkedAt: new Date(0).toISOString(),
   message: 'OpenCode lifecycle status is unavailable in this runtime.',
   diagnostics: []
@@ -205,6 +221,27 @@ function parseContract(value: unknown): HostBoundaryContract {
   }
 }
 
+function isLocalhostEndpoint(endpoint: string | null): boolean {
+  if (!endpoint) {
+    return false
+  }
+
+  try {
+    const parsed = new URL(endpoint)
+    return parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost'
+  } catch {
+    return false
+  }
+}
+
+function deriveBindingMode(endpoint: string | null): OpenCodeBindingMode {
+  if (!endpoint) {
+    return 'unavailable'
+  }
+
+  return isLocalhostEndpoint(endpoint) ? 'localhost' : 'network'
+}
+
 function parseEngineStatus(value: unknown): OpenCodeEngineStatus {
   if (!isRecord(value)) {
     return DEFAULT_ENGINE_STATUS
@@ -228,6 +265,14 @@ function parseEngineStatus(value: unknown): OpenCodeEngineStatus {
     : instanceKey
       ? 'shared'
       : DEFAULT_ENGINE_STATUS.connectionMode
+  const bindingMode = typeof value.bindingMode === 'string'
+    && VALID_BINDING_MODES.has(value.bindingMode as OpenCodeBindingMode)
+    ? value.bindingMode as OpenCodeBindingMode
+    : deriveBindingMode(endpoint)
+  const authMode = typeof value.authMode === 'string'
+    && VALID_AUTH_MODES.has(value.authMode as OpenCodeAuthMode)
+    ? value.authMode as OpenCodeAuthMode
+    : DEFAULT_ENGINE_STATUS.authMode
   const checkedAt = typeof value.checkedAt === 'string' && value.checkedAt.trim().length > 0
     ? value.checkedAt.trim()
     : new Date().toISOString()
@@ -244,6 +289,8 @@ function parseEngineStatus(value: unknown): OpenCodeEngineStatus {
     pid,
     instanceKey,
     connectionMode,
+    bindingMode,
+    authMode,
     checkedAt,
     message,
     diagnostics

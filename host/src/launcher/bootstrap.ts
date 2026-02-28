@@ -71,6 +71,23 @@ function parseEngineArgs(rawValue: string | undefined): string[] {
   return parsed.length > 0 ? parsed : [...DEFAULT_ENGINE_ARGS]
 }
 
+function parseBooleanFlag(rawValue: string | undefined): boolean | undefined {
+  if (!rawValue) {
+    return undefined
+  }
+
+  const normalized = rawValue.trim().toLowerCase()
+  if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on') {
+    return true
+  }
+
+  if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off') {
+    return false
+  }
+
+  return undefined
+}
+
 function resolveEngineOptions(
   repoPath: string,
   overrides?: Omit<OpenCodeEngineLifecycleOptions, 'cwd'>
@@ -79,6 +96,7 @@ function resolveEngineOptions(
   const localEndpoint = process.env.STEWARD_OPENCODE_LOCAL_URL || process.env.STEWARD_OPENCODE_ENDPOINT || undefined
   const command = process.env.STEWARD_OPENCODE_COMMAND || undefined
   const args = parseEngineArgs(process.env.STEWARD_OPENCODE_ARGS)
+  const allowRemote = parseBooleanFlag(process.env.STEWARD_OPENCODE_ALLOW_REMOTE)
 
   const startupTimeoutMs = parsePositiveInt(process.env.STEWARD_OPENCODE_STARTUP_TIMEOUT_MS)
   const healthPollIntervalMs = parsePositiveInt(process.env.STEWARD_OPENCODE_HEALTH_POLL_INTERVAL_MS)
@@ -91,6 +109,7 @@ function resolveEngineOptions(
     localEndpoint,
     command,
     args,
+    allowRemote,
     startupTimeoutMs,
     healthPollIntervalMs,
     fetchTimeoutMs,
@@ -210,6 +229,7 @@ export async function bootstrapLauncher(
       repoId: context.repoId,
       repoPath: context.repoPath,
       explicitSessionId,
+      authToken: engineHandle?.getAuthToken() || undefined,
       fetchTimeoutMs: engineOptions.fetchTimeoutMs
     })
 

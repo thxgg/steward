@@ -33,6 +33,8 @@ function createFallbackStatus(): OpenCodeEngineStatus {
     pid: null,
     instanceKey: null,
     connectionMode: 'unavailable',
+    bindingMode: 'unavailable',
+    authMode: 'none',
     checkedAt: new Date(0).toISOString(),
     message: 'OpenCode lifecycle manager is not active in this runtime mode.',
     diagnostics: []
