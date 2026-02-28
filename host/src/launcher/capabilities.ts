@@ -96,6 +96,33 @@ function describeSessionBridge(session: SessionBridgeStatus): {
   }
 }
 
+function describeWorkflowActions(session: SessionBridgeStatus): {
+  available: boolean
+  detail: string
+  action?: string
+} {
+  if (session.state === 'ready' && session.activeSessionId) {
+    return {
+      available: true,
+      detail: `Workflow buttons dispatch to active session ${session.activeSessionId}.`
+    }
+  }
+
+  if (session.state === 'degraded') {
+    return {
+      available: false,
+      detail: 'Workflow buttons are disabled until session bridge is healthy.',
+      action: session.message
+    }
+  }
+
+  return {
+    available: false,
+    detail: 'Workflow buttons require an active session bridge.',
+    action: 'Wait for session bridge initialization before using launcher workflow actions.'
+  }
+}
+
 export function detectLauncherCapabilities(
   engine: OpenCodeEngineStatus,
   session: SessionBridgeStatus
@@ -103,6 +130,7 @@ export function detectLauncherCapabilities(
   const hasOpenCodeCli = commandAvailable('opencode')
   const engineLifecycle = describeEngineLifecycle(engine)
   const sessionBridge = describeSessionBridge(session)
+  const workflowActions = describeWorkflowActions(session)
 
   return [
     {
@@ -139,9 +167,9 @@ export function detectLauncherCapabilities(
     {
       id: 'workflowActions',
       label: 'In-UI workflow buttons',
-      available: false,
-      detail: 'Launcher-scoped `/steward:break_into_tasks` and `/steward:complete_next_task` controls are not wired yet.',
-      action: 'Run workflow prompts from your MCP client for now.'
+      available: workflowActions.available,
+      detail: workflowActions.detail,
+      action: workflowActions.action
     },
     {
       id: 'terminalEmbedding',

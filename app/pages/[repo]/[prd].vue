@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { FileText, LayoutGrid, AlertCircle, Loader2, RefreshCw, GitBranch } from 'lucide-vue-next'
+import {
+  FileText,
+  LayoutGrid,
+  AlertCircle,
+  Loader2,
+  RefreshCw,
+  GitBranch,
+  ListChecks,
+  CheckCheck
+} from 'lucide-vue-next'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { Button } from '~/components/ui/button'
 import { Badge } from '~/components/ui/badge'
@@ -72,6 +81,13 @@ const {
   fetchPrdGraph
 } = usePrd()
 const { showError } = useToast()
+const {
+  runState: workflowRunState,
+  inFlightAction: workflowInFlightAction,
+  isLauncherMode,
+  runBreakIntoTasks,
+  runCompleteNextTask
+} = useLauncherWorkflowActions()
 
 // Get route params
 const repoId = computed(() => route.params.repo as string)
@@ -103,6 +119,18 @@ const detailOpen = ref(false)
 // Resolved commits for selected task (fetched from API with repo context)
 const selectedTaskCommits = ref<CommitRef[]>([])
 const isUpdatingArchive = ref(false)
+
+const workflowStatusTone = computed(() => {
+  if (workflowRunState.value.status === 'error') {
+    return 'text-destructive'
+  }
+
+  if (workflowRunState.value.status === 'success') {
+    return 'text-emerald-600'
+  }
+
+  return 'text-muted-foreground'
+})
 
 const taskQueryId = computed(() => getSingleQueryParam(route.query[TASK_QUERY_KEY]))
 const taskQueryPrd = computed(() => getSingleQueryParam(route.query[TASK_PRD_QUERY_KEY]))
@@ -535,6 +563,22 @@ async function handleArchiveToggle(archived: boolean) {
     isUpdatingArchive.value = false
   }
 }
+
+async function handleBreakIntoTasksClick() {
+  await runBreakIntoTasks(prdSlug.value)
+
+  if (workflowRunState.value.status === 'success') {
+    await loadTasksAndProgress()
+  }
+}
+
+async function handleCompleteNextTaskClick() {
+  await runCompleteNextTask(prdSlug.value)
+
+  if (workflowRunState.value.status === 'success') {
+    await loadTasksAndProgress()
+  }
+}
 </script>
 
 <template>
@@ -585,15 +629,55 @@ async function handleArchiveToggle(archived: boolean) {
           <PrdMeta :metadata="document.metadata" />
         </div>
 
-        <Button
-          variant="outline"
-          size="sm"
-          :disabled="isUpdatingArchive"
-          @click="handleArchiveToggle(!document.archived)"
-        >
-          <span v-if="isUpdatingArchive">Saving...</span>
-          <span v-else>{{ document.archived ? 'Restore document' : 'Archive document' }}</span>
-        </Button>
+        <div class="flex flex-col items-end gap-2">
+          <div v-if="isLauncherMode" class="flex flex-wrap justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              :disabled="!!workflowInFlightAction || isUpdatingArchive"
+              @click="handleBreakIntoTasksClick"
+            >
+              <Loader2
+                v-if="workflowInFlightAction === 'break_into_tasks'"
+                class="mr-2 size-4 animate-spin"
+              />
+              <ListChecks v-else class="mr-2 size-4" />
+              Break Into Tasks
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              :disabled="!!workflowInFlightAction || isUpdatingArchive"
+              @click="handleCompleteNextTaskClick"
+            >
+              <Loader2
+                v-if="workflowInFlightAction === 'complete_next_task'"
+                class="mr-2 size-4 animate-spin"
+              />
+              <CheckCheck v-else class="mr-2 size-4" />
+              Complete Next Task
+            </Button>
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            :disabled="isUpdatingArchive || !!workflowInFlightAction"
+            @click="handleArchiveToggle(!document.archived)"
+          >
+            <span v-if="isUpdatingArchive">Saving...</span>
+            <span v-else>{{ document.archived ? 'Restore document' : 'Archive document' }}</span>
+          </Button>
+
+          <p
+            v-if="isLauncherMode && workflowRunState.message"
+            class="max-w-sm text-right text-xs"
+            :class="workflowStatusTone"
+          >
+            {{ workflowRunState.message }}
+          </p>
+        </div>
       </div>
 
       <!-- Tabs -->

@@ -34,6 +34,8 @@ test('launcher control server serves state and actions with token auth', async (
     }
   }
 
+  const sentSessionMessages = []
+
   const server = await startLauncherControlServer({
     getState: () => state,
     runAction: async (action) => {
@@ -54,6 +56,7 @@ test('launcher control server serves state and actions with token auth', async (
     },
     getSessionState: () => state.launcher.session,
     sendSessionMessage: async (input) => {
+      sentSessionMessages.push(input)
       return {
         sessionId: state.launcher.session.activeSessionId,
         accepted: true,
@@ -135,6 +138,12 @@ test('launcher control server serves state and actions with token auth', async (
     const sessionMessageBody = await sessionMessageResponse.json()
     assert.equal(sessionMessageBody.ok, true)
     assert.equal(sessionMessageBody.result.sessionId, 'sess-1')
+    assert.deepEqual(sentSessionMessages, [
+      {
+        role: 'user',
+        content: 'hello'
+      }
+    ])
 
     const sessionEventsResponse = await fetch(`${server.url}/session/events`, {
       headers: {
