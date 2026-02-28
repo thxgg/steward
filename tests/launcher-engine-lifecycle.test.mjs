@@ -77,6 +77,8 @@ test('engine lifecycle reuses healthy configured endpoint without spawning', asy
     assert.equal(status.reused, true)
     assert.equal(status.owned, false)
     assert.equal(status.endpoint, server.endpoint)
+    assert.equal(status.connectionMode, 'shared')
+    assert.equal(status.instanceKey, `engine:${server.endpoint}`)
     assert.equal(status.pid, null)
   } finally {
     if (lifecycle) {
@@ -161,6 +163,8 @@ test('engine lifecycle falls back to managed process and stops owned child on sh
     assert.equal(status.reused, false)
     assert.equal(status.owned, true)
     assert.equal(status.endpoint, localEndpoint)
+    assert.equal(status.connectionMode, 'shared')
+    assert.equal(status.instanceKey, `engine:${localEndpoint}`)
     assert.ok(typeof status.pid === 'number' && status.pid > 0)
 
     startedPid = status.pid
@@ -178,6 +182,45 @@ test('engine lifecycle falls back to managed process and stops owned child on sh
       await lifecycle.stop('test cleanup')
     }
 
+    await rm(tempRoot, { recursive: true, force: true })
+  }
+})
+
+test('engine lifecycle reuses healthy local endpoint to avoid duplicate engine spawn', async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), 'steward-engine-local-reuse-'))
+
+  const server = await withServer((_request, response) => {
+    response.statusCode = 200
+    response.end('ok')
+  })
+
+  let lifecycle = null
+
+  try {
+    const { startOpenCodeEngineLifecycle } = await import('../dist/host/src/launcher/engine-lifecycle.js')
+
+    lifecycle = await startOpenCodeEngineLifecycle({
+      cwd: tempRoot,
+      localEndpoint: server.endpoint,
+      command: 'definitely-not-a-real-opencode-command',
+      startupTimeoutMs: 1500,
+      healthPollIntervalMs: 100
+    })
+
+    const status = lifecycle.getStatus()
+    assert.equal(status.state, 'healthy')
+    assert.equal(status.reused, true)
+    assert.equal(status.owned, false)
+    assert.equal(status.endpoint, server.endpoint)
+    assert.equal(status.connectionMode, 'shared')
+    assert.equal(status.instanceKey, `engine:${server.endpoint}`)
+    assert.equal(status.pid, null)
+  } finally {
+    if (lifecycle) {
+      await lifecycle.stop('test cleanup')
+    }
+
+    await server.close()
     await rm(tempRoot, { recursive: true, force: true })
   }
 })

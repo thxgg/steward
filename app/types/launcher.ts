@@ -42,6 +42,11 @@ export type HostCapabilityId =
 export type OpenCodeEngineState = 'starting' | 'healthy' | 'degraded' | 'stopped'
 
 /**
+ * How launcher is connected to the active engine endpoint
+ */
+export type OpenCodeConnectionMode = 'shared' | 'external' | 'unavailable'
+
+/**
  * Lifecycle and health status for OpenCode engine runtime
  */
 export interface OpenCodeEngineStatus {
@@ -55,6 +60,10 @@ export interface OpenCodeEngineStatus {
   owned: boolean
   /** PID of owned process when available */
   pid: number | null
+  /** Stable identity key for diagnostics across clients */
+  instanceKey: string | null
+  /** Connection strategy used for current engine endpoint */
+  connectionMode: OpenCodeConnectionMode
   /** Last health/status check timestamp */
   checkedAt: string
   /** Human-readable lifecycle status summary */

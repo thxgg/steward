@@ -6,6 +6,7 @@ import type {
   LauncherHostState,
   LauncherResolvedContext,
   OpenCodeEngineState,
+  OpenCodeConnectionMode,
   OpenCodeEngineStatus,
   SessionBridgeState,
   SessionBridgeStatus,
@@ -33,6 +34,12 @@ const VALID_ENGINE_STATES = new Set<OpenCodeEngineState>([
   'healthy',
   'degraded',
   'stopped'
+])
+
+const VALID_CONNECTION_MODES = new Set<OpenCodeConnectionMode>([
+  'shared',
+  'external',
+  'unavailable'
 ])
 
 const VALID_SESSION_BRIDGE_STATES = new Set<SessionBridgeState>([
@@ -66,6 +73,8 @@ const DEFAULT_ENGINE_STATUS: OpenCodeEngineStatus = {
   reused: false,
   owned: false,
   pid: null,
+  instanceKey: null,
+  connectionMode: 'unavailable',
   checkedAt: new Date(0).toISOString(),
   message: 'OpenCode lifecycle status is unavailable in this runtime.',
   diagnostics: []
@@ -210,6 +219,15 @@ function parseEngineStatus(value: unknown): OpenCodeEngineStatus {
   const reused = typeof value.reused === 'boolean' ? value.reused : false
   const owned = typeof value.owned === 'boolean' ? value.owned : false
   const pid = typeof value.pid === 'number' && Number.isFinite(value.pid) ? value.pid : null
+  const instanceKey = typeof value.instanceKey === 'string' && value.instanceKey.trim().length > 0
+    ? value.instanceKey.trim()
+    : null
+  const connectionMode = typeof value.connectionMode === 'string'
+    && VALID_CONNECTION_MODES.has(value.connectionMode as OpenCodeConnectionMode)
+    ? value.connectionMode as OpenCodeConnectionMode
+    : instanceKey
+      ? 'shared'
+      : DEFAULT_ENGINE_STATUS.connectionMode
   const checkedAt = typeof value.checkedAt === 'string' && value.checkedAt.trim().length > 0
     ? value.checkedAt.trim()
     : new Date().toISOString()
@@ -224,6 +242,8 @@ function parseEngineStatus(value: unknown): OpenCodeEngineStatus {
     reused,
     owned,
     pid,
+    instanceKey,
+    connectionMode,
     checkedAt,
     message,
     diagnostics

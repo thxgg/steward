@@ -10,6 +10,39 @@ const DEFAULT_FETCH_TIMEOUT_MS = 1_500
 const DEFAULT_SHUTDOWN_GRACE_MS = 2_000
 const HEALTH_PROBE_SUFFIXES = ['', 'health', 'api/health', 'openapi.json']
 
+function isLocalhostEndpoint(endpoint: string | null): boolean {
+  if (!endpoint) {
+    return false
+  }
+
+  try {
+    const parsed = new URL(endpoint)
+    return parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost'
+  } catch {
+    return false
+  }
+}
+
+function toInstanceKey(endpoint: string | null): string | null {
+  if (!endpoint) {
+    return null
+  }
+
+  return `engine:${endpoint}`
+}
+
+function resolveConnectionMode(endpoint: string | null, owned: boolean): 'shared' | 'external' | 'unavailable' {
+  if (!endpoint) {
+    return 'unavailable'
+  }
+
+  if (owned || isLocalhostEndpoint(endpoint)) {
+    return 'shared'
+  }
+
+  return 'external'
+}
+
 export interface OpenCodeEngineLifecycleOptions {
   cwd: string
   configuredEndpoint?: string | null
@@ -170,12 +203,16 @@ function toSafePositiveInt(value: number | undefined, fallbackValue: number): nu
 }
 
 function createStoppedStatus(message: string, endpoint: string | null, diagnostics: string[] = []): OpenCodeEngineStatus {
+  const owned = false
+
   return {
     state: 'stopped',
     endpoint,
     reused: false,
-    owned: false,
+    owned,
     pid: null,
+    instanceKey: toInstanceKey(endpoint),
+    connectionMode: resolveConnectionMode(endpoint, owned),
     checkedAt: new Date().toISOString(),
     message,
     diagnostics
@@ -204,6 +241,8 @@ export async function startOpenCodeEngineLifecycle(
     reused: false,
     owned: false,
     pid: null,
+    instanceKey: toInstanceKey(configuredEndpoint || localEndpoint),
+    connectionMode: resolveConnectionMode(configuredEndpoint || localEndpoint, false),
     checkedAt: new Date().toISOString(),
     message: 'Starting OpenCode engine lifecycle manager.',
     diagnostics: []
@@ -321,6 +360,8 @@ export async function startOpenCodeEngineLifecycle(
         reused: true,
         owned: false,
         pid: null,
+        instanceKey: toInstanceKey(configuredEndpoint),
+        connectionMode: resolveConnectionMode(configuredEndpoint, false),
         message: `Reusing healthy OpenCode endpoint at ${configuredEndpoint}.`,
         diagnostics: []
       })
@@ -337,6 +378,29 @@ export async function startOpenCodeEngineLifecycle(
     appendDiagnostic(`Configured endpoint is invalid: ${options.configuredEndpoint}`)
   }
 
+  const localProbe = await probeEndpoint(localEndpoint, fetchTimeoutMs)
+  if (localProbe.healthy) {
+    updateStatus({
+      state: 'healthy',
+      endpoint: localEndpoint,
+      reused: true,
+      owned: false,
+      pid: null,
+      instanceKey: toInstanceKey(localEndpoint),
+      connectionMode: resolveConnectionMode(localEndpoint, false),
+      message: `Reusing healthy local OpenCode endpoint at ${localEndpoint} to keep a single shared engine instance.`,
+      diagnostics: []
+    })
+    startBackgroundHealthPoll(localEndpoint)
+
+    return {
+      getStatus: () => cloneStatus(status),
+      stop
+    }
+  }
+
+  appendDiagnostic(`No reusable local endpoint at ${localEndpoint}: ${localProbe.detail}`)
+
   const commandCheck = commandExists(command)
   if (!commandCheck.available) {
     updateStatus({
@@ -345,6 +409,8 @@ export async function startOpenCodeEngineLifecycle(
       reused: false,
       owned: false,
       pid: null,
+      instanceKey: toInstanceKey(configuredEndpoint || localEndpoint),
+      connectionMode: resolveConnectionMode(configuredEndpoint || localEndpoint, false),
       message: 'OpenCode CLI is unavailable and no healthy configured endpoint could be reused.'
     })
     appendDiagnostic(commandCheck.detail)
@@ -373,6 +439,8 @@ export async function startOpenCodeEngineLifecycle(
     reused: false,
     owned: true,
     pid: managedProcess.pid || null,
+    instanceKey: toInstanceKey(localEndpoint),
+    connectionMode: resolveConnectionMode(localEndpoint, true),
     message: `Starting managed OpenCode engine via ${command} ${args.join(' ')}.`
   })
 
@@ -402,6 +470,8 @@ export async function startOpenCodeEngineLifecycle(
         reused: false,
         owned: true,
         pid: managedProcess.pid || null,
+        instanceKey: toInstanceKey(localEndpoint),
+        connectionMode: resolveConnectionMode(localEndpoint, true),
         message: `Managed OpenCode engine is healthy at ${localEndpoint}.`,
         diagnostics: []
       })
@@ -430,6 +500,8 @@ export async function startOpenCodeEngineLifecycle(
     reused: false,
     owned: false,
     pid: null,
+    instanceKey: toInstanceKey(localEndpoint),
+    connectionMode: resolveConnectionMode(localEndpoint, false),
     message: `Managed OpenCode engine failed to reach healthy state within ${startupTimeoutMs}ms.`
   })
 

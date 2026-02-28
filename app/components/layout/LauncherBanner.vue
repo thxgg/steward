@@ -44,7 +44,15 @@ const engineLabel = computed(() => {
   const mode = status.value.reused ? 'reused endpoint' : (status.value.owned ? 'managed process' : 'unmanaged')
   const endpoint = status.value.endpoint ? ` at ${status.value.endpoint}` : ''
 
-  return `${status.value.state} (${mode})${endpoint}`
+  return `${status.value.state} (${mode}, connection=${status.value.connectionMode})${endpoint}`
+})
+
+const engineIdentityLabel = computed(() => {
+  if (!status.value.instanceKey) {
+    return 'Engine identity: unavailable'
+  }
+
+  return `Engine identity: ${status.value.instanceKey}`
 })
 
 const sessionLabel = computed(() => {
@@ -108,6 +116,8 @@ async function handleRestart() {
       <p class="text-xs text-muted-foreground">
         OpenCode engine: {{ engineLabel }}. {{ status.message }}
       </p>
+
+      <p class="text-xs text-muted-foreground">{{ engineIdentityLabel }}</p>
 
       <p class="text-xs text-muted-foreground">{{ sessionLabel }}</p>
 
