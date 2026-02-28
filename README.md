@@ -58,7 +58,47 @@ Note: `execute` runs in a VM sandbox by design, so globals like `process` are in
 prd ui
 prd ui --port 3100 --host 127.0.0.1
 prd mcp
+prd sync export ./steward-sync.json
+prd sync inspect ./steward-sync.json
+prd sync merge ./steward-sync.json
+prd sync merge ./steward-sync.json --apply
+prd sync merge ./steward-sync.json --apply --map rsk_source=/Users/you/Projects/repo
 ```
+
+### Sync Bundles (Cross-Device)
+
+Steward supports local-first state sharing across devices using portable JSON bundles.
+
+- `prd sync export <bundle-path>` writes a versioned bundle of repos/state/archives.
+- `prd sync inspect <bundle-path>` validates and summarizes bundle contents.
+- `prd sync merge <bundle-path>` plans a merge in dry-run mode by default.
+- `prd sync merge <bundle-path> --apply` applies the planned merge transactionally.
+
+Path hint privacy defaults:
+
+- Export defaults to `--path-hints basename` to avoid leaking absolute filesystem paths.
+- Use `--path-hints none` to omit path hints entirely.
+- Use `--path-hints absolute` only when you explicitly want full paths in the bundle.
+
+Representative command output summaries:
+
+- `sync export` prints bundle path, bundle id, and row totals (`repos/states/archives`).
+- `sync inspect` prints bundle metadata (`bundleId`, `sourceDeviceId`, format version), totals, and unknown references.
+- `sync merge` prints mapping totals, state/archive action counts, and conflict counts.
+- `sync merge --apply` also prints backup path and retention cleanup counts.
+
+Safety defaults and retention:
+
+- Merge defaults to dry-run; no writes happen unless `--apply` is provided.
+- Apply creates a SQLite backup before any write and runs an integrity check before commit.
+- Re-applying the same bundle id is idempotent and returns a no-op result.
+- Default retention keeps backups for 30 days (max 20 files) and sync apply logs for 180 days (max 10,000 rows).
+
+Troubleshooting sync:
+
+- Unresolved mapping on apply: run `prd sync inspect <bundle-path>` and pass one or more `--map <incomingRepoSyncKey>=<localPathOrRepoRef>` values.
+- Expected no-op reapply: if bundle id was already applied, merge returns "already applied" and leaves state unchanged.
+- Restore from backup: stop Steward processes, then replace your DB file with a backup in the same directory (files match `state.db.sync-backup.*.db`).
 
 ## Architecture
 
@@ -66,6 +106,7 @@ prd mcp
 ┌─────────────────────────────────────────┐
 │            Steward CLI (Node)           │
 │  - `prd ui` runs prebuilt UI server     │
+│  - `prd sync` manages state bundles     │
 │  - `prd mcp` starts MCP over stdio      │
 └─────────────────────────────────────────┘
                     │
