@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { User, Calendar, CircleDot, ExternalLink } from 'lucide-vue-next'
+import { User, Calendar, CircleDot, CheckCircle2, ExternalLink } from 'lucide-vue-next'
 import { Badge } from '~/components/ui/badge'
 import type { PrdMetadata } from '~/types/prd'
 
@@ -16,6 +16,19 @@ const statusVariant = computed(() => {
   if (status.includes('draft')) return 'secondary'
   if (status.includes('blocked') || status.includes('paused')) return 'destructive'
   return 'secondary'
+})
+
+const statusIcon = computed(() => {
+  const status = props.metadata.status?.toLowerCase()
+  if (!status) {
+    return CircleDot
+  }
+
+  if (status.includes('complete') || status.includes('done')) {
+    return CheckCircle2
+  }
+
+  return CircleDot
 })
 
 // Check if there's any metadata to display
@@ -42,9 +55,9 @@ const hasMetadata = computed(() => {
     </div>
 
     <!-- Status -->
-    <Badge v-if="metadata.status" :variant="statusVariant" class="gap-1">
-      <CircleDot class="size-3" />
-      {{ metadata.status }}
+    <Badge v-if="metadata.status" :variant="statusVariant" class="leading-none">
+      <component :is="statusIcon" class="size-3.5 shrink-0" />
+      <span class="leading-none">{{ metadata.status }}</span>
     </Badge>
 
     <!-- Shortcut Story Link -->

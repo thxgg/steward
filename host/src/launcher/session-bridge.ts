@@ -15,16 +15,8 @@ import {
 
 const DEFAULT_FETCH_TIMEOUT_MS = 2_000
 
-const LIST_SESSION_PATHS = ['/api/sessions', '/sessions']
-const CREATE_SESSION_PATHS = ['/api/sessions', '/sessions']
-const MESSAGE_PATHS = [
-  '/api/sessions/{sessionId}/messages',
-  '/sessions/{sessionId}/messages'
-]
-const EVENTS_PATHS = [
-  '/api/sessions/{sessionId}/events',
-  '/sessions/{sessionId}/events'
-]
+const SESSION_PATH = '/session'
+const SESSION_MESSAGE_PATH = '/session/{sessionId}/message'
 
 type HttpMethod = 'GET' | 'POST'
 
@@ -88,10 +80,23 @@ function resolveAuthToken(options: SessionBridgeOptions): string | null {
   }
 
   const envToken = process.env.STEWARD_OPENCODE_AUTH_TOKEN?.trim()
-    || process.env.OPENCODE_AUTH_TOKEN?.trim()
-    || process.env.OPENCODE_API_KEY?.trim()
+    || process.env.OPENCODE_SERVER_PASSWORD?.trim()
 
   return envToken || null
+}
+
+function resolveAuthUsername(): string {
+  return process.env.STEWARD_OPENCODE_AUTH_USERNAME?.trim()
+    || process.env.OPENCODE_SERVER_USERNAME?.trim()
+    || 'opencode'
+}
+
+function buildBasicAuthHeader(username: string, password: string | null): string | null {
+  if (!password) {
+    return null
+  }
+
+  return `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`
 }
 
 function createDisabledStatus(message: string): SessionBridgeStatus {
@@ -120,49 +125,30 @@ function parseSessionId(value: unknown): string | null {
 }
 
 function parseSessionCollection(value: unknown): OpenCodeSessionSummary[] {
-  if (Array.isArray(value)) {
-    return value
-      .map((entry) => {
-        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-          return null
-        }
-
-        const candidate = entry as Record<string, unknown>
-        const id = parseSessionId(candidate.id) || parseSessionId(candidate.sessionId)
-        return id ? { id } : null
-      })
-      .filter((entry): entry is OpenCodeSessionSummary => entry !== null)
-  }
-
-  if (!value || typeof value !== 'object') {
+  if (!Array.isArray(value)) {
     return []
   }
 
-  const objectValue = value as Record<string, unknown>
-  if (Array.isArray(objectValue.sessions)) {
-    return parseSessionCollection(objectValue.sessions)
-  }
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        return null
+      }
 
-  if (Array.isArray(objectValue.data)) {
-    return parseSessionCollection(objectValue.data)
-  }
-
-  return []
+      const candidate = entry as Record<string, unknown>
+      const id = parseSessionId(candidate.id)
+      return id ? { id } : null
+    })
+    .filter((entry): entry is OpenCodeSessionSummary => entry !== null)
 }
 
 function parseCreatedSessionId(value: unknown): string | null {
-  if (parseSessionId(value)) {
-    return parseSessionId(value)
-  }
-
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null
   }
 
   const objectValue = value as Record<string, unknown>
   return parseSessionId(objectValue.id)
-    || parseSessionId(objectValue.sessionId)
-    || parseSessionId((objectValue.session as Record<string, unknown> | undefined)?.id)
 }
 
 function parseMessageResult(value: unknown, fallbackSessionId: string): SessionBridgeMessageResult {
@@ -175,13 +161,14 @@ function parseMessageResult(value: unknown, fallbackSessionId: string): SessionB
   }
 
   const objectValue = value as Record<string, unknown>
-  const sessionId = parseSessionId(objectValue.sessionId)
-    || parseSessionId((objectValue.session as Record<string, unknown> | undefined)?.id)
+  const info = objectValue.info && typeof objectValue.info === 'object' && !Array.isArray(objectValue.info)
+    ? objectValue.info as Record<string, unknown>
+    : null
+
+  const sessionId = parseSessionId(info?.sessionID)
     || fallbackSessionId
-  const accepted = typeof objectValue.accepted === 'boolean'
-    ? objectValue.accepted
-    : true
-  const requestId = parseSessionId(objectValue.requestId)
+  const accepted = true
+  const requestId = parseSessionId(info?.id)
 
   return {
     sessionId,
@@ -190,48 +177,122 @@ function parseMessageResult(value: unknown, fallbackSessionId: string): SessionB
   }
 }
 
-function parseEventsResult(value: unknown, fallbackSessionId: string): SessionBridgeEventsResult {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return {
-      sessionId: fallbackSessionId,
-      events: [],
-      cursor: null
-    }
-  }
+interface OpenCodeSessionMessage {
+  id: string
+  sessionId: string
+  role: string
+  parts: Array<Record<string, unknown>>
+  createdAt: number
+}
 
-  const objectValue = value as Record<string, unknown>
-  const rawEvents = Array.isArray(objectValue.events)
-    ? objectValue.events
-    : (Array.isArray(objectValue.data) ? objectValue.data : [])
+function parseSessionMessages(value: unknown, fallbackSessionId: string): OpenCodeSessionMessage[] {
+  const candidates: unknown[] = Array.isArray(value) ? value : []
 
-  const events: SessionBridgeEvent[] = []
-
-  for (const entry of rawEvents) {
+  const parsed: OpenCodeSessionMessage[] = []
+  for (const entry of candidates) {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
       continue
     }
 
     const objectEntry = entry as Record<string, unknown>
-    const id = parseSessionId(objectEntry.id)
-    const type = parseSessionId(objectEntry.type) || 'message'
+    const info = objectEntry.info
+    if (!info || typeof info !== 'object' || Array.isArray(info)) {
+      continue
+    }
+
+    const infoObject = info as Record<string, unknown>
+    const id = parseSessionId(infoObject.id)
     if (!id) {
       continue
     }
 
-    events.push({
+    const role = parseSessionId(infoObject.role) || 'message'
+    const sessionId = parseSessionId(infoObject.sessionID)
+      || fallbackSessionId
+    const time = infoObject.time
+    const createdAt = (time && typeof time === 'object' && !Array.isArray(time)
+      && typeof (time as Record<string, unknown>).created === 'number'
+      && Number.isFinite((time as Record<string, unknown>).created as number))
+      ? Math.floor((time as Record<string, unknown>).created as number)
+      : 0
+    const parts = Array.isArray(objectEntry.parts)
+      ? objectEntry.parts.filter((part): part is Record<string, unknown> => !!part && typeof part === 'object' && !Array.isArray(part))
+      : []
+
+    parsed.push({
       id,
-      type,
-      payload: objectEntry.payload
+      sessionId,
+      role,
+      parts,
+      createdAt
     })
   }
 
-  const cursor = parseSessionId(objectValue.cursor)
+  return parsed.sort((left, right) => {
+    if (left.createdAt !== right.createdAt) {
+      return left.createdAt - right.createdAt
+    }
+
+    return left.id.localeCompare(right.id)
+  })
+}
+
+function mapMessagesToEvents(
+  messages: OpenCodeSessionMessage[],
+  cursor?: string | null
+): { events: SessionBridgeEvent[]; cursor: string | null } {
+  const normalizedCursor = cursor?.trim() || null
+  let startIndex = 0
+
+  if (normalizedCursor) {
+    const matchedIndex = messages.findIndex((message) => message.id === normalizedCursor)
+    if (matchedIndex >= 0) {
+      startIndex = matchedIndex + 1
+    }
+  }
+
+  const events: SessionBridgeEvent[] = []
+
+  for (const message of messages.slice(startIndex)) {
+    if (message.parts.length === 0) {
+      events.push({
+        id: message.id,
+        type: `message.${message.role}`,
+        payload: {
+          messageId: message.id,
+          role: message.role
+        }
+      })
+      continue
+    }
+
+    message.parts.forEach((part, index) => {
+      const partType = parseSessionId(part.type) || 'part'
+      const partId = parseSessionId(part.id) || `part-${index + 1}`
+      const text = typeof part.text === 'string' ? part.text : null
+
+      events.push({
+        id: `${message.id}:${partId}`,
+        type: `message.${message.role}.${partType}`,
+        payload: text ?? part
+      })
+    })
+  }
+
+  const nextCursor = messages[messages.length - 1]?.id || normalizedCursor || null
 
   return {
-    sessionId: parseSessionId(objectValue.sessionId) || fallbackSessionId,
     events,
-    cursor
+    cursor: nextCursor
   }
+}
+
+function isLikelyHtmlResponse(text: string): boolean {
+  const sample = text.trim().slice(0, 256).toLowerCase()
+  return sample.startsWith('<!doctype html')
+    || sample.startsWith('<html')
+    || sample.includes('<head')
+    || sample.includes('<body')
 }
 
 export async function startSessionBridge(options: SessionBridgeOptions): Promise<SessionBridgeHandle> {
@@ -253,6 +314,8 @@ export async function startSessionBridge(options: SessionBridgeOptions): Promise
 
   const fetchTimeoutMs = resolveFetchTimeoutMs(options.fetchTimeoutMs)
   const authToken = resolveAuthToken(options)
+  const authUsername = resolveAuthUsername()
+  const authHeader = buildBasicAuthHeader(authUsername, authToken)
   const workspaceKey = createWorkspaceSessionKey(options.repoId, endpoint)
   const diagnostics: string[] = []
 
@@ -272,8 +335,9 @@ export async function startSessionBridge(options: SessionBridgeOptions): Promise
         method: requestOptions.method,
         signal: controller.signal,
         headers: {
+          accept: 'application/json',
           'content-type': 'application/json',
-          ...(authToken ? { authorization: `Bearer ${authToken}` } : {})
+          ...(authHeader ? { authorization: authHeader } : {})
         },
         ...(requestOptions.body !== undefined
           ? { body: JSON.stringify(requestOptions.body) }
@@ -290,33 +354,24 @@ export async function startSessionBridge(options: SessionBridgeOptions): Promise
         return null
       }
 
-      return JSON.parse(text) as unknown
+      try {
+        return JSON.parse(text) as unknown
+      } catch {
+        if (isLikelyHtmlResponse(text)) {
+          throw new Error(
+            'OpenCode endpoint returned HTML instead of JSON. Ensure launcher points to an OpenCode API server (opencode serve), not a web-only UI endpoint.'
+          )
+        }
+
+        throw new Error(`OpenCode endpoint returned invalid JSON for ${path}.`)
+      }
     } finally {
       clearTimeout(timeout)
     }
   }
 
-  async function requestWithPaths(
-    paths: string[],
-    requestOptions: RequestOptions,
-    sessionId?: string
-  ): Promise<unknown> {
-    let lastError: unknown = null
-
-    for (const path of paths) {
-      const normalizedPath = normalizePath(path, sessionId)
-      try {
-        return await request(normalizedPath, requestOptions)
-      } catch (error) {
-        lastError = error
-      }
-    }
-
-    throw lastError || new Error('No request paths available')
-  }
-
   async function listSessions(): Promise<OpenCodeSessionSummary[]> {
-    const payload = await requestWithPaths(LIST_SESSION_PATHS, {
+    const payload = await request(SESSION_PATH, {
       method: 'GET'
     })
 
@@ -324,11 +379,9 @@ export async function startSessionBridge(options: SessionBridgeOptions): Promise
   }
 
   async function createSession(): Promise<string> {
-    const payload = await requestWithPaths(CREATE_SESSION_PATHS, {
+    const payload = await request(SESSION_PATH, {
       method: 'POST',
-      body: {
-        workspacePath: options.repoPath
-      }
+      body: {}
     })
 
     const createdId = parseCreatedSessionId(payload)
@@ -427,13 +480,17 @@ export async function startSessionBridge(options: SessionBridgeOptions): Promise
         throw new Error('Session bridge has no active session id')
       }
 
-      const payload = await requestWithPaths(MESSAGE_PATHS, {
+      const payload = await request(normalizePath(SESSION_MESSAGE_PATH, activeSessionId), {
         method: 'POST',
         body: {
-          role: input.role,
-          content: input.content
+          parts: [
+            {
+              type: 'text',
+              text: input.content
+            }
+          ]
         }
-      }, activeSessionId)
+      })
 
       return parseMessageResult(payload, activeSessionId)
     },
@@ -442,21 +499,17 @@ export async function startSessionBridge(options: SessionBridgeOptions): Promise
         throw new Error('Session bridge has no active session id')
       }
 
-      const eventPaths = EVENTS_PATHS.map((path) => {
-        return cursor
-          ? `${path}?cursor=${encodeURIComponent(cursor)}`
-          : path
+      const payload = await request(normalizePath(SESSION_MESSAGE_PATH, activeSessionId), {
+        method: 'GET'
       })
+      const messages = parseSessionMessages(payload, activeSessionId)
+      const mapped = mapMessagesToEvents(messages, cursor)
 
-      const payload = await requestWithPaths(
-        eventPaths,
-        {
-          method: 'GET'
-        },
-        activeSessionId
-      )
-
-      return parseEventsResult(payload, activeSessionId)
+      return {
+        sessionId: activeSessionId,
+        events: mapped.events,
+        cursor: mapped.cursor
+      }
     }
   }
 }

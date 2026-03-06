@@ -50,7 +50,7 @@ test('engine lifecycle reuses healthy configured endpoint without spawning', asy
   const tempRoot = await mkdtemp(join(tmpdir(), 'steward-engine-reuse-'))
 
   const server = await withServer((request, response) => {
-    if (request.url === '/health' || request.url === '/openapi.json' || request.url === '/') {
+    if (request.url === '/global/health') {
       response.statusCode = 200
       response.end('ok')
       return
@@ -122,7 +122,7 @@ test('engine lifecycle falls back to managed process and stops owned child on sh
       "const host = '127.0.0.1'",
       '',
       'const server = createServer((req, res) => {',
-      "  if (req.url === '/health' || req.url === '/openapi.json' || req.url === '/') {",
+      "  if (req.url === '/global/health') {",
       '    res.statusCode = 200',
       "    res.end('ok')",
       '    return',
@@ -296,6 +296,44 @@ test('engine lifecycle reuses healthy local endpoint to avoid duplicate engine s
   }
 })
 
+test('engine lifecycle rejects html-shell endpoint as healthy engine candidate', async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), 'steward-engine-html-shell-'))
+
+  const server = await withServer((_request, response) => {
+    response.statusCode = 200
+    response.setHeader('content-type', 'text/html; charset=utf-8')
+    response.end('<!doctype html><html><body>OpenCode Web</body></html>')
+  })
+
+  let lifecycle = null
+
+  try {
+    const { startOpenCodeEngineLifecycle } = await import('../dist/host/src/launcher/engine-lifecycle.js')
+
+    lifecycle = await startOpenCodeEngineLifecycle({
+      cwd: tempRoot,
+      localEndpoint: server.endpoint,
+      command: 'definitely-not-a-real-opencode-command',
+      startupTimeoutMs: 1500,
+      healthPollIntervalMs: 100
+    })
+
+    const status = lifecycle.getStatus()
+    assert.equal(status.state, 'degraded')
+    assert.equal(status.reused, false)
+    assert.equal(status.owned, false)
+    assert.equal(status.endpoint, server.endpoint)
+    assert.ok(status.diagnostics.some((entry) => entry.includes('returned HTML instead of an OpenCode API health payload')))
+  } finally {
+    if (lifecycle) {
+      await lifecycle.stop('test cleanup')
+    }
+
+    await server.close()
+    await rm(tempRoot, { recursive: true, force: true })
+  }
+})
+
 test('engine lifecycle blocks network-visible endpoint unless explicitly allowed', async () => {
   const tempRoot = await mkdtemp(join(tmpdir(), 'steward-engine-network-block-'))
 
@@ -347,7 +385,7 @@ test('engine lifecycle requires auth token for configured network endpoint reuse
     const status = lifecycle.getStatus()
     assert.equal(status.state, 'degraded')
     assert.equal(status.authMode, 'none')
-    assert.ok(status.diagnostics.some((entry) => entry.includes('requires an auth token')))
+    assert.ok(status.diagnostics.some((entry) => entry.includes('requires Basic auth credentials')))
   } finally {
     if (lifecycle) {
       await lifecycle.stop('test cleanup')

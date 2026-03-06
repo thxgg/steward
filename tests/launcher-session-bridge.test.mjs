@@ -42,23 +42,20 @@ async function withSessionBridgeServer() {
     created: 0,
     messages: [],
     messagePaths: [],
-    eventPaths: []
+    messageReadPaths: []
   }
 
   const server = createServer(async (request, response) => {
     const requestUrl = new URL(request.url || '/', 'http://127.0.0.1')
 
-    if (request.method === 'GET' && requestUrl.pathname === '/api/sessions') {
+    if (request.method === 'GET' && requestUrl.pathname === '/session') {
       response.statusCode = 200
       response.setHeader('content-type', 'application/json')
-      response.end(JSON.stringify({ sessions: state.sessions.map((id) => ({ id })) }))
+      response.end(JSON.stringify(state.sessions.map((id) => ({ id }))))
       return
     }
 
-    if (request.method === 'POST' && requestUrl.pathname === '/api/sessions') {
-      const body = await parseJsonBody(request)
-      assert.ok(typeof body.workspacePath === 'string')
-
+    if (request.method === 'POST' && requestUrl.pathname === '/session') {
       state.created += 1
       const id = `sess-created-${state.created}`
       state.sessions.push(id)
@@ -69,37 +66,76 @@ async function withSessionBridgeServer() {
       return
     }
 
-    if (request.method === 'POST' && requestUrl.pathname.startsWith('/api/sessions/') && requestUrl.pathname.endsWith('/messages')) {
+    if (request.method === 'POST' && requestUrl.pathname.startsWith('/session/') && requestUrl.pathname.endsWith('/message')) {
       state.messagePaths.push(requestUrl.pathname)
       const body = await parseJsonBody(request)
+      assert.ok(Array.isArray(body.parts))
+      assert.ok(typeof body.parts[0]?.text === 'string')
       state.messages.push(body)
+      const sessionId = requestUrl.pathname.split('/')[2]
+      const messageId = `msg-send-${state.messages.length}`
 
       response.statusCode = 200
       response.setHeader('content-type', 'application/json')
       response.end(JSON.stringify({
-        sessionId: requestUrl.pathname.split('/')[3],
-        accepted: true,
-        requestId: `request-${String(body.role || 'unknown')}`
+        info: {
+          id: messageId,
+          sessionID: sessionId,
+          role: 'assistant'
+        },
+        parts: [
+          {
+            id: `part-send-${state.messages.length}`,
+            type: 'text',
+            text: `ack:${body.parts[0].text}`
+          }
+        ]
       }))
       return
     }
 
-    if (request.method === 'GET' && requestUrl.pathname.startsWith('/api/sessions/') && requestUrl.pathname.endsWith('/events')) {
-      state.eventPaths.push(requestUrl.pathname)
+    if (request.method === 'GET' && requestUrl.pathname.startsWith('/session/') && requestUrl.pathname.endsWith('/message')) {
+      state.messageReadPaths.push(requestUrl.pathname)
+      const sessionId = requestUrl.pathname.split('/')[2]
 
       response.statusCode = 200
       response.setHeader('content-type', 'application/json')
-      response.end(JSON.stringify({
-        sessionId: requestUrl.pathname.split('/')[3],
-        events: [
-          {
-            id: 'evt-1',
-            type: 'message',
-            payload: { cursor: requestUrl.searchParams.get('cursor') }
-          }
-        ],
-        cursor: 'cursor-next'
-      }))
+      response.end(JSON.stringify([
+        {
+          info: {
+            id: 'msg-evt-1',
+            sessionID: sessionId,
+            role: 'assistant',
+            time: {
+              created: 1
+            }
+          },
+          parts: [
+            {
+              id: 'part-evt-1',
+              type: 'text',
+              text: 'ready'
+            }
+          ]
+        },
+        {
+          info: {
+            id: 'msg-evt-2',
+            sessionID: sessionId,
+            role: 'assistant',
+            time: {
+              created: 2
+            }
+          },
+          parts: [
+            {
+              id: 'part-evt-2',
+              type: 'text',
+              text: 'next'
+            }
+          ]
+        }
+      ]))
       return
     }
 
@@ -216,18 +252,71 @@ test('session bridge routes message and event traffic to active session identity
 
     const eventsResult = await bridge.fetchEvents('cursor-0')
     assert.equal(eventsResult.sessionId, status.activeSessionId)
-    assert.equal(eventsResult.events.length, 1)
-    assert.equal(eventsResult.cursor, 'cursor-next')
+    assert.equal(eventsResult.events.length, 2)
+    assert.equal(eventsResult.cursor, 'msg-evt-2')
 
     assert.equal(server.state.messages.length, 2)
-    assert.deepEqual(server.state.messages.map((entry) => entry.content), [
+    assert.deepEqual(server.state.messages.map((entry) => entry.parts[0].text), [
       breakCommand,
       completeCommand
     ])
     assert.ok(server.state.messagePaths.every((path) => path.includes(status.activeSessionId)))
-    assert.ok(server.state.eventPaths.every((path) => path.includes(status.activeSessionId)))
+    assert.ok(server.state.messageReadPaths.every((path) => path.includes(status.activeSessionId)))
   } finally {
     await server.close()
+    await rm(tempRoot, { recursive: true, force: true })
+  }
+})
+
+test('session bridge reports actionable diagnostics when endpoint serves html shell', async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), 'steward-session-bridge-html-shell-'))
+  const storePath = join(tempRoot, 'launcher-session-store.json')
+
+  const server = createServer((_request, response) => {
+    response.statusCode = 200
+    response.setHeader('content-type', 'text/html; charset=utf-8')
+    response.end('<!doctype html><html><body>OpenCode Web Shell</body></html>')
+  })
+
+  await new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', resolve)
+  })
+
+  const address = server.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('Failed to resolve html-shell server address')
+  }
+
+  const endpoint = `http://127.0.0.1:${address.port}`
+
+  try {
+    const { startSessionBridge } = await import('../dist/host/src/launcher/session-bridge.js')
+
+    const bridge = await startSessionBridge({
+      endpoint,
+      repoId: 'repo-html',
+      repoPath: '/workspace/repo-html',
+      storePath
+    })
+
+    const status = bridge.getStatus()
+    assert.equal(status.state, 'degraded')
+    assert.equal(status.activeSessionId, null)
+    assert.equal(status.source, 'none')
+    assert.ok(status.diagnostics.some((entry) => entry.includes('OpenCode endpoint returned HTML instead of JSON')))
+    assert.match(status.message, /could not resolve or create an active session/i)
+  } finally {
+    await new Promise((resolve, reject) => {
+      server.close((error) => {
+        if (error) {
+          reject(error)
+          return
+        }
+
+        resolve()
+      })
+    })
+
     await rm(tempRoot, { recursive: true, force: true })
   }
 })

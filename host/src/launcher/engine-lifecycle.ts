@@ -9,7 +9,15 @@ const DEFAULT_STARTUP_TIMEOUT_MS = 15_000
 const DEFAULT_HEALTH_POLL_INTERVAL_MS = 500
 const DEFAULT_FETCH_TIMEOUT_MS = 1_500
 const DEFAULT_SHUTDOWN_GRACE_MS = 2_000
-const HEALTH_PROBE_SUFFIXES = ['', 'health', 'api/health', 'openapi.json']
+const HEALTH_PROBE_PATH = 'global/health'
+
+function isLikelyHtml(text: string): boolean {
+  const sample = text.trim().slice(0, 256).toLowerCase()
+  return sample.startsWith('<!doctype html')
+    || sample.startsWith('<html')
+    || sample.includes('<head')
+    || sample.includes('<body')
+}
 
 function isLocalhostEndpoint(endpoint: string | null): boolean {
   if (!endpoint) {
@@ -64,9 +72,22 @@ function resolveProvidedAuthToken(optionToken: string | null | undefined): strin
   }
 
   return normalizeAuthToken(process.env.STEWARD_OPENCODE_AUTH_TOKEN)
-    || normalizeAuthToken(process.env.OPENCODE_AUTH_TOKEN)
-    || normalizeAuthToken(process.env.OPENCODE_API_KEY)
+    || normalizeAuthToken(process.env.OPENCODE_SERVER_PASSWORD)
     || null
+}
+
+function resolveAuthUsername(): string {
+  return process.env.STEWARD_OPENCODE_AUTH_USERNAME?.trim()
+    || process.env.OPENCODE_SERVER_USERNAME?.trim()
+    || 'opencode'
+}
+
+function buildBasicAuthHeader(username: string, password: string | null): string | null {
+  if (!password) {
+    return null
+  }
+
+  return `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`
 }
 
 export interface OpenCodeEngineLifecycleOptions {
@@ -123,10 +144,7 @@ function cloneStatus(status: OpenCodeEngineStatus): OpenCodeEngineStatus {
 
 function buildProbeUrls(endpoint: string): string[] {
   const base = endpoint.endsWith('/') ? endpoint : `${endpoint}/`
-
-  return HEALTH_PROBE_SUFFIXES.map((suffix) => {
-    return new URL(suffix, base).toString()
-  })
+  return [new URL(HEALTH_PROBE_PATH, base).toString()]
 }
 
 async function probeEndpoint(
@@ -136,6 +154,7 @@ async function probeEndpoint(
 ): Promise<ProbeResult> {
   const urls = buildProbeUrls(endpoint)
   let lastFailure = `No successful response from ${endpoint}`
+  const authHeader = buildBasicAuthHeader(resolveAuthUsername(), authToken || null)
 
   for (const url of urls) {
     const controller = new AbortController()
@@ -149,15 +168,29 @@ async function probeEndpoint(
         signal: controller.signal,
         headers: {
           accept: 'application/json, text/plain, */*',
-          ...(authToken ? { authorization: `Bearer ${authToken}` } : {})
+          ...(authHeader ? { authorization: authHeader } : {})
         }
       })
 
-      if (response.status < 500) {
+      if (response.ok) {
+        const contentType = (response.headers.get('content-type') || '').toLowerCase()
+        if (contentType.includes('text/html')) {
+          const htmlProbe = await response.text().catch(() => '')
+          if (isLikelyHtml(htmlProbe)) {
+            lastFailure = `${url} returned HTML instead of an OpenCode API health payload`
+            continue
+          }
+        }
+
         return {
           healthy: true,
           detail: `${url} responded with ${response.status}`
         }
+      }
+
+      if (response.status === 401 || response.status === 403) {
+        lastFailure = `${url} responded with ${response.status} (auth required or auth token invalid)`
+        continue
       }
 
       lastFailure = `${url} responded with ${response.status}`
@@ -423,7 +456,7 @@ export async function startOpenCodeEngineLifecycle(
       )
     } else if (configuredBindingMode === 'network' && !activeAuthToken) {
       appendDiagnostic(
-        `Configured endpoint ${configuredEndpoint} requires an auth token (set STEWARD_OPENCODE_AUTH_TOKEN).`
+        `Configured endpoint ${configuredEndpoint} requires Basic auth credentials (set OPENCODE_SERVER_PASSWORD or STEWARD_OPENCODE_AUTH_TOKEN).`
       )
     } else {
       const configuredProbe = await probeEndpoint(configuredEndpoint, fetchTimeoutMs, activeAuthToken)
@@ -531,8 +564,10 @@ export async function startOpenCodeEngineLifecycle(
     cwd: options.cwd,
     env: {
       ...process.env,
-      STEWARD_OPENCODE_AUTH_TOKEN: activeAuthToken,
-      OPENCODE_AUTH_TOKEN: activeAuthToken
+      OPENCODE_SERVER_PASSWORD: activeAuthToken,
+      ...(process.env.OPENCODE_SERVER_USERNAME
+        ? { OPENCODE_SERVER_USERNAME: process.env.OPENCODE_SERVER_USERNAME }
+        : {})
     },
     stdio: 'ignore'
   })
